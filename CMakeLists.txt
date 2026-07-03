@@ -61,12 +61,15 @@ endfunction()
 set(ROLLFORGE_JUCE_DEFINITIONS
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
-    JUCE_ALSA=1
-    JUCE_JACK=1
-    JUCE_WASAPI=1
-    JUCE_DIRECTSOUND=1
-    JUCE_ASIO=0
+    JUCE_ASIO=0                     # ASIO excluded on every platform (SDK licensing)
     JUCE_STRICT_REFCOUNTEDPOINTER=1
+    # Audio backends MUST be gated per platform. JUCE honours JUCE_JACK on
+    # Windows too (audio_devices #includes <jack/jack.h>), which needs the JACK
+    # SDK — absent on the Windows CI runner. Likewise ALSA is Linux-only.
+    $<$<PLATFORM_ID:Linux>:JUCE_ALSA=1>
+    $<$<PLATFORM_ID:Linux>:JUCE_JACK=1>
+    $<$<PLATFORM_ID:Windows>:JUCE_WASAPI=1>
+    $<$<PLATFORM_ID:Windows>:JUCE_DIRECTSOUND=1>
 )
 
 # ---------------------------------------------------------------------------
