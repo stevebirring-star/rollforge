@@ -1,0 +1,116 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(RollForge VERSION 0.1.0 LANGUAGES C CXX)
+
+# ---------------------------------------------------------------------------
+# Global build settings
+# ---------------------------------------------------------------------------
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Default to Release for single-config generators (Ninja, Makefiles).
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+endif()
+
+option(ROLLFORGE_BUILD_APP   "Build the RollForge GUI application"           ON)
+option(ROLLFORGE_BUILD_TESTS "Build RollForge unit tests"                    ON)
+option(ROLLFORGE_ASAN        "Build with Address/UB sanitizers (GCC/Clang)"  OFF)
+
+# -DROLLFORGE_BUILD_APP=OFF skips compiling/linking the GUI app target, which
+# speeds up test-only builds (used by the ASan CI job below). NOTE: JUCE still
+# builds its "juceaide" helper at configure time and juceaide itself compiles
+# juce_gui_basics, so the Linux GUI dev packages (freetype, fontconfig, X11
+# extensions) are required even for a tests-only build.
+
+# ---------------------------------------------------------------------------
+# Dependency: JUCE (pinned to a specific release tag for reproducibility)
+# ---------------------------------------------------------------------------
+include(FetchContent)
+
+set(ROLLFORGE_JUCE_TAG "8.0.8" CACHE STRING "JUCE release tag to build against")
+
+message(STATUS "RollForge: fetching JUCE ${ROLLFORGE_JUCE_TAG}")
+FetchContent_Declare(
+    JUCE
+    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+    GIT_TAG        ${ROLLFORGE_JUCE_TAG}
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(JUCE)
+
+# ---------------------------------------------------------------------------
+# Sanitizer helper (opt-in, used by the ASan CI job)
+# ---------------------------------------------------------------------------
+function(rollforge_apply_sanitizers target)
+    if(ROLLFORGE_ASAN AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+        message(STATUS "RollForge: enabling ASan/UBSan for ${target}")
+        target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer -g)
+        target_link_options(${target}    PRIVATE -fsanitize=address,undefined)
+    endif()
+endfunction()
+
+# ---------------------------------------------------------------------------
+# Compile definitions shared by every RollForge target.
+#   * WEB_BROWSER/CURL off  -> no webkit2gtk / libcurl needed on Linux.
+#   * ALSA + JACK on        -> PipeWire is reached via its ALSA/JACK bridges.
+#   * WASAPI + DirectSound  -> Windows backends; ASIO stays off (SDK licensing).
+# ---------------------------------------------------------------------------
+set(ROLLFORGE_JUCE_DEFINITIONS
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_ALSA=1
+    JUCE_JACK=1
+    JUCE_WASAPI=1
+    JUCE_DIRECTSOUND=1
+    JUCE_ASIO=0
+    JUCE_STRICT_REFCOUNTEDPOINTER=1
+)
+
+# ---------------------------------------------------------------------------
+# Application target (Standalone only for now; engine/UI kept decoupled so a
+# VST3/AU wrapper can be added later without touching engine or model code).
+# ---------------------------------------------------------------------------
+if(ROLLFORGE_BUILD_APP)
+    juce_add_gui_app(RollForge
+        PRODUCT_NAME "RollForge"
+        COMPANY_NAME "StackBase"
+        BUNDLE_ID    "com.stackbase.rollforge"
+        VERSION      ${PROJECT_VERSION}
+    )
+
+    target_sources(RollForge PRIVATE
+        src/app/Main.cpp
+        src/ui/MainComponent.cpp
+        src/engine/AudioEngine.cpp
+    )
+
+    target_include_directories(RollForge PRIVATE src)
+
+    target_compile_definitions(RollForge PRIVATE
+        ${ROLLFORGE_JUCE_DEFINITIONS}
+        JUCE_APPLICATION_NAME_STRING="RollForge"
+        JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}"
+    )
+
+    # juce_audio_utils transitively pulls in audio_devices/formats/processors,
+    # gui_extra/gui_basics/graphics, events, data_structures and core.
+    target_link_libraries(RollForge PRIVATE
+        juce::juce_audio_utils
+        juce::juce_gui_extra
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags
+    )
+
+    rollforge_apply_sanitizers(RollForge)
+endif()
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+if(ROLLFORGE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
