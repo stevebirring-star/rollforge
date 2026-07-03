@@ -16,9 +16,12 @@ cmake --build build --parallel
 ```
 
 **Automated**
-- ☐ `ctest --test-dir build --output-on-failure` → smoke test passes.
-- ☐ CI green on `ubuntu-22.04` and `windows-latest`.
-- ☐ ASan/UBSan job green on Linux.
+- ☑ `ctest --test-dir build --output-on-failure` → smoke test passes _(verified locally, Release)_.
+- ☑ ASan/UBSan run green + leak-clean on Linux _(verified locally: `-DROLLFORGE_ASAN=ON -DROLLFORGE_BUILD_APP=OFF`)_.
+- ☐ CI green on `ubuntu-22.04` and `windows-latest` _(pending first push — GitHub Actions runs there)_.
+
+> The test runner executes only the `rollforge` category, not JUCE's internal
+> unit-test suite (faster, and avoids unrelated UBSan noise from JUCE's tests).
 
 **Manual**
 - ☐ App launches; a dark 720×420 window titled *RollForge* appears.
