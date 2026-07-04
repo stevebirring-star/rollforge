@@ -87,18 +87,35 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible (clearRollsButton);
 
+    rollPresetBox.addItem ("Auto (density)", 1);
+    for (int i = 0; i < RollPresets::NumPresets; ++i)
+        rollPresetBox.addItem (RollPresets::name ((RollPresets::Preset) i), i + 2);
+    rollPresetBox.setSelectedId (1, juce::dontSendNotification);
+    addAndMakeVisible (rollPresetBox);
+
     rollOverlay.onRollPainted = [this] (int lane, int startStep, int length, float density)
     {
         if (lane < 0 || lane >= editPattern.numLanes || editPattern.numRolls >= maxRolls)
             return;
 
+        const int pad = editPattern.lane (lane).targetPad;
+        const int len = juce::jmax (1, length);
+        const int sel = rollPresetBox.getSelectedId();
+
         RollRegion r;
-        r.startStep   = startStep;
-        r.lengthSteps = (double) juce::jmax (1, length);
-        r.targetPad   = editPattern.lane (lane).targetPad;
-        r.speed       = { 2.0f, 2.0f + density * 14.0f, 0.3f };   // accelerate; vertical -> end density
-        r.volume      = { 1.0f, 0.7f, 0.0f };
-        r.pitch       = { 0.0f, 0.0f, 0.0f };
+        if (sel <= 1)   // Auto: an accelerating roll whose end density follows the vertical drag
+        {
+            r.startStep   = startStep;
+            r.lengthSteps = (double) len;
+            r.targetPad   = pad;
+            r.speed       = { 2.0f, 2.0f + density * 14.0f, 0.3f };
+            r.volume      = { 1.0f, 0.7f, 0.0f };
+            r.pitch       = { 0.0f, 0.0f, 0.0f };
+        }
+        else            // a named preset shape
+        {
+            r = RollPresets::make ((RollPresets::Preset) (sel - 2), startStep, (double) len, pad);
+        }
         editPattern.rolls[(std::size_t) editPattern.numRolls] = RollCompiler::compile (r);
         ++editPattern.numRolls;
 
@@ -304,6 +321,8 @@ void MainComponent::resized()
     brushButton.setBounds (rollRow.removeFromLeft (110));
     rollRow.removeFromLeft (6);
     clearRollsButton.setBounds (rollRow.removeFromLeft (110));
+    rollRow.removeFromLeft (10);
+    rollPresetBox.setBounds (rollRow.removeFromLeft (160));
 
     area.removeFromTop (8);
     area.removeFromBottom (26);   // leave room for the hint text

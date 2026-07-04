@@ -6,6 +6,7 @@
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
 #include "model/RollCompiler.h"
+#include "model/RollPresets.h"
 #include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
 #include "ui/TransportBar.h"
@@ -61,6 +62,7 @@ private:
     RollBrushOverlay rollOverlay { 8, 16, SequencerGrid::labelColumnWidth };
     juce::TextButton brushButton { "Roll Brush" };
     juce::TextButton clearRollsButton { "Clear Rolls" };
+    juce::ComboBox   rollPresetBox;
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     juce::Label      titleLabel;
     juce::Label      statusLabel;
