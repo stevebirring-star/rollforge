@@ -42,6 +42,7 @@ MainComponent::MainComponent()
         loadFileIntoPad (index, file);
     };
     addAndMakeVisible (padGrid);
+    addAndMakeVisible (transportBar);
 
     engine.initialise();
 
@@ -173,6 +174,8 @@ void MainComponent::resized()
     statusLabel.setBounds (statusRow);
 
     area.removeFromTop (12);
+    transportBar.setBounds (area.removeFromTop (40));
+    area.removeFromTop (10);
     area.removeFromBottom (26);   // leave room for the hint text
     padGrid.setBounds (area);
 }

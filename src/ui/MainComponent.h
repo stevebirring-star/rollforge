@@ -6,6 +6,7 @@
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
 #include "ui/PadGrid.h"
+#include "ui/TransportBar.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -43,6 +44,7 @@ private:
     Kit                  starterKit;
 
     PadGrid          padGrid;
+    TransportBar     transportBar { engine.getSequencer() };
     juce::Label      titleLabel;
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };

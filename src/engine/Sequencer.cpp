@@ -130,6 +130,7 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
     if (lanes > maxLanes) lanes = maxLanes;
 
     const double samplesPerStep = clock.getSamplesPerStep();
+    const double swingAmount    = clampVal ((double) swing.load (std::memory_order_relaxed), 0.0, 1.0);
 
     for (int li = 0; li < lanes; ++li)
     {
@@ -153,14 +154,14 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
                 continue;
         }
 
-        // Micro-shift the step's base position LATER by up to half a step. Only
-        // forward (>= 0) is applied for now: a step's events are generated at its
-        // grid boundary, so a backward shift would land before the block that
-        // discovers it and could only fire (late) at that block's start — wrong,
-        // and buffer-size dependent. Backward "rush" needs a look-ahead pass; until
-        // then a negative microShift is clamped to 0 (fires on the grid).
-        const double shift = clampVal ((double) s.microShift, 0.0, 0.5);
-        const std::int64_t base = stepSample + (std::int64_t) std::llround (shift * samplesPerStep);
+        // Forward timing offset = micro-shift + swing, both applied LATER only.
+        // Micro-shift is forward-only for now (a backward shift would land before
+        // the block that generates the step -> wrong + buffer-size dependent; a
+        // negative value is clamped to 0). Swing delays the off-beat (odd) 1/16s.
+        double forward = clampVal ((double) s.microShift, 0.0, 0.5);
+        if ((stepIndex & 1) == 1)
+            forward += swingAmount / 3.0;   // swing 1 -> ~66:33 shuffle
+        const std::int64_t base = stepSample + (std::int64_t) std::llround (forward * samplesPerStep);
 
         // Ratchets: `r` evenly-spaced sub-hits across the step, velocity-ramped.
         const int r = clampVal (s.ratchets, 1, 8);

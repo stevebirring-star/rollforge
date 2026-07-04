@@ -260,6 +260,32 @@ public:
             expect (buf.getMagnitude (0, 0, 2000) > 0.0f);
             expectEquals (seq.getTriggerCount(), (std::int64_t) 1);
         }
+
+        beginTest ("swing delays the off-beat 1/16 steps");
+        {
+            DrumEngine engine;
+            engine.prepare (sr, 16384);
+            Sequencer seq;
+            seq.prepare (sr);
+            seq.setTempo (120.0);
+
+            Pattern p;
+            p.numLanes = 1;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            p.lane (0).step (1).on = true;   // step 1 is an off-beat 1/16
+            seq.setPattern (p);
+            seq.setSwing (1.0f);
+            seq.setPlaying (true);
+
+            juce::AudioBuffer<float> buf (1, 16384);
+            buf.clear();
+            seq.process (engine, buf);
+
+            // grid 5513 + swing (5512.5/3 ~= 1838) -> ~7351: silent before, audible after.
+            expectWithinAbsoluteError (buf.getMagnitude (0, 0, 7000), 0.0f, 0.0f);
+            expect (buf.getMagnitude (0, 7351, 2000) > 0.0f);
+            expectEquals (seq.getTriggerCount(), (std::int64_t) 1);
+        }
     }
 };
 

@@ -56,6 +56,9 @@ public:
     void queuePattern (const Pattern& pattern);   // swap in at the next bar (glitch-free)
     void setPlaying (bool shouldPlay) noexcept { playing.store (shouldPlay, std::memory_order_release); }
     void setTempo (double bpm) noexcept;
+    /** Swing 0..1: delays the off-beat (2nd of each pair) 1/16 by swing/3 of a
+        step, so 1 gives a ~66:33 shuffle. A global groove control. */
+    void setSwing (float amount) noexcept { swing.store (amount, std::memory_order_release); }
     void requestReset() noexcept { resetRequested.store (true, std::memory_order_release); }
 
     //==============================================================================
@@ -67,6 +70,7 @@ public:
     //==============================================================================
     // Telemetry (any thread).
     bool         isPlaying()       const noexcept { return playing.load (std::memory_order_acquire); }
+    float        getSwing()        const noexcept { return swing.load (std::memory_order_acquire); }
     bool         isSwitchQueued()  const noexcept { return switchQueued.load (std::memory_order_acquire); }
     std::int64_t getCurrentStep()  const noexcept { return currentStep.load (std::memory_order_acquire); }
     std::int64_t getTriggerCount() const noexcept { return triggerCount.load (std::memory_order_acquire); }
@@ -107,6 +111,7 @@ private:
     int   pendingCount = 0;
 
     std::atomic<bool>   playing        { false };
+    std::atomic<float>  swing          { 0.0f };
     std::atomic<double> pendingTempo   { 120.0 };
     std::atomic<bool>   tempoDirty     { false };
     std::atomic<bool>   resetRequested { false };
