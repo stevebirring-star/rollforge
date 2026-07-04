@@ -63,7 +63,7 @@ void PadComponent::mouseDown (const juce::MouseEvent&)
     flash();
 }
 
-bool PadComponent::isInterestedInFileDragAndDrop (const juce::StringArray& files)
+bool PadComponent::isInterestedInFileDrag (const juce::StringArray& files)
 {
     for (const auto& f : files)
         if (isAudioFile (f))
