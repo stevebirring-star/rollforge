@@ -142,7 +142,23 @@ vendored SQLite) on Linux + Windows + ASan.
 - ☐ Quit -> clean exit, no crash/hang.
 
 ## Phase 6 — Export & interop
-_(to be filled)_
+
+**Automated (headless):** `tests/headless-compile.sh` -> 125 test groups, adding
+ProjectIO (`.rollforge` JSON round-trip; malformed input fails gracefully),
+MidiExport (GM notes; ratchets flatten; a saved `.mid` reads back), OfflineRender
+(a kit+pattern renders non-silent audio; empty -> silence), and StemNull (per-pad
+stems sum to the full mix with master FX off; a WAV per active pad is written).
+
+**Manual (needs a machine with audio + a display):**
+- ☐ Click "Export" -> the dialog shows Export MIDI / WAV (mix) / Stems.
+- ☐ Export MIDI -> the `.mid` opens in a DAW and plays the pattern's groove on a
+  GM drum map.
+- ☐ Export WAV (mix) -> the file plays back the pattern (with the current macro-FX
+  applied) and matches what you hear.
+- ☐ Export Stems -> a folder of `pad_NN.wav` files; summing them equals the mix
+  (master FX off).
+- ☐ Exporting does not interrupt live playback (renders on a separate engine).
+- ☐ Quit -> clean exit, no crash/hang.
 
 ## Phase 7 — Packaging & polish
 _(to be filled)_

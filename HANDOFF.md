@@ -4,18 +4,18 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-04 (Phase 5 complete — sample library + auto-kits)._
+_Last updated: 2026-07-04 (Phase 6 complete — export & interop)._
 
 ---
 
 ## 1. Where we are
 
-- **Phases 0–5 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
-  `d18ec8b`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
+- **Phases 0–6 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
+  `5e69e57`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
   Phase 2 = 8 commits (`234584c`..`094adce`); Phase 3 = 8 commits (`3bfcd2d`..
   `fb01993`, + a Windows stack-overflow fix `f2e4ba8`); Phase 4 = 6 commits
-  (`6071e3b`..`5e393f7`); Phase 5 = 5 commits (`f2a0d7c`..`d18ec8b`). Run
-  `git log --oneline` for the list.
+  (`6071e3b`..`5e393f7`); Phase 5 = 5 commits (`f2a0d7c`..`d18ec8b`); Phase 6 = 5
+  commits (`3c88551`..`5e69e57`). Run `git log --oneline` for the list.
 - **What Phase 1 delivers:** `SampleBuffer` (immutable, reference-counted) + a
   message-thread retirement pool (the final delete never runs on the audio
   thread); `Pad`/`Kit` model; a lock-free command FIFO + `DrumEngine` seam;
@@ -56,16 +56,25 @@ _Last updated: 2026-07-04 (Phase 5 complete — sample library + auto-kits)._
   DB), and `KitBuilder` (NEW KIT: a seeded, coherent kit with per-pad locks), plus
   a `BrowserPanel` UI (scan / filter / NEW KIT, opened from a "Library" button).
   Deferred: background-threaded scan, audition-on-click, drag→pad.
-- **Verified:** 115 headless `juce::UnitTest` groups pass locally via
+- **What Phase 6 delivers:** export & interop — `model/ProjectIO` (`.rollforge`
+  JSON save/load of the session), `model/MidiExporter` (Pattern → GM-drum MIDI;
+  ratchets/rolls flattened), `engine/OfflineRenderer` (faster-than-realtime render
+  reusing the Sequencer + DrumEngine + MasterBus, no device), `engine/WavExporter`
+  (full-mix WAV + per-pad stems that null against the mix), and an `ExportPanel`
+  UI (Export MIDI / WAV / stems, from an "Export" button; render on a fresh engine
+  so live audio is untouched). Deferred: project save/load UI (needs per-pad path
+  tracking) + drag-out (`performExternalDragDropOfFiles`).
+- **Verified:** 125 headless `juce::UnitTest` groups pass locally via
   `tests/headless-compile.sh`; full CI (Linux + Windows + ASan/UBSan) is green on
-  every Phase-0..5 commit.
+  every Phase-0..6 commit.
 - **Still NOT verified (human checks — no audio machine was used):** actual
   *audible* output; the pad-grid + sequencer-grid UI (step editing, playhead,
   transport, swing, undo); the Phase-3 UI (paint a roll with the brush, FILL /
   Reroll, the Humanise knob); the Phase-4 macro knobs (PUNCH / SPACE / CRUSH /
   DRIVE) actually sounding good full-travel; the Phase-5 library (scan a real
-  folder → browse by category → NEW KIT loads a playable kit); drag-and-drop
-  file→pad; and live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
+  folder → browse by category → NEW KIT loads a playable kit); the Phase-6 export
+  (Export MIDI / WAV / stems open in a DAW correctly); drag-and-drop file→pad; and
+  live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
   is RT-safe and unit-tested, but *hearing* it and *clicking* pads needs a human
   at a machine with audio (see TESTING.md).
 
@@ -138,46 +147,44 @@ as new headless tests land. Device-coupled code (`AudioEngine`, using
 `juce_audio_devices`) and all `ui/` code are NOT in the headless build — only CI
 compiles those. CI remains the authoritative full build on both OSes.
 
-## 4. Immediate next actions (Phase 6 — Export & interop)
+## 4. Immediate next actions (Phase 7 — Packaging & polish)
 
-Phase 5 is complete (see §1). Next is Phase 6: get music OUT — MIDI export, WAV +
-per-pad stems, and `.rollforge` project save/load, driven by a faster-than-realtime
-offline renderer. Full file/class map: PLAN.md Phase 6.
+Phase 6 is complete (see §1). Next is Phase 7, the LAST phase: ship it — installers
++ portable builds on both OSes, a first-run experience, a settings view, and
+autosave/recovery. Full file/class map: PLAN.md Phase 7. Acceptance: a clean
+install makes sound in under 3 clicks on both OSes.
 
-**Recommended first commit:** `model/ProjectIO` — `.rollforge` JSON save/load of
-the whole session (kit + patterns + FX macro values + tempo/swing), with relative
-sample paths. Pure model (juce_core JSON), fully headless-testable
-(`ProjectRoundTripTests`: save → load → identical), and it de-risks everything else
-(the exporters serialise from a known-good project format).
+**Recommended first commit:** `app/Autosave` — write a recovery `.rollforge` every
+~60 s (reuse the Phase-6 `ProjectIO`) and offer to restore it on next launch.
+Timer + ProjectIO; the restore-decision logic is headless-testable, and it protects
+real work immediately.
 
 **Suggested build order (each a commit):**
-1. `model/ProjectIO` — `.rollforge` JSON round-trip (kit / patterns / FX / tempo).
-   `ProjectRoundTripTests`.
-2. `model/MidiExporter` — Pattern → MIDI (rolls/ratchets flattened; GM drum map +
-   remap table). `MidiExportTests`.
-3. `engine/OfflineRenderer` — sample-accurate faster-than-realtime render of a
-   pattern span (reuses the `Sequencer` + `MasterBus`, no audio device).
-4. `model/WavExporter` — full-mix WAV + per-pad stems (pre/post master-FX option),
-   via the OfflineRenderer. `StemNullTests` (stems sum to the mix).
-5. `ui/ExportDialog` + `ui/DragOutGrip` — export UI; drag-out via
-   `performExternalDragDropOfFiles`.
+1. `app/Autosave` — periodic recovery file via `ProjectIO`; restore-on-launch
+   prompt. Test the "should offer restore?" logic headless.
+2. `ui/SettingsView` — device / buffer size / theme scale (125/150%) / sample
+   folders, persisted to app-data. (The audio-device selector already exists.)
+3. `ui/FirstRun` — starter kit + a muted demo loop, a pulsing Play, ~3 coach marks
+   (never a modal tutorial). Shown once (a flag in app-data).
+4. `packaging/linux/` — AppImage via linuxdeploy in CI + a plain tar.gz.
+5. `packaging/windows/` — Inno Setup installer in CI + a portable zip.
 
-**Carry forward:** ProjectIO / MidiExporter / WavExporter / OfflineRenderer are all
-non-GUI → keep them headless-testable (the OfflineRenderer reuses the existing
-Sequencer + DrumEngine + MasterBus with no audio device, so it compiles into the
-headless build). Only the ExportDialog / DragOutGrip UI needs CI. The offline
-render must be deterministic so `StemNullTests` (stems sum to the mix) holds.
+**Carry forward:** packaging is mostly CI-workflow + scripts (not C++ unit-tested);
+add release jobs to `.github/workflows/` that build the app in Release and bundle
+it. Keep Autosave's decision logic pure so it stays headless-testable. This is the
+last phase — after it, see the "Scope guard" in PLAN.md for what is deliberately
+NOT in v1.
 
-**Decisions to pin for Phase 6:** JSON schema + a version field for `.rollforge`;
-whether the "collect samples" option copies files next to the project; GM drum-map
-note assignments; stems pre- or post-master-FX (offer both). Default to the
-simplest testable choice and note it.
+**Decisions to pin for Phase 7:** autosave interval + recovery-file location;
+which settings persist + where; whether first-run is a one-time flag or a menu item
+too; AppImage vs Flatpak for Linux (PLAN says AppImage). Default to the simplest
+shippable choice.
 
 ## 5. Open items / risks
 
-- **CI proven on both OSes, through all of Phase 5.** `.github/workflows/ci.yml`
+- **CI proven on both OSes, through all of Phase 6.** `.github/workflows/ci.yml`
   (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job) is green on every
-  Phase-0..5 commit up to HEAD `d18ec8b` — including the vendored SQLite
+  Phase-0..6 commit up to HEAD `5e69e57` — including the vendored SQLite
   amalgamation compiling under MSVC + ASan. (Linux + ASan finish in a couple of
   minutes; the Windows job — a cold MSVC + JUCE build — often takes 10–15 min but
   has never failed on a green Linux commit.) History worth knowing: the first-ever

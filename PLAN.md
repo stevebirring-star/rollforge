@@ -178,7 +178,7 @@ test groups; CI green (incl. SQLite under MSVC + ASan).
 
 ---
 
-## Phase 6 — Export & interop 🚧
+## Phase 6 — Export & interop ✅
 
 | File | Classes / responsibility |
 |------|--------------------------|
@@ -190,10 +190,16 @@ test groups; CI green (incl. SQLite under MSVC + ASan).
 | `tests/` | `MidiExportTests`, `StemNullTests` (stems sum to mix), `ProjectRoundTripTests`. |
 
 **Accept:** exported MIDI reproduces the groove in a DAW; stems null against the mix.
+✅ Done (commits `3c88551`..`5e69e57`, 5 commits): `ProjectIO` (`.rollforge` JSON
+round-trip), `MidiExporter` (Pattern → GM-drum MIDI), `OfflineRenderer` (faster-
+than-RT, reuses Sequencer + DrumEngine + MasterBus), `WavExporter` (mix + per-pad
+stems that null against the mix), and an `ExportPanel` UI. Deferred: project
+save/load UI (needs per-pad path tracking) + drag-out. 125 headless test groups;
+CI green.
 
 ---
 
-## Phase 7 — Packaging & polish ⬜
+## Phase 7 — Packaging & polish 🚧
 
 | File | Purpose |
 |------|---------|
