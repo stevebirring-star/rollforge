@@ -66,6 +66,7 @@ ENGINE_SOURCES=(
     src/model/FillEngine.cpp
     src/model/Humaniser.cpp
     src/model/ProjectIO.cpp
+    src/model/MidiExporter.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -96,6 +97,7 @@ TEST_SOURCES=(
     tests/ScannerTests.cpp
     tests/KitBuilderTests.cpp
     tests/ProjectIOTests.cpp
+    tests/MidiExportTests.cpp
     tests/TestMain.cpp
 )
 
