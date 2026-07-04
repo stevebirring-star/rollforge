@@ -63,6 +63,7 @@ TEST_SOURCES=(
     tests/StarterKitTests.cpp
     tests/KitInstallerTests.cpp
     tests/PadMappingTests.cpp
+    tests/PatternModelTests.cpp
     tests/TestMain.cpp
 )
 
