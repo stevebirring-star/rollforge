@@ -27,6 +27,7 @@ target_sources(RollForgeTests PRIVATE
     SequencerTests.cpp
     PatternSwitchTests.cpp
     RollCompilerTests.cpp
+    RollSequencingTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp

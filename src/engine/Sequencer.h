@@ -78,9 +78,10 @@ public:
 private:
     struct Event
     {
-        std::int64_t sample;    // absolute transport sample
+        std::int64_t sample;      // absolute transport sample
         int          pad;
         float        velocity;
+        float        pitchOffset; // extra semitones (rolls); 0 for plain steps
     };
 
     // A bar for switch quantisation = 16 steps (4/4 at 1/16). Configurable later.
@@ -92,7 +93,7 @@ private:
 
     void applyIncomingPattern (bool nowPlaying) noexcept;
     void generateStepEvents (std::int64_t stepIndex, std::int64_t stepSample) noexcept;
-    void addEvent (std::int64_t sample, int pad, float velocity) noexcept;
+    void addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset = 0.0f) noexcept;
     void renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& buffer,
                            std::int64_t blockStart, int numSamples) noexcept;
 

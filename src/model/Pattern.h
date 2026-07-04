@@ -8,6 +8,7 @@
 // mutates it, and never blocks).
 
 #include "model/Lane.h"
+#include "model/RollRegion.h"
 
 #include <array>
 
@@ -15,6 +16,7 @@ namespace rollforge
 {
 
 inline constexpr int maxLanes = 16;
+inline constexpr int maxRolls = 16;
 
 struct Pattern
 {
@@ -22,6 +24,9 @@ struct Pattern
     int    numLanes = 0;         // active lanes, 0..maxLanes
     double bpm      = 120.0;
     float  swing    = 0.0f;      // 0..1 (delay applied to off-beat 8ths)
+
+    std::array<CompiledRoll, maxRolls> rolls {};   // pre-compiled roll overlays
+    int    numRolls = 0;         // active rolls, 0..maxRolls
 
     Lane&       lane (int index)       noexcept { return lanes[(size_t) index]; }
     const Lane& lane (int index) const noexcept { return lanes[(size_t) index]; }

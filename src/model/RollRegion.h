@@ -2,10 +2,14 @@
 
 // RollForge — RollRegion: a non-destructive "roll" (a burst of repeated hits on
 // one pad over a span, with an accelerating/decelerating rate and per-hit
-// Speed/Volume/Pitch shaping). RollCompiler turns it into concrete events.
+// Speed/Volume/Pitch shaping). RollCompiler turns it into a CompiledRoll.
 //
 // This is the Phase-3 differentiator's core data. Pure (no JUCE), so it and the
-// compiler are fully headless-unit-tested.
+// compiler are fully headless-unit-tested. Roll events use TEMPO-INDEPENDENT step
+// offsets: the compiler runs once on the message thread, and the audio thread just
+// scales step -> sample at play time (no RT-thread compilation).
+
+#include <array>
 
 namespace rollforge
 {
@@ -31,13 +35,27 @@ struct RollRegion
     RollCurve pitch  { 0.0f, 0.0f, 0.0f };
 };
 
-/** One compiled hit of a roll. `sampleOffset` is relative to the roll's start
-    (the Sequencer adds the roll's absolute start sample). */
+/** One compiled hit of a roll. `stepOffset` is in STEPS relative to the roll's
+    start (tempo-independent; the Sequencer multiplies by samplesPerStep and adds
+    the roll's absolute start sample). */
 struct RollEvent
 {
-    int   sampleOffset   = 0;
+    float stepOffset     = 0.0f;
     float velocity       = 1.0f;
     float pitchSemitones = 0.0f;
+};
+
+/** Max hits a compiled roll holds (excess is dropped by the compiler). */
+inline constexpr int maxRollEvents = 128;
+
+/** A roll compiled to tempo-independent step-offset events, ready for the audio
+    thread. Trivially copyable, so it rides inside a Pattern snapshot. */
+struct CompiledRoll
+{
+    int   targetPad = 0;
+    float startStep = 0.0f;   // step-in-loop where the roll begins
+    int   count     = 0;
+    std::array<RollEvent, maxRollEvents> events {};
 };
 
 } // namespace rollforge

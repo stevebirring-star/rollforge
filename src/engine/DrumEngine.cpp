@@ -94,17 +94,21 @@ void DrumEngine::renderInto (juce::AudioBuffer<float>& buffer, int startSample, 
     pool.renderAdditive (buffer, startSample, numSamples);
 }
 
-void DrumEngine::triggerPadNow (int padIndex, float velocity) noexcept
+void DrumEngine::triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones) noexcept
 {
     if (padIndex >= 0 && padIndex < (int) pads.size() && pads[(size_t) padIndex].sample != nullptr)
     {
         const auto& slot = pads[(size_t) padIndex];
-        pool.trigger (slot.sample, slot.params, velocity, slot.chokeGroup);
+        VoiceParameters params = slot.params;
+        params.pitchSemitones += pitchOffsetSemitones;
+        pool.trigger (slot.sample, params, velocity, slot.chokeGroup);
     }
     else
     {
         // No sample configured yet -> fallback blip (keeps the app audible).
-        pool.trigger (interimSound, VoiceParameters {}, velocity, 0);
+        VoiceParameters params;
+        params.pitchSemitones = pitchOffsetSemitones;
+        pool.trigger (interimSound, params, velocity, 0);
     }
 }
 

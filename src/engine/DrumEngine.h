@@ -85,8 +85,9 @@ public:
     void drainCommands() noexcept;
 
     /** Triggers a pad immediately from the audio thread (no queue). Plays the
-        pad's configured sample/params/choke, or the interim blip if unconfigured. */
-    void triggerPadNow (int padIndex, float velocity) noexcept;
+        pad's configured sample/params/choke, or the interim blip if unconfigured.
+        `pitchOffsetSemitones` is added to the pad's pitch (used by rolls). */
+    void triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones = 0.0f) noexcept;
 
     /** Renders the voice pool ADDITIVELY into `buffer[startSample, startSample+numSamples)`. */
     void renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;

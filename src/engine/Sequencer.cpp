@@ -180,13 +180,37 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
             addEvent (evSample, lane.targetPad, velocity);
         }
     }
+
+    // Rolls: fire any roll whose start step matches this step's position in the bar.
+    // The roll's events are pre-compiled (step offsets); we just scale to samples.
+    const int posInBar = (int) (((stepIndex % barLengthSteps) + barLengthSteps) % barLengthSteps);
+    int rolls = active.numRolls;
+    if (rolls < 0)        rolls = 0;
+    if (rolls > maxRolls) rolls = maxRolls;
+
+    for (int ri = 0; ri < rolls; ++ri)
+    {
+        const CompiledRoll& roll = active.rolls[(size_t) ri];
+        if ((int) std::lround (roll.startStep) != posInBar)
+            continue;
+
+        int n = roll.count;
+        if (n > maxRollEvents) n = maxRollEvents;
+        for (int k = 0; k < n; ++k)
+        {
+            const RollEvent& e = roll.events[(size_t) k];
+            const std::int64_t evSample = stepSample
+                + (std::int64_t) std::llround ((double) e.stepOffset * samplesPerStep);
+            addEvent (evSample, roll.targetPad, e.velocity, e.pitchSemitones);
+        }
+    }
 }
 
-void Sequencer::addEvent (std::int64_t sample, int pad, float velocity) noexcept
+void Sequencer::addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset) noexcept
 {
     if (pendingCount < maxPendingEvents)
-        pending[pendingCount++] = { sample, pad, velocity };
-    // else: buffer full (pathological ratchet/lane count) -> drop this event.
+        pending[pendingCount++] = { sample, pad, velocity, pitchOffset };
+    // else: buffer full (pathological ratchet/lane/roll count) -> drop this event.
 }
 
 void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& buffer,
@@ -220,7 +244,7 @@ void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& 
             cursor = offset;
         }
 
-        engine.triggerPadNow (pending[best].pad, pending[best].velocity);
+        engine.triggerPadNow (pending[best].pad, pending[best].velocity, pending[best].pitchOffset);
         triggerCount.fetch_add (1, std::memory_order_acq_rel);
 
         pending[best] = pending[--pendingCount];   // remove (swap with last)

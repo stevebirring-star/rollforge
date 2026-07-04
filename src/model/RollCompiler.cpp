@@ -21,41 +21,60 @@ float curveValue (const RollCurve& curve, float t) noexcept
     return curve.start + (curve.end - curve.start) * eased;
 }
 
-std::vector<RollEvent> compileRoll (const RollRegion& region, double samplesPerStep)
+int compileRollInto (const RollRegion& region, RollEvent* out, int maxEvents) noexcept
 {
-    std::vector<RollEvent> events;
+    if (out == nullptr || maxEvents <= 0)
+        return 0;
 
-    if (region.lengthSteps <= 0.0 || samplesPerStep <= 0.0)
-        return events;
+    const double totalSteps = region.lengthSteps;
+    if (totalSteps <= 0.0)
+        return 0;
 
-    const int totalSamples = (int) std::llround (region.lengthSteps * samplesPerStep);
-    if (totalSamples <= 0)
-        return events;
-
-    double phase   = 0.0;   // accumulated hit count (integral of the rate)
+    // Integrate the rate over the span in fine step increments (< ~1 sample at
+    // typical tempos), emitting a hit each time the accumulated hit-count crosses
+    // an integer.
+    const double dt = 1.0 / 8192.0;
+    double phase   = 0.0;
     int    nextHit = 0;
+    int    count   = 0;
 
-    for (int sample = 0; sample < totalSamples; ++sample)
+    for (double s = 0.0; s < totalSteps; s += dt)
     {
-        const float u = (float) sample / (float) totalSamples;   // 0..1 position along the roll
+        const float u = (float) (s / totalSteps);   // 0..1 position along the roll
 
-        // Emit any hits whose phase boundary has been reached (usually one).
-        while (phase >= (double) nextHit)
+        while (phase >= (double) nextHit && count < maxEvents)
         {
-            RollEvent e;
-            e.sampleOffset   = sample;
-            e.velocity       = clamp01 (curveValue (region.volume, u));
-            e.pitchSemitones = curveValue (region.pitch, u);
-            events.push_back (e);
+            out[count].stepOffset     = (float) s;
+            out[count].velocity       = clamp01 (curveValue (region.volume, u));
+            out[count].pitchSemitones = curveValue (region.pitch, u);
+            ++count;
             ++nextHit;
         }
+        if (count >= maxEvents)
+            break;
 
-        const double rateHitsPerStep = (double) curveValue (region.speed, u);
-        if (rateHitsPerStep > 0.0)
-            phase += rateHitsPerStep / samplesPerStep;
+        const double rate = (double) curveValue (region.speed, u);   // hits per step
+        if (rate > 0.0)
+            phase += rate * dt;
     }
 
-    return events;
+    return count;
+}
+
+std::vector<RollEvent> compileRoll (const RollRegion& region)
+{
+    RollEvent buf[maxRollEvents];
+    const int n = compileRollInto (region, buf, maxRollEvents);
+    return std::vector<RollEvent> (buf, buf + n);
+}
+
+CompiledRoll compile (const RollRegion& region)
+{
+    CompiledRoll cr;
+    cr.targetPad = region.targetPad;
+    cr.startStep = (float) region.startStep;
+    cr.count     = compileRollInto (region, cr.events.data(), maxRollEvents);
+    return cr;
 }
 
 } // namespace RollCompiler

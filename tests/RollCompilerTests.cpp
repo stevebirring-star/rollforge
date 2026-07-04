@@ -1,8 +1,8 @@
-// RollForge — RollCompiler unit tests (Phase 3, commit 1).
+// RollForge — RollCompiler unit tests (Phase 3).
 //
-// Headless checks of the pure roll compiler: even spacing at constant speed,
-// tightening at accelerating speed, velocity/pitch ramps, determinism, and edge
-// cases. This is the heavily-tested core the roll UI and presets wrap.
+// Headless checks of the pure roll compiler: even step spacing at constant speed,
+// tightening at accelerating speed, velocity/pitch ramps, determinism, degenerate
+// cases, and the CompiledRoll wrapper. Offsets are in STEPS (tempo-independent).
 
 #include "model/RollCompiler.h"
 
@@ -31,20 +31,19 @@ public:
             expect (RollCompiler::curveValue (accel, 0.5f) < 5.0f);
         }
 
-        beginTest ("constant-speed roll places evenly-spaced hits");
+        beginTest ("constant-speed roll places evenly-spaced hits (in steps)");
         {
             RollRegion r;
             r.lengthSteps = 1.0;
             r.speed  = { 4.0f, 4.0f, 0.0f };
             r.volume = { 1.0f, 1.0f, 0.0f };
 
-            const auto ev = RollCompiler::compileRoll (r, 4800.0);
+            const auto ev = RollCompiler::compileRoll (r);
             expectEquals ((int) ev.size(), 4);
-            expectEquals (ev[0].sampleOffset, 0);
-            // ~1200-sample spacing (allow a couple samples for FP accumulation).
-            expect (ev[1].sampleOffset >= 1198 && ev[1].sampleOffset <= 1202);
-            expect (ev[2].sampleOffset >= 2398 && ev[2].sampleOffset <= 2402);
-            expect (ev[3].sampleOffset >= 3598 && ev[3].sampleOffset <= 3602);
+            expectWithinAbsoluteError (ev[0].stepOffset, 0.00f, 0.001f);
+            expectWithinAbsoluteError (ev[1].stepOffset, 0.25f, 0.001f);
+            expectWithinAbsoluteError (ev[2].stepOffset, 0.50f, 0.001f);
+            expectWithinAbsoluteError (ev[3].stepOffset, 0.75f, 0.001f);
         }
 
         beginTest ("accelerating roll packs hits tighter over time");
@@ -53,17 +52,17 @@ public:
             r.lengthSteps = 2.0;
             r.speed = { 2.0f, 8.0f, 0.0f };
 
-            const auto ev = RollCompiler::compileRoll (r, 4800.0);
+            const auto ev = RollCompiler::compileRoll (r);
             expect (ev.size() >= 6);
 
             for (size_t i = 1; i < ev.size(); ++i)
-                expect (ev[i].sampleOffset > ev[i - 1].sampleOffset);   // monotonic
+                expect (ev[i].stepOffset > ev[i - 1].stepOffset);   // monotonic
 
             for (size_t i = 2; i < ev.size(); ++i)
             {
-                const int gapPrev = ev[i - 1].sampleOffset - ev[i - 2].sampleOffset;
-                const int gapCurr = ev[i].sampleOffset - ev[i - 1].sampleOffset;
-                expect (gapCurr <= gapPrev + 1);   // non-increasing (+1 for rounding)
+                const float gapPrev = ev[i - 1].stepOffset - ev[i - 2].stepOffset;
+                const float gapCurr = ev[i].stepOffset - ev[i - 1].stepOffset;
+                expect (gapCurr <= gapPrev + 1.0e-3f);   // non-increasing
             }
         }
 
@@ -75,7 +74,7 @@ public:
             r.volume = { 1.0f, 0.2f, 0.0f };
             r.pitch  = { 0.0f, 12.0f, 0.0f };
 
-            const auto ev = RollCompiler::compileRoll (r, 4800.0);
+            const auto ev = RollCompiler::compileRoll (r);
             expect (ev.size() >= 4);
             expectWithinAbsoluteError (ev.front().velocity, 1.0f, 0.05f);
             expect (ev.back().velocity < ev.front().velocity);
@@ -91,23 +90,30 @@ public:
             r.volume = { 1.0f, 0.4f, 0.0f };
             r.pitch  = { 0.0f, 7.0f, 0.0f };
 
-            const auto a = RollCompiler::compileRoll (r, 5512.5);
-            const auto b = RollCompiler::compileRoll (r, 5512.5);
+            const auto a = RollCompiler::compileRoll (r);
+            const auto b = RollCompiler::compileRoll (r);
             expectEquals ((int) a.size(), (int) b.size());
             for (size_t i = 0; i < a.size(); ++i)
             {
-                expectEquals (a[i].sampleOffset, b[i].sampleOffset);
+                expectWithinAbsoluteError (a[i].stepOffset, b[i].stepOffset, 1.0e-6f);
                 expectWithinAbsoluteError (a[i].velocity, b[i].velocity, 1.0e-6f);
             }
         }
 
-        beginTest ("degenerate rolls produce no events");
+        beginTest ("compile() fills a CompiledRoll; zero-length rolls are empty");
         {
-            RollRegion zeroLength; zeroLength.lengthSteps = 0.0;
-            expect (RollCompiler::compileRoll (zeroLength, 4800.0).empty());
+            RollRegion r;
+            r.startStep = 3.0; r.lengthSteps = 1.0; r.targetPad = 5;
+            r.speed = { 4.0f, 4.0f, 0.0f };
 
-            RollRegion normal; normal.lengthSteps = 1.0;
-            expect (RollCompiler::compileRoll (normal, 0.0).empty());   // no samplesPerStep
+            const CompiledRoll cr = RollCompiler::compile (r);
+            expectEquals (cr.targetPad, 5);
+            expectWithinAbsoluteError (cr.startStep, 3.0f, 1.0e-4f);
+            expectEquals (cr.count, 4);
+
+            RollRegion zeroLength; zeroLength.lengthSteps = 0.0;
+            expect (RollCompiler::compileRoll (zeroLength).empty());
+            expectEquals (RollCompiler::compile (zeroLength).count, 0);
         }
     }
 };

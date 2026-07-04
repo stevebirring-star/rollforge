@@ -71,6 +71,7 @@ TEST_SOURCES=(
     tests/SequencerTests.cpp
     tests/PatternSwitchTests.cpp
     tests/RollCompilerTests.cpp
+    tests/RollSequencingTests.cpp
     tests/TestMain.cpp
 )
 
