@@ -5,13 +5,17 @@
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
+#include "model/RollCompiler.h"
 #include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
 #include "ui/TransportBar.h"
 #include "ui/SequencerGrid.h"
 #include "ui/FillBar.h"
+#include "ui/RollBrushOverlay.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
+
+#include <vector>
 
 namespace rollforge
 {
@@ -54,6 +58,10 @@ private:
     TransportBar     transportBar { engine.getSequencer() };
     SequencerGrid    seqGrid { 8, 16 };
     FillBar          fillBar { engine.getSequencer() };
+    RollBrushOverlay rollOverlay { 8, 16, SequencerGrid::labelColumnWidth };
+    juce::TextButton brushButton { "Roll Brush" };
+    juce::TextButton clearRollsButton { "Clear Rolls" };
+    std::vector<RollBrushOverlay::RollRect> paintedRolls;
     juce::Label      titleLabel;
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };

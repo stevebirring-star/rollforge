@@ -32,6 +32,8 @@ public:
     int getNumLanes() const noexcept { return numLanes; }
     int getNumSteps() const noexcept { return numSteps; }
 
+    static constexpr int labelColumnWidth = 90;   // width of the lane-label column
+
 private:
     StepComponent* cell (int lane, int step) noexcept;
 
@@ -41,8 +43,6 @@ private:
 
     juce::OwnedArray<juce::Label>    laneLabels;
     juce::OwnedArray<StepComponent>  cells;   // row-major: lane * numSteps + step
-
-    static constexpr int labelWidth = 90;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SequencerGrid)
 };

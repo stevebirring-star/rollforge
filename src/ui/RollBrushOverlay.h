@@ -1,0 +1,59 @@
+#pragma once
+
+// RollForge — RollBrushOverlay: a transparent layer sitting exactly over the
+// SequencerGrid's step area. When the brush is off it passes clicks through to the
+// grid (normal step editing); when on, a horizontal click-drag paints one roll
+// block on a lane (drag left/right = span; drag up = denser end). It also draws
+// the existing roll blocks. It owns no model state — it reports painted rolls up
+// via onRollPainted and renders whatever rects the owner hands back. UI only.
+
+#include <juce_gui_basics/juce_gui_basics.h>
+
+#include <functional>
+#include <vector>
+
+namespace rollforge
+{
+
+class RollBrushOverlay final : public juce::Component
+{
+public:
+    RollBrushOverlay (int numLanes, int numSteps, int labelWidth);
+
+    void setBrushEnabled (bool shouldBeEnabled);
+    bool isBrushEnabled() const noexcept { return brushEnabled; }
+
+    struct RollRect { int lane; int startStep; int lengthSteps; };
+    void setRolls (const std::vector<RollRect>& rollsToDraw);
+
+    /** Fired on mouse-up: (lane, startStep, lengthSteps, endDensity 0..1). */
+    std::function<void (int, int, int, float)> onRollPainted;
+
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp   (const juce::MouseEvent&) override;
+    void paint     (juce::Graphics&) override;
+
+private:
+    int laneAt (int y) const noexcept;
+    int stepAt (int x) const noexcept;
+    juce::Rectangle<int> cellRect (int lane, int startStep, int len) const noexcept;
+
+    const int numLanes;
+    const int numSteps;
+    const int labelWidth;
+
+    bool  brushEnabled  = false;
+    bool  dragging      = false;
+    int   dragLane      = 0;
+    int   dragStartStep = 0;
+    int   dragCurStep   = 0;
+    int   dragStartY    = 0;
+    float dragDensity   = 0.5f;
+
+    std::vector<RollRect> rolls;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RollBrushOverlay)
+};
+
+} // namespace rollforge

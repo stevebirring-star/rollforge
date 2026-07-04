@@ -69,18 +69,18 @@ void SequencerGrid::resized()
 {
     auto area = getLocalBounds();
     const int rowH = area.getHeight() / numLanes;
-    const int gridW = area.getWidth() - labelWidth;
+    const int gridW = area.getWidth() - labelColumnWidth;
     const int cellW = gridW / numSteps;
 
     for (int lane = 0; lane < numLanes; ++lane)
     {
         const int y = lane * rowH;
         if (auto* label = laneLabels[lane])
-            label->setBounds (0, y, labelWidth - 4, rowH);
+            label->setBounds (0, y, labelColumnWidth - 4, rowH);
 
         for (int step = 0; step < numSteps; ++step)
             if (auto* c = cell (lane, step))
-                c->setBounds (labelWidth + step * cellW, y, cellW, rowH);
+                c->setBounds (labelColumnWidth + step * cellW, y, cellW, rowH);
     }
 }
 

@@ -65,9 +65,48 @@ MainComponent::MainComponent()
     {
         FillEngine::generateFill (editPattern, style, intensity, seed);
         refreshGridFromPattern();
+        paintedRolls.clear();                 // a fill replaces the pattern's rolls
+        rollOverlay.setRolls (paintedRolls);
         engine.getSequencer().setPattern (editPattern);
     };
     addAndMakeVisible (fillBar);
+
+    // Roll brush: toggle it on, then drag across a lane to paint an accelerating
+    // roll (drag up = denser). Clear Rolls removes them.
+    brushButton.setClickingTogglesState (true);
+    brushButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2a7a74));
+    brushButton.onClick = [this] { rollOverlay.setBrushEnabled (brushButton.getToggleState()); };
+    addAndMakeVisible (brushButton);
+
+    clearRollsButton.onClick = [this]
+    {
+        editPattern.numRolls = 0;
+        paintedRolls.clear();
+        rollOverlay.setRolls (paintedRolls);
+        engine.getSequencer().setPattern (editPattern);
+    };
+    addAndMakeVisible (clearRollsButton);
+
+    rollOverlay.onRollPainted = [this] (int lane, int startStep, int length, float density)
+    {
+        if (lane < 0 || lane >= editPattern.numLanes || editPattern.numRolls >= maxRolls)
+            return;
+
+        RollRegion r;
+        r.startStep   = startStep;
+        r.lengthSteps = (double) juce::jmax (1, length);
+        r.targetPad   = editPattern.lane (lane).targetPad;
+        r.speed       = { 2.0f, 2.0f + density * 14.0f, 0.3f };   // accelerate; vertical -> end density
+        r.volume      = { 1.0f, 0.7f, 0.0f };
+        r.pitch       = { 0.0f, 0.0f, 0.0f };
+        editPattern.rolls[(std::size_t) editPattern.numRolls] = RollCompiler::compile (r);
+        ++editPattern.numRolls;
+
+        paintedRolls.push_back ({ lane, startStep, juce::jmax (1, length) });
+        rollOverlay.setRolls (paintedRolls);
+        engine.getSequencer().setPattern (editPattern);
+    };
+    addAndMakeVisible (rollOverlay);   // added after seqGrid -> drawn on top
 
     engine.initialise();
 
@@ -95,7 +134,7 @@ MainComponent::MainComponent()
     refreshStatus();
 
     startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
-    setSize (780, 770);
+    setSize (780, 810);
 }
 
 MainComponent::~MainComponent()
@@ -259,10 +298,19 @@ void MainComponent::resized()
     transportBar.setBounds (area.removeFromTop (40));
     area.removeFromTop (8);
     fillBar.setBounds (area.removeFromTop (32));
-    area.removeFromTop (10);
+    area.removeFromTop (8);
+
+    auto rollRow = area.removeFromTop (28);
+    brushButton.setBounds (rollRow.removeFromLeft (110));
+    rollRow.removeFromLeft (6);
+    clearRollsButton.setBounds (rollRow.removeFromLeft (110));
+
+    area.removeFromTop (8);
     area.removeFromBottom (26);   // leave room for the hint text
 
-    seqGrid.setBounds (area.removeFromTop ((int) (area.getHeight() * 0.58f)));
+    const auto gridBounds = area.removeFromTop ((int) (area.getHeight() * 0.58f));
+    seqGrid.setBounds (gridBounds);
+    rollOverlay.setBounds (gridBounds);   // exactly overlaps the grid
     area.removeFromTop (10);
     padGrid.setBounds (area);
 }
