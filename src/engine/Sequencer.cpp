@@ -1,7 +1,28 @@
 #include "engine/Sequencer.h"
 
+#include <cmath>
+
 namespace rollforge
 {
+
+namespace
+{
+    template <typename T>
+    T clampVal (T v, T lo, T hi) noexcept { return v < lo ? lo : (v > hi ? hi : v); }
+
+    // Deterministic hash of (stepIndex, laneIndex) -> [0, 1). Same pattern loops
+    // reproducibly; different absolute steps (i.e. later bars) get different values.
+    float hashUnitFloat (std::int64_t a, std::int64_t b) noexcept
+    {
+        std::uint64_t x = (std::uint64_t) a * 0x9E3779B97F4A7C15ull
+                        + (std::uint64_t) b * 0xBF58476D1CE4E5B9ull
+                        + 0xD6E8FEB86659FD93ull;
+        x ^= x >> 30; x *= 0xBF58476D1CE4E5B9ull;
+        x ^= x >> 27; x *= 0x94D049BB133111EBull;
+        x ^= x >> 31;
+        return (float) ((double) (x >> 40) / (double) (1u << 24));   // 24-bit -> [0,1)
+    }
+}
 
 Sequencer::Sequencer()
 {
@@ -13,6 +34,7 @@ Sequencer::Sequencer()
 void Sequencer::prepare (double sampleRate) noexcept
 {
     clock.prepare (sampleRate);
+    pendingCount = 0;
     currentStep.store (-1, std::memory_order_release);
 }
 
@@ -34,37 +56,47 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     if (tempoDirty.exchange (false, std::memory_order_acquire))
         clock.setTempo (pendingTempo.load (std::memory_order_relaxed));
     if (resetRequested.exchange (false, std::memory_order_acquire))
+    {
         clock.reset();
-    clock.setPlaying (playing.load (std::memory_order_acquire));
+        pendingCount = 0;   // drop scheduled events on rewind
+    }
+
+    const bool nowPlaying = playing.load (std::memory_order_acquire);
+    clock.setPlaying (nowPlaying);
 
     const int numSamples = buffer.getNumSamples();
 
     // UI + MIDI queued triggers land at the block start.
     engine.drainCommands();
 
-    const Pattern& pattern = patterns.read();
+    if (! nowPlaying)
+    {
+        // Transport paused: just render decaying voices; don't advance events.
+        engine.renderInto (buffer, 0, numSamples);
+        return;
+    }
 
-    int cursor = 0;
+    const Pattern& pattern = patterns.read();
+    const std::int64_t blockStart = clock.getSampleCounter();
+
+    // 1. Generate this block's step events into the pending buffer.
     clock.processBlock (numSamples, [&] (std::int64_t stepIndex, int offset) noexcept
     {
-        if (offset > cursor)
-        {
-            engine.renderInto (buffer, cursor, offset - cursor);
-            cursor = offset;
-        }
-        fireStep (engine, pattern, stepIndex);
+        generateStepEvents (pattern, stepIndex, blockStart + (std::int64_t) offset);
         currentStep.store (stepIndex, std::memory_order_release);
     });
 
-    if (cursor < numSamples)
-        engine.renderInto (buffer, cursor, numSamples - cursor);
+    // 2. Fire pending events landing in this block, in order, splitting segments.
+    renderWithEvents (engine, buffer, blockStart, numSamples);
 }
 
-void Sequencer::fireStep (DrumEngine& engine, const Pattern& pattern, std::int64_t stepIndex) noexcept
+void Sequencer::generateStepEvents (const Pattern& pattern, std::int64_t stepIndex, std::int64_t stepSample) noexcept
 {
     int lanes = pattern.numLanes;
     if (lanes < 0)        lanes = 0;
     if (lanes > maxLanes) lanes = maxLanes;
+
+    const double samplesPerStep = clock.getSamplesPerStep();
 
     for (int li = 0; li < lanes; ++li)
     {
@@ -74,15 +106,94 @@ void Sequencer::fireStep (DrumEngine& engine, const Pattern& pattern, std::int64
         if (len < 1) continue;
         if (len > maxStepsPerLane) len = maxStepsPerLane;
 
-        const int pos = (int) (stepIndex % (std::int64_t) len);
-        const Step& s = lane.step (pos);
+        const int   pos = (int) (stepIndex % (std::int64_t) len);
+        const Step& s   = lane.step (pos);
+        if (! s.on)
+            continue;
 
-        if (s.on)
+        // Probability gate (deterministic per absolute step + lane).
+        if (s.probability < 100)
         {
-            engine.triggerPadNow (lane.targetPad, s.velocity);
-            triggerCount.fetch_add (1, std::memory_order_acq_rel);
+            if (s.probability <= 0)
+                continue;
+            if (hashUnitFloat (stepIndex, li) >= (float) s.probability / 100.0f)
+                continue;
+        }
+
+        // Micro-shift the step's base position LATER by up to half a step. Only
+        // forward (>= 0) is applied for now: a step's events are generated at its
+        // grid boundary, so a backward shift would land before the block that
+        // discovers it and could only fire (late) at that block's start — wrong,
+        // and buffer-size dependent. Backward "rush" needs a look-ahead pass; until
+        // then a negative microShift is clamped to 0 (fires on the grid).
+        const double shift = clampVal ((double) s.microShift, 0.0, 0.5);
+        const std::int64_t base = stepSample + (std::int64_t) std::llround (shift * samplesPerStep);
+
+        // Ratchets: `r` evenly-spaced sub-hits across the step, velocity-ramped.
+        const int r = clampVal (s.ratchets, 1, 8);
+        for (int j = 0; j < r; ++j)
+        {
+            const std::int64_t evSample = base + (std::int64_t) std::llround ((double) j * samplesPerStep / (double) r);
+
+            float velocity = s.velocity;
+            if (r > 1)
+            {
+                const float t = (float) j / (float) (r - 1);      // 0..1
+                velocity *= 1.0f + s.ratchetRamp * (t - 0.5f);     // ramp around the base
+            }
+            velocity = clampVal (velocity, 0.0f, 1.0f);
+
+            addEvent (evSample, lane.targetPad, velocity);
         }
     }
+}
+
+void Sequencer::addEvent (std::int64_t sample, int pad, float velocity) noexcept
+{
+    if (pendingCount < maxPendingEvents)
+        pending[pendingCount++] = { sample, pad, velocity };
+    // else: buffer full (pathological ratchet/lane count) -> drop this event.
+}
+
+void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& buffer,
+                                  std::int64_t blockStart, int numSamples) noexcept
+{
+    const std::int64_t blockEnd = blockStart + numSamples;
+    int cursor = 0;
+
+    // Fire pending events with sample < blockEnd, in ascending order, splitting
+    // render segments at each. O(n^2) over a small bounded buffer -> RT-safe.
+    while (true)
+    {
+        int          best       = -1;
+        std::int64_t bestSample  = blockEnd;
+        for (int i = 0; i < pendingCount; ++i)
+            if (pending[i].sample < bestSample)
+            {
+                bestSample = pending[i].sample;
+                best = i;
+            }
+
+        if (best < 0)
+            break;   // nothing left before blockEnd
+
+        int offset = (int) (pending[best].sample - blockStart);
+        offset = clampVal (offset, cursor, numSamples);   // clamp past/backward events into the block
+
+        if (offset > cursor)
+        {
+            engine.renderInto (buffer, cursor, offset - cursor);
+            cursor = offset;
+        }
+
+        engine.triggerPadNow (pending[best].pad, pending[best].velocity);
+        triggerCount.fetch_add (1, std::memory_order_acq_rel);
+
+        pending[best] = pending[--pendingCount];   // remove (swap with last)
+    }
+
+    if (cursor < numSamples)
+        engine.renderInto (buffer, cursor, numSamples - cursor);
 }
 
 } // namespace rollforge

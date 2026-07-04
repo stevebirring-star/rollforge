@@ -3,19 +3,27 @@
 // RollForge — Sequencer: drives the DrumEngine from a Pattern + Clock.
 //
 // Each audio block it reads the latest Pattern snapshot (lock-free, via
-// TripleBuffer), advances the Clock, and at every 1/16 step it fires the active
-// lanes' pads into the DrumEngine at the EXACT sample offset — rendering the
-// block in segments split at those offsets so triggers are sample-accurate (not
-// quantised to the block boundary).
+// TripleBuffer), advances the Clock, and turns each active step into one or more
+// note events at EXACT sample positions:
+//   * probability — a deterministic per-(step,lane) hash gates whether the step
+//     fires (so a loop is reproducible but varies bar to bar);
+//   * micro-shift — moves the step's events LATER by up to half a step (forward
+//     only for now; backward "rush" needs a look-ahead pass and is reserved, so a
+//     negative microShift is clamped to 0);
+//   * ratchets    — 1..8 evenly-spaced sub-hits across the step, with a velocity
+//     ramp.
+// Events are queued by absolute sample in a fixed pending buffer (so a ratchet or
+// forward shift that crosses a block boundary still fires at the right sample),
+// then the block is rendered in segments split at the event offsets — fully
+// sample-accurate.
+//
+// NOT YET: per-lane triplet timing (needs lane timing decoupled from the global
+// 1/16 grid) — a later commit.
 //
 // THREADING:
-//   * setPattern/setPlaying/setTempo/requestReset — MESSAGE thread. Pattern edits
-//     publish a snapshot; transport changes are marshaled to the audio thread via
-//     atomics and applied at the next block.
+//   * setPattern/setPlaying/setTempo/requestReset — MESSAGE thread (pattern edits
+//     publish a snapshot; transport changes marshaled to the audio thread).
 //   * process() — AUDIO thread. No allocation, locking, or IO.
-//
-// Straight 1/16 lanes only for now; per-lane triplet, ratchets, probability and
-// micro-shift arrive in the next commit.
 //
 // ENGINE LAYER RULE: no JUCE GUI includes.
 
@@ -61,10 +69,27 @@ public:
     std::int64_t getTriggerCount() const noexcept { return triggerCount.load (std::memory_order_acquire); }
 
 private:
-    void fireStep (DrumEngine& engine, const Pattern& pattern, std::int64_t stepIndex) noexcept;
+    struct Event
+    {
+        std::int64_t sample;    // absolute transport sample
+        int          pad;
+        float        velocity;
+    };
+
+    // Sized well above a realistic worst case (steps-in-block x lanes x ratchets
+    // + ratchet carry-over); events beyond it are dropped gracefully (addEvent).
+    static constexpr int maxPendingEvents = 2048;
+
+    void generateStepEvents (const Pattern& pattern, std::int64_t stepIndex, std::int64_t stepSample) noexcept;
+    void addEvent (std::int64_t sample, int pad, float velocity) noexcept;
+    void renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& buffer,
+                           std::int64_t blockStart, int numSamples) noexcept;
 
     Clock                 clock;
     TripleBuffer<Pattern> patterns;
+
+    Event pending[maxPendingEvents];
+    int   pendingCount = 0;
 
     std::atomic<bool>   playing        { false };
     std::atomic<double> pendingTempo   { 120.0 };

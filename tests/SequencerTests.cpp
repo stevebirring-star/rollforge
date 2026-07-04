@@ -8,6 +8,8 @@
 #include "engine/DrumEngine.h"
 #include "engine/Sequencer.h"
 
+#include <cmath>
+
 namespace rollforge::tests
 {
 
@@ -138,6 +140,125 @@ public:
 
             expectEquals (seq.getTriggerCount(), (std::int64_t) 2);
             expectEquals (engine.getNumActiveVoices(), 2);
+        }
+
+        beginTest ("ratchets fire N evenly-spaced sub-hits across a step");
+        {
+            DrumEngine engine;
+            engine.prepare (sr, 512);
+            Sequencer seq;
+            seq.prepare (sr);
+            seq.setTempo (120.0);
+
+            Pattern p;
+            p.numLanes = 1;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            p.lane (0).step (0).on = true;
+            p.lane (0).step (0).ratchets = 4;
+            seq.setPattern (p);
+            seq.setPlaying (true);
+
+            // One step of ~5512 samples holds all 4 ratchet hits (at 0, ~1378, ~2756, ~4134).
+            const int total = 6000;
+            int done = 0;
+            while (done < total)
+            {
+                const int n = juce::jmin (512, total - done);
+                juce::AudioBuffer<float> buf (1, n);
+                buf.clear();
+                seq.process (engine, buf);
+                done += n;
+            }
+            expectEquals (seq.getTriggerCount(), (std::int64_t) 4);
+        }
+
+        beginTest ("probability gates firing deterministically");
+        {
+            auto countWith = [&] (int probability)
+            {
+                DrumEngine engine;
+                engine.prepare (sr, 512);
+                Sequencer seq;
+                seq.prepare (sr);
+                seq.setTempo (120.0);
+
+                Pattern p;
+                p.numLanes = 1;
+                p.lane (0).targetPad = 0; p.lane (0).length = 1;   // every global step fires
+                p.lane (0).step (0).on = true;
+                p.lane (0).step (0).probability = probability;
+                seq.setPattern (p);
+                seq.setPlaying (true);
+
+                const int total = (int) std::llround (64 * 5512.5);   // 64 global steps
+                int done = 0;
+                while (done < total)
+                {
+                    const int n = juce::jmin (512, total - done);
+                    juce::AudioBuffer<float> buf (1, n);
+                    buf.clear();
+                    seq.process (engine, buf);
+                    done += n;
+                }
+                return seq.getTriggerCount();
+            };
+
+            expectEquals (countWith (100), (std::int64_t) 64);   // always
+            expectEquals (countWith (0),   (std::int64_t) 0);    // never
+            const auto quarter = countWith (25);
+            expect (quarter > 0 && quarter < 64);                // some, but fewer
+            expectEquals (countWith (25), quarter);              // deterministic
+        }
+
+        beginTest ("micro-shift moves a step off the grid");
+        {
+            DrumEngine engine;
+            engine.prepare (sr, 16384);
+            Sequencer seq;
+            seq.prepare (sr);
+            seq.setTempo (120.0);
+
+            Pattern p;
+            p.numLanes = 1;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            p.lane (0).step (0).on = true;
+            p.lane (0).step (0).microShift = 0.5f;   // +half a step
+            seq.setPattern (p);
+            seq.setPlaying (true);
+
+            juce::AudioBuffer<float> buf (1, 16384);
+            buf.clear();
+            seq.process (engine, buf);
+
+            // step 0 grid @ 0 -> +0.5 * 5512.5 = ~2756: silent before, audible after.
+            expectWithinAbsoluteError (buf.getMagnitude (0, 0, 2500), 0.0f, 0.0f);
+            expect (buf.getMagnitude (0, 2756, 3000) > 0.0f);
+            expectEquals (seq.getTriggerCount(), (std::int64_t) 1);
+        }
+
+        beginTest ("backward micro-shift is clamped to the grid (forward-only for now)");
+        {
+            DrumEngine engine;
+            engine.prepare (sr, 16384);
+            Sequencer seq;
+            seq.prepare (sr);
+            seq.setTempo (120.0);
+
+            Pattern p;
+            p.numLanes = 1;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            p.lane (0).step (0).on = true;
+            p.lane (0).step (0).microShift = -0.5f;   // negative -> clamped to 0
+            seq.setPattern (p);
+            seq.setPlaying (true);
+
+            juce::AudioBuffer<float> buf (1, 16384);
+            buf.clear();
+            seq.process (engine, buf);
+
+            // Clamped to 0 -> fires on the grid at sample 0 (audible from the start).
+            expect (buf.getMagnitude (0, 0, 2000) > 0.0f);
+            expectEquals (seq.getTriggerCount(), (std::int64_t) 1);
         }
     }
 };
