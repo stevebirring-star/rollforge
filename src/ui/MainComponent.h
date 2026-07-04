@@ -9,6 +9,7 @@
 #include "ui/PadGrid.h"
 #include "ui/TransportBar.h"
 #include "ui/SequencerGrid.h"
+#include "ui/FillBar.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -38,6 +39,7 @@ private:
     void loadFileIntoPad (int padIndex, const juce::File& file);
     void updatePadLabels();
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
+    void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
 
     // Declared first -> destroyed last: the engine (holding pad sample refs)
     // outlives the Kit/pool/loader that also reference the samples.
@@ -51,6 +53,7 @@ private:
     PadGrid          padGrid;
     TransportBar     transportBar { engine.getSequencer() };
     SequencerGrid    seqGrid { 8, 16 };
+    FillBar          fillBar { engine.getSequencer() };
     juce::Label      titleLabel;
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };

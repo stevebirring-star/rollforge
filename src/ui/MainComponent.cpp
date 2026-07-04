@@ -59,6 +59,16 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible (seqGrid);
 
+    // FILL / Reroll generate a drum fill into the edit pattern; Humanise is wired
+    // straight to the sequencer inside FillBar.
+    fillBar.onFill = [this] (FillEngine::Style style, int intensity, std::uint64_t seed)
+    {
+        FillEngine::generateFill (editPattern, style, intensity, seed);
+        refreshGridFromPattern();
+        engine.getSequencer().setPattern (editPattern);
+    };
+    addAndMakeVisible (fillBar);
+
     engine.initialise();
 
     // Install the synthesised starter kit so pads play real drum sounds. Built
@@ -85,7 +95,7 @@ MainComponent::MainComponent()
     refreshStatus();
 
     startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
-    setSize (760, 720);
+    setSize (780, 770);
 }
 
 MainComponent::~MainComponent()
@@ -113,6 +123,35 @@ void MainComponent::afterStepEdit (int lane, int step)
     const Step& s = editPattern.lane (lane).step (step);
     seqGrid.setStep (lane, step, s.on, s.velocity);
     engine.getSequencer().setPattern (editPattern);
+}
+
+void MainComponent::refreshGridFromPattern()
+{
+    const int rows = seqGrid.getNumLanes();
+    for (int lane = 0; lane < rows; ++lane)
+    {
+        if (lane < editPattern.numLanes)
+        {
+            const int pad = editPattern.lane (lane).targetPad;
+            juce::String label;
+            if (pad >= 0 && pad < kitNumPads)
+                if (auto sample = starterKit.pad (pad).primarySample())
+                    label = sample->getName();
+            seqGrid.setLaneLabel (lane, label);
+
+            for (int step = 0; step < 16; ++step)
+            {
+                const Step& s = editPattern.lane (lane).step (step);
+                seqGrid.setStep (lane, step, s.on, s.velocity);
+            }
+        }
+        else
+        {
+            seqGrid.setLaneLabel (lane, {});
+            for (int step = 0; step < 16; ++step)
+                seqGrid.setStep (lane, step, false, 0.8f);
+        }
+    }
 }
 
 void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
@@ -218,6 +257,8 @@ void MainComponent::resized()
 
     area.removeFromTop (12);
     transportBar.setBounds (area.removeFromTop (40));
+    area.removeFromTop (8);
+    fillBar.setBounds (area.removeFromTop (32));
     area.removeFromTop (10);
     area.removeFromBottom (26);   // leave room for the hint text
 
