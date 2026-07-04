@@ -104,6 +104,7 @@ if(ROLLFORGE_BUILD_APP)
         src/library/SampleLoader.cpp
         src/library/StarterKit.cpp
         src/library/KitInstaller.cpp
+        src/model/RollCompiler.cpp
     )
 
     target_include_directories(RollForge PRIVATE src)
