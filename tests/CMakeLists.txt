@@ -33,6 +33,7 @@ target_sources(RollForgeTests PRIVATE
     HumaniserTests.cpp
     FxSmokeTests.cpp
     CategoriserTests.cpp
+    LibraryDbTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
@@ -52,6 +53,8 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/KitInstaller.cpp
     ${CMAKE_SOURCE_DIR}/src/library/FeatureExtractor.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Categoriser.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/LibraryDb.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/sqlite/sqlite3.c
     ${CMAKE_SOURCE_DIR}/src/model/RollCompiler.cpp
     ${CMAKE_SOURCE_DIR}/src/model/RollPresets.cpp
     ${CMAKE_SOURCE_DIR}/src/model/FillEngine.cpp
@@ -59,6 +62,12 @@ target_sources(RollForgeTests PRIVATE
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+# Vendored SQLite (third-party C): pin its options + silence its warnings so the
+# project's strict warning flags don't choke on it.
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/library/sqlite/sqlite3.c PROPERTIES
+    COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION=1;SQLITE_THREADSAFE=1"
+    COMPILE_OPTIONS "-w")
 
 target_compile_definitions(RollForgeTests PRIVATE
     ${ROLLFORGE_JUCE_DEFINITIONS}

@@ -115,6 +115,8 @@ if(ROLLFORGE_BUILD_APP)
         src/library/KitInstaller.cpp
         src/library/FeatureExtractor.cpp
         src/library/Categoriser.cpp
+        src/library/LibraryDb.cpp
+        src/library/sqlite/sqlite3.c
         src/model/RollCompiler.cpp
         src/model/RollPresets.cpp
         src/model/FillEngine.cpp
@@ -122,6 +124,13 @@ if(ROLLFORGE_BUILD_APP)
     )
 
     target_include_directories(RollForge PRIVATE src)
+
+    # Vendored SQLite amalgamation (third-party C): pin its options (no extension
+    # loading; thread-safe) and silence its warnings so the project's strict
+    # warning flags don't choke on it.
+    set_source_files_properties(src/library/sqlite/sqlite3.c PROPERTIES
+        COMPILE_DEFINITIONS "SQLITE_OMIT_LOAD_EXTENSION=1;SQLITE_THREADSAFE=1"
+        COMPILE_OPTIONS "-w")
 
     target_compile_definitions(RollForge PRIVATE
         ${ROLLFORGE_JUCE_DEFINITIONS}

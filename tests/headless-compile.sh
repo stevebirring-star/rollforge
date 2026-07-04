@@ -58,6 +58,7 @@ ENGINE_SOURCES=(
     src/library/KitInstaller.cpp
     src/library/FeatureExtractor.cpp
     src/library/Categoriser.cpp
+    src/library/LibraryDb.cpp
     src/model/RollCompiler.cpp
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
@@ -88,10 +89,21 @@ TEST_SOURCES=(
     tests/HumaniserTests.cpp
     tests/FxSmokeTests.cpp
     tests/CategoriserTests.cpp
+    tests/LibraryDbTests.cpp
     tests/TestMain.cpp
 )
 
 CXX="${CXX:-g++}"
+CC="${CC:-gcc}"
+
+# The vendored SQLite amalgamation is a 9 MB C file — compile it once (cached) as
+# C, not on every run. Rebuilt only if sqlite3.c is newer than the cached object.
+SQLITE_OBJ="$(dirname "$OUT")/sqlite3.o"
+if [[ ! -f "$SQLITE_OBJ" || src/library/sqlite/sqlite3.c -nt "$SQLITE_OBJ" ]]; then
+    echo "compiling vendored sqlite3.c (cached after first run)..."
+    "$CC" -c -O1 -DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_THREADSAFE=1 \
+        src/library/sqlite/sqlite3.c -o "$SQLITE_OBJ"
+fi
 
 # Compile flags mirror the test target's config in CMakeLists.txt.
 "$CXX" -std=c++20 -O0 -g \
@@ -104,7 +116,7 @@ CXX="${CXX:-g++}"
     "$MODULES/juce_core/juce_core_CompilationTime.cpp" \
     "$MODULES/juce_audio_basics/juce_audio_basics.cpp" \
     "$MODULES/juce_audio_formats/juce_audio_formats.cpp" \
-    "${ENGINE_SOURCES[@]}" "${TEST_SOURCES[@]}" \
+    "${ENGINE_SOURCES[@]}" "${TEST_SOURCES[@]}" "$SQLITE_OBJ" \
     -o "$OUT" \
     -lpthread -ldl -lrt -lm
 
