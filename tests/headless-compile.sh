@@ -45,6 +45,7 @@ ENGINE_SOURCES=(
 # Test translation units (TestMain.cpp provides main() + the category runner).
 TEST_SOURCES=(
     tests/SampleBufferTests.cpp
+    tests/PadKitTests.cpp
     tests/TestMain.cpp
 )
 
