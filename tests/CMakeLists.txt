@@ -35,6 +35,7 @@ target_sources(RollForgeTests PRIVATE
     CategoriserTests.cpp
     LibraryDbTests.cpp
     ScannerTests.cpp
+    KitBuilderTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
@@ -56,6 +57,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/Categoriser.cpp
     ${CMAKE_SOURCE_DIR}/src/library/LibraryDb.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Scanner.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/KitBuilder.cpp
     ${CMAKE_SOURCE_DIR}/src/library/sqlite/sqlite3.c
     ${CMAKE_SOURCE_DIR}/src/model/RollCompiler.cpp
     ${CMAKE_SOURCE_DIR}/src/model/RollPresets.cpp

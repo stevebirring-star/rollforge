@@ -60,6 +60,7 @@ ENGINE_SOURCES=(
     src/library/Categoriser.cpp
     src/library/LibraryDb.cpp
     src/library/Scanner.cpp
+    src/library/KitBuilder.cpp
     src/model/RollCompiler.cpp
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
@@ -92,6 +93,7 @@ TEST_SOURCES=(
     tests/CategoriserTests.cpp
     tests/LibraryDbTests.cpp
     tests/ScannerTests.cpp
+    tests/KitBuilderTests.cpp
     tests/TestMain.cpp
 )
 
