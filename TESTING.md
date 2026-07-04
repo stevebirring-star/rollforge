@@ -43,7 +43,24 @@ cmake --build build --parallel
 ---
 
 ## Phase 1 — Pads + playback engine
-_(to be filled when the phase lands)_
+
+**Automated (headless):** `tests/headless-compile.sh` → 52 test groups pass
+(SampleBuffer + retirement, Pad/Kit, CommandQueue, DrumEngine, Voice, VoicePool,
+choke, SampleLoader, StarterKit, KitInstaller, PadMapping). CI builds the full
+app and runs these on Linux + Windows + ASan/UBSan.
+
+**Manual (needs a machine with audio + a display):**
+- ☐ App launches; a 4×4 pad grid appears, pads labelled (kick, snare, hats, …).
+- ☐ Click a pad → its sound plays immediately; the pad flashes.
+- ☐ Keys `1234`/`qwer`/`asdf`/`zxcv` trigger the matching pads (grid-mirrored).
+- ☐ Rapid repeated hits stay polyphonic (no premature cut-offs) up to ~64 voices.
+- ☐ Trigger the closed hat while the open hat is ringing → the open hat is choked.
+- ☐ Drag a WAV/AIFF/FLAC/OGG file onto a pad → it loads (label updates) and that
+  pad plays the file; other pads unchanged; no glitch if a voice was mid-play.
+- ☐ Connect a MIDI keyboard → notes 36–51 trigger pads 0–15 with velocity.
+- ☐ Audio Settings → change device / sample rate → pads still play at correct
+  pitch (samples are native-rate + resampled per-voice).
+- ☐ Quit → clean exit, no crash/hang (ASan-clean; no leaked sample buffers).
 
 ## Phase 2 — Sequencer core
 _(to be filled)_

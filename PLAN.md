@@ -52,7 +52,7 @@ build machine).
 
 ---
 
-## Phase 1 — Pads + playback engine ⬜
+## Phase 1 — Pads + playback engine ✅
 
 16 pads (4×4), 64-voice polyphonic pool, per-pad params, sample loading, code-synthesised starter kit.
 
@@ -70,10 +70,14 @@ build machine).
 | `tests/` | `VoicePoolTests`, `ChokeGroupTests`. |
 
 **Accept:** click pads → instant sound; unit tests for voice stealing + choke.
+✅ Done (commits `7ffbb6a`..`e16e87f`): 16-pad synth StarterKit, 64-voice pool
+(steal-the-quietest + choke groups), native-rate SampleLoader + per-voice
+resampling, PadGrid UI with drag-drop, keyboard + MIDI input. 52 headless test
+groups; CI green on both OSes. Samples stored at native rate (Voice resamples).
 
 ---
 
-## Phase 2 — Sequencer core ⬜
+## Phase 2 — Sequencer core 🚧
 
 Up to 16 lanes × 64 steps, base 1/16 grid, per-lane triplet + length (polyrhythms), rich per-step data, transport.
 

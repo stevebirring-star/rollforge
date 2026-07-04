@@ -4,31 +4,33 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-04 (Phase 0 CI green on both OSes)._
+_Last updated: 2026-07-04 (Phase 1 complete — pads + playback engine)._
 
 ---
 
 ## 1. Where we are
 
-- **Phase 0 (skeleton) is complete, committed, and pushed.** Four commits on
-  `master`, HEAD = `7ddd435`:
-  - `ac122ac` — repo skeleton, CMake + JUCE 8.0.8, audio engine blip, UI shell, CI, docs.
-  - `d11f4d9` — run only the `rollforge` test category (fixes ASan/UBSan CI).
-  - `8de94ea` — add this HANDOFF.md.
-  - `7ddd435` — gate audio backends per platform (fixes Windows CI).
-- **Verified locally:** configures + builds clean (GUI app + tests), Release
-  tests pass, ASan/UBSan run is leak-clean. Passed a 4-lens adversarial review
-  (findings verified against the pinned JUCE source; all confirmed ones fixed).
-  Re-audited 2026-07-04 against pinned JUCE 8.0.8 — RT contract, engine/UI
-  layering, and the async-settings-dialog lifetime all confirmed clean; no
-  blockers or correctness bugs (two minor follow-ups landed in §5).
-- **Verified in CI:** GitHub Actions is green on **both OSes** — Linux build,
-  Windows build, and the Linux ASan/UBSan job all passed on `7ddd435` (full run
-  SUCCESS in ~9m48s). The first run (on `8de94ea`) failed on Windows with a
-  `jack/jack.h` error; `7ddd435` fixed it. See §5.
-- **Still NOT verified:** the blip has not been *heard*. The build machine was
-  headless, so the audio path builds/links and the callback is RT-safe, but
-  audible output needs a human at a machine with audio (see TESTING.md).
+- **Phase 0 (skeleton) and Phase 1 (pads + playback engine) are complete,
+  committed, pushed, and CI-green on both OSes.** HEAD = `e16e87f`. Phase 1 is 9
+  commits (`7ffbb6a`..`e16e87f`) plus a compile fixup (`900be7f`); run
+  `git log --oneline` for the list.
+- **What Phase 1 delivers:** `SampleBuffer` (immutable, reference-counted) + a
+  message-thread retirement pool (the final delete never runs on the audio
+  thread); `Pad`/`Kit` model; a lock-free command FIFO + `DrumEngine` seam;
+  `Voice` (per-voice resampling, one-shot AR envelope, equal-power pan, reverse);
+  `VoicePool` (64 voices, steal-the-quietest + choke groups); `SampleLoader`
+  (WAV/AIFF/FLAC/Ogg → native rate); `StarterKit` (16 synthesised drums, no
+  binary assets); a `PadGrid` UI (click-to-audition + drag-drop file→pad); and
+  keyboard + MIDI producers (each its own SPSC queue). Acceptance met: click a pad
+  → instant sound; voice-steal + choke groups unit-tested.
+- **Verified:** 52 headless `juce::UnitTest` groups pass locally via
+  `tests/headless-compile.sh`; full CI (Linux + Windows + ASan/UBSan) is green on
+  every Phase-1 commit.
+- **Still NOT verified (human checks — no audio machine was used):** actual
+  *audible* output, the pad-grid UI interaction, drag-and-drop, and live MIDI
+  input. The build machine is headless, so every audio/GUI path compiles, links,
+  is RT-safe and unit-tested, but *hearing* it and *clicking* pads needs a human
+  at a machine with audio (see TESTING.md).
 
 ## 2. Machine / environment gotchas (READ FIRST when resuming)
 
@@ -57,6 +59,11 @@ This is `steveslaptop` (Ubuntu 24.04, gcc 13.3). Key facts:
   Latest available at pin time was 8.0.9. FetchContent re-clones into
   `build/_deps/juce-src`; reuse it across build dirs with
   `-DFETCHCONTENT_SOURCE_DIR_JUCE=<path>/build/_deps/juce-src` to skip re-download.
+- **No GitHub auth on this laptop.** Every push has gone via the VPS relay:
+  `git bundle create <b> master` → `scp <b> webvps:~/` → on `webvps:~/rollforge-tmp`
+  `git fetch <b> master && git merge --ff-only FETCH_HEAD && git push origin master`.
+  (Force-push is blocked by the safety guard — land a fixup commit instead of an
+  amend if a pushed commit turns out broken.)
 
 ## 3. Build / test / sanitize
 
@@ -82,137 +89,87 @@ ctest --test-dir build-asan --output-on-failure
 **No GUI dev libs / no sudo?** The CMake path above needs the Linux GUI dev
 packages because `juceaide` compiles `juce_gui_basics` (see §2). When you can't
 install them, run the headless engine/model tests directly — this compiles only
-`juce_core` + `juce_audio_basics` + the pure code under test, bypassing juceaide:
+`juce_core` + `juce_audio_basics` + `juce_audio_formats` + the pure code under
+test, bypassing juceaide:
 
 ```bash
 tests/headless-compile.sh      # builds build/headless/RollForgeTests and runs it
 ```
 
 Keep its `ENGINE_SOURCES`/`TEST_SOURCES` lists in sync with `tests/CMakeLists.txt`
-as new headless tests land. CI remains the authoritative full build on both OSes.
+as new headless tests land. Device-coupled code (`AudioEngine`, using
+`juce_audio_devices`) and all `ui/` code are NOT in the headless build — only CI
+compiles those. CI remains the authoritative full build on both OSes.
 
-## 4. Immediate next actions (Phase 1 — Pads + playback engine)
+## 4. Immediate next actions (Phase 2 — Sequencer core)
 
-Goal: 16 pads (4×4), 64-voice polyphonic pool, per-pad params, sample loading,
-a code-synthesised starter kit. Acceptance: click a pad → instant sound; unit
-tests for voice stealing + choke groups.
+Goal: up to 16 lanes × 64 steps, base 1/16 grid, per-lane triplet + length
+(polyrhythms), rich per-step data (velocity, micro-shift, ratchets, probability,
+sample-lock), and a sample-accurate transport. Acceptance: timing tests exact
+across buffer sizes; ratchets even; pattern A→B on the bar boundary, glitch-free.
+Full file/class map: PLAN.md Phase 2. `juce::UndoManager` arrives here (per spec).
 
-**Recommended first commit** (from the 2026-07-04 readiness review — pulls the
-riskiest RT decision forward, ahead of the original "start with `Pad.h`"):
-`engine/SampleBuffer` as an immutable-once-loaded `juce::ReferenceCountedObject`
-**plus its RT-safe reclamation scheme**, with a headless unit test and a written
-ownership contract in the header. Sample lifetime is the single most load-bearing
-decision in Phase 1 — every downstream file is shaped by it, and getting it wrong
-is a use-after-free, not a compile error. It's fully headless-testable (no audio
-device), so it fits CI.
+**Recommended first commit:** the **model + the double-buffered snapshot** —
+`model/Step`, `model/Lane`, `model/Pattern` (lanes + BPM + swing) with a pure
+`snapshot()` the audio thread reads via an **atomic pointer swap** (never
+mutating shared state, never blocking). This is Phase 2's load-bearing threading
+decision (mirrors Phase 1's SampleBuffer-first choice): the Clock/Sequencer are
+shaped by how they read pattern data RT-safely. Fully headless-testable.
 
-**Ownership / reclamation contract.** Voices hold a strong
-`ReferenceCountedObjectPtr` for the whole note (incref at note-on is RT-safe).
-The hazard is the *free*: a voice dropping the last ref would run `delete` on the
-audio thread (with `JUCE_STRICT_REFCOUNTEDPOINTER=1` that is the silent default).
-Fix: a message-thread-owned `ReferenceCountedArray` is the sole retirement owner;
-a 1–2 s timer frees a retired buffer only once its refcount hits 1 (no voice
-references it). Pad edits / NEW KIT / device-SR rebuilds swap the pointer via the
-command FIFO and move the old buffer to the retirement set; live voices keep
-playing it until they end.
+**Suggested build order (each a commit; keep the model pure + unit-tested):**
+1. `model/Step` + `model/Lane` + `model/Pattern` + double-buffered `snapshot()`.
+2. `engine/Clock` — sample-accurate scheduler → exact per-block sample offsets;
+   drift-free at 64/256/1024 buffers. `ClockTimingTests`.
+3. `engine/Sequencer` — reads the snapshot, emits pad triggers to `DrumEngine` at
+   the right sample offsets within a block; swing. Wire a transport (play/stop,
+   BPM) into `AudioEngine`. Headless test that a one-step pattern fires once/bar.
+4. Per-step richness in the Sequencer: ratchets (1–8 + ramp), probability
+   (100/75/50/25, seeded), micro-shift (±50%). `RatchetTests`, `SwingTests`.
+5. `model/PatternBank` (slots A–H) + bar-boundary pattern switch. `PatternSwitchTests`.
+6. `ui/TransportBar` — play/stop, BPM, tap tempo, swing, metronome, pattern slots.
+7. `ui/SequencerGrid` + `ui/StepComponent` — the grid, vertical-drag velocity,
+   60 Hz playhead read from an atomic (never full-window repaints per frame).
+8. `model/UndoableActions` — `juce::UndoManager`-backed edits.
 
-**Decisions to pin before coding (the plan leaves these open):**
-1. **Buffer storage rate** — native-rate + resample per-voice (robust to a
-   runtime device-SR change; the Voice already needs an interpolator for ±12 st)
-   vs device-rate + resample-on-load (must rebuild *every* buffer when the device
-   SR changes in the settings dialog). Recommend native-rate. Decide before the
-   Voice read loop.
-2. **Voice-steal order + tie-break** — a pure function of testable state: prefer
-   released/choking → lowest envelope gain → oldest (a monotonic trigger counter,
-   *not* wall-clock); tie-break on lowest voice index. "Quietest" = tracked
-   envelope gain, never live audio RMS (keeps tests deterministic + headless).
-3. **Choke semantics** — group 0 = no choke; choke fires at trigger, before
-   allocation; same-group voices get a ~3–5 ms declick release (not a hard cut);
-   a choked voice is *logically* dead immediately (out of age/steal bookkeeping)
-   while it finishes the ramp. Does closed-hat choke both open and pedal hats?
-4. **Same-pad retrigger** — polyphonic-per-pad (new voice, steal at 64) vs
-   monophonic (a new hit steals its own previous voice). Drum machines default
-   polyphonic except hats. Changes both steal and choke test expectations.
-5. **Fixed MIDI-note → pad map + velocity → gain curve**, and the exact 16-key
-   keyboard layout (e.g. `1234`/`QWER`/`ASDF`/`ZXCV` mirroring the 4×4 grid).
-   "No mapping UI" still needs a chosen default.
-6. **Envelope** — one-shot AR (play to end, ignore note-off; typical for drums)
-   vs gated ADSR. Decide whether note-off does anything at all in Phase 1.
-7. **Starter kit** — regenerate the 16 synthesised sounds each launch vs cache to
-   disk (repo ships no binary assets either way). Any length/RAM cap on dropped
-   files, or full in-RAM decode?
+**Threading contract (carry forward):** the audio thread reads a double-buffered
+pattern snapshot (atomic pointer swap) — it never mutates shared model state and
+never blocks. UI→engine still goes through the lock-free command queue; engine→UI
+telemetry (playhead, meters) via `std::atomic`, read by a 60 Hz UI timer. The
+Sequencer emits into the SAME `DrumEngine` trigger path built in Phase 1 (feed it
+via the command queue, or a direct in-audio-thread call from `process()` — decide
+in commit 3).
 
-**RT-safety guardrails carried from Phase 0:**
-- **Two producers → two FIFOs.** `juce::AbstractFifo` is single-producer /
-  single-consumer. Keyboard/UI commands arrive on the message thread; incoming
-  MIDI arrives on JUCE's own MIDI-input thread — a *second* producer. Design one
-  SPSC FIFO **per producer thread** from the first engine commit; the callback
-  drains both at block start. Do not bolt MIDI onto the UI FIFO later.
-- **Command payloads are trivially-copyable POD** (enum tag + pad / velocity /
-  offset / raw `SampleBuffer*`). No strings, no smart pointers, no heap in the
-  ring. `static_assert(std::is_trivially_copyable_v<Command>)`.
-- **Preallocate everything up front** — 64 voices + per-voice resampler state +
-  both FIFOs in the constructor / `prepare()`. `trigger()` / `process()` allocate
-  nothing.
-- **Keep `DrumEngine` free of any `AudioDeviceManager` dependency.** `AudioEngine`
-  owns a `DrumEngine` member and forwards `prepare(sr, block)` from
-  `audioDeviceAboutToStart` + `process(buffer, n)` from the callback (replacing
-  the blip). This is what lets `VoicePoolTests` / `ChokeGroupTests` run headless.
-- When you add engine/model files, **extract a STATIC engine lib** that links
-  only audio modules — mechanically enforces "no JUCE-GUI includes under
-  `src/engine`" (today it's convention-only) and lets the tests link the engine.
-
-**Revised build order** (each a commit; keep the model pure + unit-tested):
-
-1. `engine/SampleBuffer` + refcount + message-thread retirement/sweep + headless
-   test [the recommended first commit above].
-2. `model/Pad.h` + `model/Kit.h` — trivial POD (sample ref, volume, pan, pitch
-   ±12 st, attack/release, choke group, reverse, ≤4 alternates). Grow fields as
-   later steps need them. No JUCE GUI.
-3. Command FIFO(s) + `engine/DrumEngine` seam replacing the blip in `AudioEngine`,
-   driven by a trivial synth buffer, with a headless "push trigger → assert
-   non-silent output" test.
-4. `engine/Voice` — single-voice interpolated playback, AR envelope, pitch, pan,
-   reverse; unit-tested.
-5. `engine/VoicePool` — 64 voices, voice stealing + choke groups →
-   `VoicePoolTests`, `ChokeGroupTests` (all headless, under the `rollforge`
-   category — the runner only executes that category).
-6. `library/SampleLoader` — `AudioFormatManager` (WAV/AIFF/FLAC/MP3/OGG) on a
-   background thread; installs via the retirement set + command FIFO. (Link
-   `juce_audio_formats` — already transitively present via `juce_audio_utils`.)
-7. `library/StarterKit` — synthesise 16 clean sounds on the message thread at
-   startup (kick = pitched sine + click, snare = noise+tone, hats = filtered
-   noise bursts of varying decay, …). Repo ships NO binary assets.
-8. `ui/PadGrid` + `ui/PadComponent` — 4×4 pads, click-to-audition, background
-   drag-and-drop audio file → pad. Dark theme, ≥28 px hit targets.
-9. Keyboard producer (message-thread FIFO) + MIDI producer (its **own** SPSC
-   FIFO). Keys trigger pads (keep space for play/stop later); incoming MIDI notes
-   → pad triggers (no mapping UI).
-
-Introduce `juce::UndoManager` from Phase 2 onward (per spec), not Phase 1.
+**Decisions to pin for Phase 2:** exact swing model (delay of the off-beat 8ths);
+ratchet ramp shape; probability RNG seeding (per-loop, deterministic for tests);
+pattern-switch quantisation (bar only, or configurable); whether lanes are
+fixed-16 or dynamic. Default to the simplest testable choice and note it.
 
 ## 5. Open items / risks
 
-- **CI proven on both OSes.** `.github/workflows/ci.yml` (ubuntu-22.04 +
-  windows-latest + a Linux ASan/UBSan job) is green on `7ddd435` — full run
-  SUCCESS in ~9m48s. History: the first run (on `8de94ea`) failed on Windows with
-  a `jack/jack.h` error; `7ddd435` fixed it by gating audio backends per platform.
-  Optional future optimisation: an `actions/cache` step for `build/_deps` if the
-  JUCE clone time grows.
-- **Only remaining open verification: blip audibility** — a human check on a
-  machine with audio (see TESTING.md manual steps). Everything else in Phase 0 is
-  verified (local build + CI + adversarial re-audit).
-- **Engine has no build boundary or test coverage yet.** `AudioEngine.cpp` is
-  compiled straight into the GUI-app target, so the "no JUCE-GUI includes under
-  `src/engine`" rule is convention-only — an accidental GUI include would still
-  link, and the engine is never built in isolation. When Phase 1 adds
-  `DrumEngine`/`VoicePool`, extract a STATIC/INTERFACE engine lib that links only
-  audio modules (enforces the rule + lets the headless voice/choke tests link the
-  engine). _(Re-audit 2026-07-04, minor.)_
+- **CI proven on both OSes, through all of Phase 1.** `.github/workflows/ci.yml`
+  (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job) is green on every
+  Phase-1 commit up to HEAD `e16e87f`. History worth knowing: the first-ever run
+  failed on Windows (`jack/jack.h`), fixed by per-platform backend gating; and 8/9
+  first failed to compile the app (a JUCE override name — `isInterestedInFileDrag`,
+  not `...AndDrop`), fixed by `900be7f`. Optional future optimisation: an
+  `actions/cache` step for `build/_deps` if the JUCE clone time grows.
+- **Open human verifications (no audio machine used yet):** audible output; the
+  pad-grid UI (click-to-audition, flash, drag-drop file→pad); and live MIDI input
+  (notes 36–51 → pads). All compile/link/unit-test clean; they need a human at a
+  machine with audio (see TESTING.md).
+- **Engine still has no build boundary.** `AudioEngine.cpp` (and all engine/model
+  code) is compiled straight into the app / test targets, so the "no JUCE-GUI
+  includes under `src/engine`/`src/model`" rule is convention-only. The headless
+  test path (`headless-compile.sh`) compiles the pure engine/model/library code
+  without GUI, which catches accidental GUI includes in practice, but there is no
+  linked STATIC engine lib. Extract one before/at the VST3 wrapper stage to make
+  the rule mechanical. _(Follow-up, minor.)_
 - **Single-instance behaviour undecided.** `Main.cpp` allows multiple instances
   while each opens the default output device; a 2nd instance can silently fail to
   open it (exclusive-mode WASAPI / some ALSA configs). Make a deliberate call
-  before shipping. _(Re-audit 2026-07-04, nit.)_
+  before shipping. _(nit.)_
+- **MP3 decoding is present but off** (`JUCE_USE_MP3AUDIOFORMAT=0`) — enable the
+  flag if MP3 import is wanted (patents expired; matches the ASIO-off caution).
 - `packaging/ci/` is an empty dir (real packaging = Phase 7).
 
 ## 6. Key decisions & rationale
@@ -224,6 +181,8 @@ Introduce `juce::UndoManager` from Phase 2 onward (per spec), not Phase 1.
 - **RT-safety is non-negotiable:** UI↔engine via lock-free FIFO + atomics;
   pattern data read via double-buffered snapshot swap; 60 Hz UI timer reads
   atomics (never full-window repaints per frame).
+- **Samples stored at native rate; the Voice resamples per-voice** — robust to a
+  runtime device-sample-rate change without rebuilding any buffer.
 - **Test runner runs only the `rollforge` category** — never JUCE's internal
   suite (faster; avoids unrelated UBSan noise). All RollForge tests must
   register under that category.
