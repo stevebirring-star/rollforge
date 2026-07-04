@@ -53,6 +53,7 @@ ENGINE_SOURCES=(
     src/model/RollCompiler.cpp
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
+    src/model/Humaniser.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -76,6 +77,7 @@ TEST_SOURCES=(
     tests/RollSequencingTests.cpp
     tests/RollPresetsTests.cpp
     tests/FillEngineTests.cpp
+    tests/HumaniserTests.cpp
     tests/TestMain.cpp
 )
 

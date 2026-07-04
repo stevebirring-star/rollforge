@@ -1,5 +1,7 @@
 #include "engine/Sequencer.h"
 
+#include "model/Humaniser.h"
+
 #include <cmath>
 
 namespace rollforge
@@ -139,6 +141,7 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
 
     const double samplesPerStep = clock.getSamplesPerStep();
     const double swingAmount    = clampVal ((double) swing.load (std::memory_order_relaxed), 0.0, 1.0);
+    const float  humaniseAmt    = clampVal ((float) humanise.load (std::memory_order_relaxed), 0.0f, 1.0f);
 
     for (int li = 0; li < lanes; ++li)
     {
@@ -169,7 +172,12 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
         double forward = clampVal ((double) s.microShift, 0.0, 0.5);
         if ((stepIndex & 1) == 1)
             forward += swingAmount / 3.0;   // swing 1 -> ~66:33 shuffle
+        forward += (double) Humaniser::timingSteps (Humaniser::eventHash (stepIndex, li, 0), humaniseAmt);
         const std::int64_t base = stepSample + (std::int64_t) std::llround (forward * samplesPerStep);
+
+        // Humanised base velocity (seeded, non-destructive) — shared by all ratchets.
+        const float stepVelocity = clampVal (s.velocity
+            + Humaniser::velocityDelta (Humaniser::eventHash (stepIndex, li, 1), humaniseAmt), 0.0f, 1.0f);
 
         // Ratchets: `r` evenly-spaced sub-hits across the step, velocity-ramped.
         const int r = clampVal (s.ratchets, 1, 8);
@@ -177,7 +185,7 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
         {
             const std::int64_t evSample = base + (std::int64_t) std::llround ((double) j * samplesPerStep / (double) r);
 
-            float velocity = s.velocity;
+            float velocity = stepVelocity;
             if (r > 1)
             {
                 const float t = (float) j / (float) (r - 1);      // 0..1
