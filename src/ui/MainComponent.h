@@ -14,6 +14,7 @@
 #include "ui/FillBar.h"
 #include "ui/RollBrushOverlay.h"
 #include "ui/MacroKnobs.h"
+#include "ui/BrowserPanel.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -39,6 +40,7 @@ public:
 
 private:
     void openAudioSettings();
+    void openLibrary();
     void refreshStatus();
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep
@@ -69,8 +71,10 @@ private:
     juce::Label      titleLabel;
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };
+    juce::TextButton libraryButton { "Library" };
 
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
+    juce::Component::SafePointer<juce::DialogWindow> libraryWindow;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

@@ -33,6 +33,11 @@ MainComponent::MainComponent()
     settingsButton.onClick = [this] { openAudioSettings(); };
     addAndMakeVisible (settingsButton);
 
+    libraryButton.setColour (juce::TextButton::buttonColourId, colours::panel);
+    libraryButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    libraryButton.onClick = [this] { openLibrary(); };
+    addAndMakeVisible (libraryButton);
+
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
         engine.triggerPad (index, velocity);   // the pad flashes itself on click
@@ -166,6 +171,9 @@ MainComponent::~MainComponent()
     if (settingsWindow != nullptr)
         settingsWindow.deleteAndZero();
 
+    if (libraryWindow != nullptr)
+        libraryWindow.deleteAndZero();
+
     engine.shutdown();   // stops the audio thread before members (and samples) are destroyed
 }
 
@@ -290,6 +298,42 @@ void MainComponent::openAudioSettings()
     settingsWindow = options.launchAsync();
 }
 
+void MainComponent::openLibrary()
+{
+    if (libraryWindow != nullptr)
+    {
+        libraryWindow->toFront (true);
+        return;
+    }
+
+    auto browser = std::make_unique<BrowserPanel>();
+    browser->onNewKit = [this] (const std::array<juce::String, kitNumPads>& paths)
+    {
+        for (int p = 0; p < kitNumPads; ++p)
+        {
+            if (paths[(size_t) p].isEmpty())
+                continue;
+            const juce::File file (paths[(size_t) p]);
+            if (auto sample = loader.loadFile (file))
+            {
+                installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
+                padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
+            }
+        }
+    };
+
+    juce::DialogWindow::LaunchOptions options;
+    options.content.setOwned (browser.release());
+    options.dialogTitle                  = "Sample Library";
+    options.dialogBackgroundColour       = colours::background;
+    options.componentToCentreAround      = this;
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar            = true;
+    options.resizable                    = true;
+
+    libraryWindow = options.launchAsync();
+}
+
 void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (colours::background);
@@ -310,6 +354,8 @@ void MainComponent::resized()
 
     auto statusRow = area.removeFromTop (26);
     settingsButton.setBounds (statusRow.removeFromRight (150));
+    statusRow.removeFromRight (8);
+    libraryButton.setBounds (statusRow.removeFromRight (90));
     statusRow.removeFromRight (12);
     statusLabel.setBounds (statusRow);
 
