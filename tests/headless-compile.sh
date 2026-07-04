@@ -43,6 +43,7 @@ ENGINE_SOURCES=(
     src/engine/SampleRetirementPool.cpp
     src/engine/DrumEngine.cpp
     src/engine/Voice.cpp
+    src/engine/VoicePool.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -52,6 +53,8 @@ TEST_SOURCES=(
     tests/CommandQueueTests.cpp
     tests/DrumEngineTests.cpp
     tests/VoiceTests.cpp
+    tests/VoicePoolTests.cpp
+    tests/ChokeGroupTests.cpp
     tests/TestMain.cpp
 )
 

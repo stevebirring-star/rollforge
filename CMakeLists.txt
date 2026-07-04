@@ -92,6 +92,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp
         src/engine/Voice.cpp
+        src/engine/VoicePool.cpp
     )
 
     target_include_directories(RollForge PRIVATE src)

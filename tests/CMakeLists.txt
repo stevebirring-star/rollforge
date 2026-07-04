@@ -16,10 +16,13 @@ target_sources(RollForgeTests PRIVATE
     CommandQueueTests.cpp
     DrumEngineTests.cpp
     VoiceTests.cpp
+    VoicePoolTests.cpp
+    ChokeGroupTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/VoicePool.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)

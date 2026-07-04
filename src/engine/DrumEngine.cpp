@@ -7,8 +7,8 @@ namespace rollforge
 
 namespace
 {
-    // A short synthesised "blip" — the INTERIM trigger sound until real per-pad
-    // samples + VoicePool land. ~120 ms, 880 Hz, quadratic fade-out (click-free).
+    // A short synthesised "blip" — the INTERIM trigger sound until StarterKit
+    // installs real per-pad samples. ~120 ms, 880 Hz, quadratic fade-out.
     SampleBuffer::Ptr makeInterimBlip (double sampleRate)
     {
         constexpr double freqHz  = 880.0;
@@ -34,8 +34,9 @@ namespace
     }
 }
 
-DrumEngine::DrumEngine (int commandCapacity)
-    : commands (commandCapacity)
+DrumEngine::DrumEngine (int commandCapacity, int numVoices)
+    : commands (commandCapacity),
+      pool (numVoices)
 {
 }
 
@@ -53,8 +54,7 @@ void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
 {
     sampleRate   = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     interimSound = makeInterimBlip (sampleRate);
-    interimPos   = -1;
-    interimGain  = 0.0f;
+    pool.prepare (sampleRate);
 }
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
@@ -62,7 +62,7 @@ void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
     // Drain producer commands first, so a trigger applies from the block's top.
     commands.drain ([this] (const EngineCommand& c) { handleCommand (c); });
 
-    renderInterimVoice (buffer);
+    pool.renderAdditive (buffer, 0, buffer.getNumSamples());
 }
 
 void DrumEngine::handleCommand (const EngineCommand& command) noexcept
@@ -70,39 +70,16 @@ void DrumEngine::handleCommand (const EngineCommand& command) noexcept
     switch (command.type)
     {
         case CommandType::triggerPad:
-            // Interim: (re)start the single one-shot voice. Real per-pad
-            // polyphonic voices + stealing/choke arrive with VoicePool (5/9).
-            interimPos  = 0;
-            interimGain = juce::jlimit (0.0f, 1.0f, command.velocity);
+            // Interim: every pad plays the same synth blip with default voice
+            // params and no choke group. Real per-pad sample + Voice::Parameters
+            // + choke-group mapping arrives with StarterKit (7/9).
+            pool.trigger (interimSound, Voice::Parameters {}, command.velocity, 0);
             break;
 
         case CommandType::none:
         default:
             break;
     }
-}
-
-void DrumEngine::renderInterimVoice (juce::AudioBuffer<float>& buffer) noexcept
-{
-    if (interimPos < 0 || interimSound == nullptr)
-        return;
-
-    const auto* src         = interimSound->getAudio().getReadPointer (0);
-    const int   length      = interimSound->getNumSamples();
-    const int   numChannels = buffer.getNumChannels();
-    const int   numSamples  = buffer.getNumSamples();
-
-    for (int i = 0; i < numSamples && interimPos < length; ++i)
-    {
-        const float value = src[interimPos] * interimGain;
-        for (int ch = 0; ch < numChannels; ++ch)
-            buffer.addSample (ch, i, value);
-
-        ++interimPos;
-    }
-
-    if (interimPos >= length)
-        interimPos = -1;   // one-shot finished -> idle
 }
 
 } // namespace rollforge
