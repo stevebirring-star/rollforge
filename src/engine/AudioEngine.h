@@ -72,6 +72,10 @@ public:
         tempo). All of its control methods are message-thread safe. */
     Sequencer& getSequencer() noexcept { return sequencer; }
 
+    /** Exposed so the macro-knob UI can drive the master effects. Its setters are
+        message-thread safe. */
+    MasterBus& getMasterBus() noexcept { return masterBus; }
+
 private:
     //==============================================================================
     // juce::AudioIODeviceCallback

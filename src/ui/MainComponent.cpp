@@ -125,6 +125,8 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible (rollOverlay);   // added after seqGrid -> drawn on top
 
+    addAndMakeVisible (macroKnobs);
+
     engine.initialise();
 
     // Install the synthesised starter kit so pads play real drum sounds. Built
@@ -151,7 +153,7 @@ MainComponent::MainComponent()
     refreshStatus();
 
     startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
-    setSize (780, 810);
+    setSize (780, 880);
 }
 
 MainComponent::~MainComponent()
@@ -327,10 +329,12 @@ void MainComponent::resized()
     area.removeFromTop (8);
     area.removeFromBottom (26);   // leave room for the hint text
 
-    const auto gridBounds = area.removeFromTop ((int) (area.getHeight() * 0.58f));
+    const auto gridBounds = area.removeFromTop ((int) (area.getHeight() * 0.50f));
     seqGrid.setBounds (gridBounds);
     rollOverlay.setBounds (gridBounds);   // exactly overlaps the grid
-    area.removeFromTop (10);
+    area.removeFromTop (8);
+    macroKnobs.setBounds (area.removeFromTop (74));
+    area.removeFromTop (8);
     padGrid.setBounds (area);
 }
 

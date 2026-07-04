@@ -13,6 +13,7 @@
 #include "ui/SequencerGrid.h"
 #include "ui/FillBar.h"
 #include "ui/RollBrushOverlay.h"
+#include "ui/MacroKnobs.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -63,6 +64,7 @@ private:
     juce::TextButton brushButton { "Roll Brush" };
     juce::TextButton clearRollsButton { "Clear Rolls" };
     juce::ComboBox   rollPresetBox;
+    MacroKnobs       macroKnobs { engine.getMasterBus() };
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     juce::Label      titleLabel;
     juce::Label      statusLabel;

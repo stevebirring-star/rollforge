@@ -94,6 +94,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/SequencerGrid.cpp
         src/ui/FillBar.cpp
         src/ui/RollBrushOverlay.cpp
+        src/ui/MacroKnobs.cpp
         src/engine/AudioEngine.cpp
         src/engine/Clock.cpp
         src/engine/DrumEngine.cpp
