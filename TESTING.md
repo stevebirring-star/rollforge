@@ -81,8 +81,27 @@ additionally verified by a 3-lens adversarial pass.
 - ☐ Stop → playback halts (voices ring out); Play restarts from the top.
 - ☐ Quit → clean exit, no crash/hang (ASan-clean).
 
-## Phase 3 — Roll Painter + Fill Engine
-_(to be filled)_
+## Phase 3 — Roll Painter + Fill Engine + Humaniser
+
+**Automated (headless):** `tests/headless-compile.sh` -> 95 test groups, adding
+RollCompiler (event spacing / acceleration / velocity + pitch ramps / determinism),
+RollSequencing (a compiled roll fires through the Sequencer, sample-accurate),
+RollPresets (10 shapes differ in character), FillEngine (same seed -> identical
+fill; intensity/style vary), and Humaniser (robot is a no-op; jitter forward /
+bounded / deterministic; hit count preserved). CI builds the full app on
+Linux + Windows + ASan/UBSan.
+
+**Manual (needs a machine with audio + a display):**
+- ☐ FILL: pick a style + intensity, press FILL -> the grid fills with a fitting
+  beat + fill; press it again / Reroll -> a different variation; Play sounds good.
+- ☐ Humanise: raise the knob -> timing/velocity loosen (less machine-like); 0 =
+  tight. It never changes which hits play, only their feel.
+- ☐ Roll brush: toggle "Roll Brush" on, drag across a lane -> an accelerating roll
+  block appears (drag up = denser) and plays; toggle off -> normal step editing.
+- ☐ Roll preset picker: choose a preset (e.g. Machine Gun, Drill Slide) then paint
+  -> that shape is used instead of the auto density curve.
+- ☐ Clear Rolls removes all painted rolls; a FILL also resets them.
+- ☐ Quit -> clean exit, no crash/hang (ASan-clean).
 
 ## Phase 4 — Macro effects
 _(to be filled)_

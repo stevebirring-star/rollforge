@@ -103,7 +103,7 @@ backward micro-shift deferred (see HANDOFF §5). 76 headless test groups; CI gre
 
 ---
 
-## Phase 3 — Roll Painter + Fill Engine + Humaniser 🚧 (differentiators — go deep)
+## Phase 3 — Roll Painter + Fill Engine + Humaniser ✅ (differentiators — go deep)
 
 | File | Classes / responsibility |
 |------|--------------------------|
@@ -118,10 +118,19 @@ backward micro-shift deferred (see HANDOFF §5). 76 headless test groups; CI gre
 | `tests/` | `RollCompilerTests` (event counts, monotonic times, ramp values), `FillDeterminismTests` (same seed → same output). |
 
 **Accept:** paint a 2-beat accelerating hat roll in one gesture; 10 distinct usable trap fills in 10 clicks; deterministic compiler/fill tests.
+✅ Done (commits `3bfcd2d`..`fb01993`, + Windows stack-overflow fix `f2e4ba8`):
+pure `RollCompiler` (tempo-independent step offsets) + `RollRegion`; rolls carried
+in the `Pattern` snapshot and fired sample-accurately by the `Sequencer` (compiled
+on the message thread, no RT compilation); 10 `RollPresets`; deterministic
+per-style `FillEngine` (seeded, intensity 1–5); one-knob `Humaniser` (forward
+timing + velocity jitter); and the UI — `FillBar` (FILL/Reroll/Humanise) +
+`RollBrushOverlay` (drag-paint) + roll-preset picker. `RollInlineEditor` (curve
+editing) and alt-sample jitter deferred (see HANDOFF §5). 95 headless test groups;
+CI green.
 
 ---
 
-## Phase 4 — Macro effects ⬜
+## Phase 4 — Macro effects 🚧
 
 Four master-bus macro knobs, per-pad SPACE sends, always-on transparent limiter. `juce::dsp`. Defaults 0 = bypass. No routing UI.
 

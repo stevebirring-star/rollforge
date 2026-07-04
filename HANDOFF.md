@@ -4,16 +4,16 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-04 (Phase 2 complete — sequencer core)._
+_Last updated: 2026-07-04 (Phase 3 complete — roll painter, fill engine, humaniser)._
 
 ---
 
 ## 1. Where we are
 
-- **Phase 0 (skeleton), Phase 1 (pads + playback engine), and Phase 2 (sequencer
-  core) are complete, committed, pushed, and CI-green on both OSes.** HEAD =
-  `094adce`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
-  Phase 2 = 8 commits (`234584c`..`094adce`). Run `git log --oneline` for the list.
+- **Phases 0–3 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
+  `fb01993`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
+  Phase 2 = 8 commits (`234584c`..`094adce`); Phase 3 = 8 commits (`3bfcd2d`..
+  `fb01993`, + a Windows stack-overflow fix `f2e4ba8`). Run `git log --oneline` for the list.
 - **What Phase 1 delivers:** `SampleBuffer` (immutable, reference-counted) + a
   message-thread retirement pool (the final delete never runs on the audio
   thread); `Pad`/`Kit` model; a lock-free command FIFO + `DrumEngine` seam;
@@ -30,12 +30,23 @@ _Last updated: 2026-07-04 (Phase 2 complete — sequencer core)._
   `PatternBank` (A–H) with glitch-free bar-boundary switching; and the
   `TransportBar` + editable `SequencerGrid` UI with `UndoManager` (Cmd/Ctrl+Z).
   Acceptance met: timing exact across buffer sizes; A→B on the bar boundary.
-- **Verified:** 76 headless `juce::UnitTest` groups pass locally via
+- **What Phase 3 delivers (the differentiators):** a pure `RollCompiler` that turns
+  a `RollRegion` (Speed/Volume/Pitch curves) into tempo-independent step-offset
+  events; rolls carried in the `Pattern` snapshot and fired by the `Sequencer` at
+  sample-accurate offsets (compiled on the message thread, scaled on the audio
+  thread — no RT compilation); 10 named `RollPresets`; a deterministic per-style
+  `FillEngine` (seeded, intensity 1–5, writes steps + a roll); a one-knob
+  `Humaniser` (seeded forward-timing + velocity jitter, non-destructive); and the
+  UI — a `FillBar` (FILL / Reroll / Humanise), a `RollBrushOverlay` (drag to paint
+  an accelerating roll on a lane), and a roll-preset picker. Deferred (documented):
+  per-lane triplet timing, backward micro-shift "rush", and alt-sample jitter.
+- **Verified:** 95 headless `juce::UnitTest` groups pass locally via
   `tests/headless-compile.sh`; full CI (Linux + Windows + ASan/UBSan) is green on
   every Phase-0/1/2 commit.
 - **Still NOT verified (human checks — no audio machine was used):** actual
   *audible* output; the pad-grid + sequencer-grid UI (step editing, playhead,
-  transport, swing, undo); drag-and-drop file→pad; and live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
+  transport, swing, undo); the Phase-3 UI (paint a roll with the brush, FILL /
+  Reroll, the Humanise knob); drag-and-drop file→pad; and live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
   is RT-safe and unit-tested, but *hearing* it and *clicking* pads needs a human
   at a machine with audio (see TESTING.md).
 
@@ -108,66 +119,66 @@ as new headless tests land. Device-coupled code (`AudioEngine`, using
 `juce_audio_devices`) and all `ui/` code are NOT in the headless build — only CI
 compiles those. CI remains the authoritative full build on both OSes.
 
-## 4. Immediate next actions (Phase 3 — Roll Painter + Fill Engine + Humaniser)
+## 4. Immediate next actions (Phase 4 — Macro effects)
 
-Phase 3 is the DIFFERENTIATORS ("go deep"): paint an accelerating hi-hat roll in
-one gesture, click FILL for usable drum fills, and one knob for Robot↔Human feel.
-Full file/class map: PLAN.md Phase 3.
+Phase 3 is complete (see §1). Next is Phase 4: four master-bus macro knobs
+(PUNCH / SPACE / CRUSH / DRIVE), per-pad SPACE sends, and an always-on transparent
+limiter, built on `juce::dsp`. Defaults 0 = bypass; no routing UI. Full file/class
+map: PLAN.md Phase 4. Acceptance: each knob sounds good full-travel; no clipping at
+max; CPU < 15% of one core @ 44.1k/256.
 
-**Recommended first commit:** `model/RollRegion` + `model/RollCompiler` — a pure,
-heavily-unit-tested `compileRoll(region, bpm) -> std::vector<Event>`. This is the
-load-bearing, fully headless-testable core (mirrors the SampleBuffer / Pattern /
-Clock "hardest pure thing first" choice); the brush UI and presets wrap it later.
+**Recommended first commit:** `engine/MasterBus` + `engine/fx/MasterLimiter` — the
+bus that chains the effects and the always-on brickwall limiter, wired post-
+`Sequencer` in the `AudioEngine` callback (0 effects = clean pass-through). This
+establishes the master-bus seam the four macros plug into, and `FxSmokeTests`
+(no NaN/clip at extremes; limiter caps output) can be headless from day one.
 
-**Suggested build order (each a commit; keep the model pure + unit-tested):**
-1. `model/RollRegion` (start/end step, density curve, Speed/Volume/Pitch mini-
-   curves, snap set {1/8,1/16,1/16T,1/32,1/32T,1/64,1/128}) + `model/RollCompiler`
-   (pure `compileRoll` -> events with exact times/velocities/pitch).
-   `RollCompilerTests` (event counts, monotonic times, ramp values).
-2. Wire compiled rolls into the Sequencer's event stream — a roll region on a
-   lane emits its compiled sub-events at sample-accurate offsets, reusing the
-   Phase-2 pending-event scheduler. Headless test a roll fires N hits over its span.
-3. `model/RollPresets` (10: Trap Triplet, Buildup, Stutter, Drill Slide, Machine
-   Gun, Fade Roll, …) — deterministic.
-4. `model/FillEngine` (rule-based templates per style: Trap/Drill/House/DnB/
-   Boom-Bap/Techno/Pop; seeded RNG; intensity 1–5; writes real steps/rolls).
-   `FillDeterminismTests` (same seed → same output).
-5. `model/Humaniser` (one-knob Robot↔Human: seeded per-loop micro-timing/velocity/
-   alt-sample jitter, non-destructive at playback). Deterministic test.
-6. `ui/RollBrushOverlay` — brush mode; click-drag → one editable roll block;
-   vertical = end-density.
-7. `ui/RollInlineEditor` — inline Speed/Volume/Pitch curve editors (not a dialog).
-8. `ui/FillControls` — FILL button, Reroll dice, intensity slider, hover preview.
+**Suggested build order (each a commit):**
+1. `engine/MasterBus` + `engine/fx/MasterLimiter` — bus seam + always-on limiter,
+   wired post-`Sequencer` in the `AudioEngine` callback. `FxSmokeTests`.
+2. `engine/fx/Drive` (saturation + gentle high-shelf), dry/wet, 0 = bypass.
+3. `engine/fx/Crush` (bitcrush/downsample + soft clip), dry/wet.
+4. `engine/fx/Punch` (transient emphasis + parallel compression blend).
+5. `engine/fx/Space` (pre-filtered short plate reverb) as a per-pad SEND bus.
+6. `ui/MacroKnobs` — four big knobs (PUNCH/SPACE/CRUSH/DRIVE) driving the bus.
 
-**Carry forward:** all model/compiler code stays pure + headless-tested (this is
-where deep test coverage pays off). Rolls/fills reuse the Phase-2 sample-accurate
-event scheduler (forward-only micro-timing; backward "rush" still needs the
-look-ahead pass — see §5). Determinism (seeded, reproducible) is required for
-presets, fills, and the humaniser so tests can pin them.
+**Carry forward:** each effect is a small, RT-safe `juce::dsp` block that is 0 =
+bypass and clamps its output so `FxSmokeTests` can prove no NaN/clip at full
+travel. The DSP is non-GUI, so keep the effect classes free of GUI includes and
+add `juce_dsp` to `headless-compile.sh`'s module list — then the whole master bus
+is headless-testable and only the `MacroKnobs` UI needs CI.
 
-**Decisions to pin for Phase 3:** roll density-curve shape (linear vs exponential
-accel); how a RollRegion attaches to a lane/step; fill RNG seeding (per-bar vs
-per-click); humaniser jitter ranges. Default to the simplest testable choice.
+**Decisions to pin for Phase 4:** limiter lookahead vs simple brickwall; where
+per-pad SPACE send levels live (a field on `Pad`?); macro-knob taper; per-buffer
+vs sample-split processing. Default to the simplest testable choice and note it.
 
 ## 5. Open items / risks
 
-- **CI proven on both OSes, through all of Phase 2.** `.github/workflows/ci.yml`
+- **CI proven on both OSes, through all of Phase 3.** `.github/workflows/ci.yml`
   (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job) is green on every
-  Phase-0/1/2 commit up to HEAD `094adce`. History worth knowing: the first-ever
-  run failed on Windows (`jack/jack.h`), fixed by per-platform backend gating; and
-  8/9 first failed to compile the app (a JUCE override name — `isInterestedInFileDrag`,
-  not `...AndDrop`), fixed by `900be7f`. Optional future optimisation: an
-  `actions/cache` step for `build/_deps` if the JUCE clone time grows.
-- **Two Phase-2 timing features deferred** (both noted in code; not blockers):
-  per-lane **triplet** timing — the `Clock` emits a straight 1/16 grid, so triplet
-  lanes need lane timing decoupled from that grid (a finer clock or per-lane
-  sub-clocking); and **backward micro-shift / swing "rush"** — a step's events are
-  generated at its grid boundary, so a backward shift can't be discovered in time
-  without a one-step look-ahead (forward micro-shift + swing work and are tested).
+  Phase-0/1/2/3 commit up to HEAD `fb01993`. History worth knowing: the first-ever
+  run failed on Windows (`jack/jack.h`), fixed by per-platform backend gating; 8/9
+  first failed to compile the app (a JUCE override name — `isInterestedInFileDrag`,
+  not `...AndDrop`), fixed by `900be7f`; and a Phase-3 commit SEGFAULTed the Windows
+  test binary — a stack overflow from the enlarged `Pattern` (compiled rolls) held
+  by-value in a stack-allocated `Sequencer` (~350 KB > Windows' 1 MB stack), fixed
+  by heap-allocating the pattern state (`f2e4ba8`; Linux's 8 MB stack + ASan had
+  hidden it — so **large engine state belongs on the heap**). Optional future
+  optimisation: an `actions/cache` step for `build/_deps` if the JUCE clone grows.
+- **Deferred (documented in code; not blockers):** per-lane **triplet** timing —
+  the `Clock` emits a straight 1/16 grid, so triplet lanes need lane timing
+  decoupled from that grid (a finer clock or per-lane sub-clocking); **backward
+  micro-shift / swing "rush"** — a step's events are generated at its grid
+  boundary, so a backward shift needs a one-step look-ahead (forward micro-shift,
+  swing, and the Humaniser's forward jitter all work and are tested); and
+  **alt-sample jitter** in the Humaniser — needs the Voice/DrumEngine to support
+  per-hit alternate-sample selection.
 - **Open human verifications (no audio machine used yet):** audible output; the
   pad-grid + sequencer-grid UI (audition, drag-drop, step editing, transport,
-  playhead, swing, undo); and live MIDI input (notes 36–51 → pads). All compile/
-  link/unit-test clean; they need a human at a machine with audio (see TESTING.md).
+  playhead, swing, undo); the Phase-3 UI (paint a roll with the brush + preset
+  picker, FILL / Reroll, the Humanise knob); and live MIDI input (notes 36–51 →
+  pads). All compile/link/unit-test clean; they need a human at a machine with
+  audio (see TESTING.md).
 - **Engine still has no build boundary.** `AudioEngine.cpp` (and all engine/model
   code) is compiled straight into the app / test targets, so the "no JUCE-GUI
   includes under `src/engine`/`src/model`" rule is convention-only. The headless
