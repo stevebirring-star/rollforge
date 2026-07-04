@@ -14,6 +14,7 @@
 // atomic flag.
 
 #include "engine/DrumEngine.h"
+#include "engine/MasterBus.h"
 #include "engine/PadMapping.h"
 #include "engine/Sequencer.h"
 
@@ -92,6 +93,7 @@ private:
     juce::AudioDeviceManager deviceManager;
     DrumEngine               drumEngine;
     Sequencer                sequencer;
+    MasterBus                masterBus;
 
     juce::StringArray enabledMidiInputs;   // device ids we registered a callback on
     std::atomic<bool> audioRunning { false };

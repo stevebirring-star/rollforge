@@ -43,6 +43,8 @@ ENGINE_SOURCES=(
     src/engine/SampleRetirementPool.cpp
     src/engine/Clock.cpp
     src/engine/DrumEngine.cpp
+    src/engine/MasterBus.cpp
+    src/engine/fx/MasterLimiter.cpp
     src/engine/PadMapping.cpp
     src/engine/Sequencer.cpp
     src/engine/Voice.cpp
@@ -78,6 +80,7 @@ TEST_SOURCES=(
     tests/RollPresetsTests.cpp
     tests/FillEngineTests.cpp
     tests/HumaniserTests.cpp
+    tests/FxSmokeTests.cpp
     tests/TestMain.cpp
 )
 

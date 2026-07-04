@@ -31,10 +31,13 @@ target_sources(RollForgeTests PRIVATE
     RollPresetsTests.cpp
     FillEngineTests.cpp
     HumaniserTests.cpp
+    FxSmokeTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/MasterBus.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterLimiter.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/PadMapping.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Sequencer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp

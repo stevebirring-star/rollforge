@@ -56,6 +56,7 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
     // to (re)allocate rate-dependent state here.
     drumEngine.prepare (sampleRate, blockSize);
     sequencer.prepare (sampleRate);
+    masterBus.prepare (sampleRate, blockSize);
 
     audioRunning.store (true, std::memory_order_release);
 }
@@ -83,6 +84,9 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
     // The sequencer drains the engine's UI/MIDI queues, fires sequenced triggers
     // at sample-accurate offsets, and renders the block into `output`.
     sequencer.process (drumEngine, output);
+
+    // Master chain (future macro FX) + always-on brickwall limiter.
+    masterBus.process (output);
 }
 
 void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
