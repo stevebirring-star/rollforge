@@ -78,6 +78,20 @@ public:
     void process (juce::AudioBuffer<float>& buffer) noexcept;
 
     //==============================================================================
+    // Fine-grained audio-thread API, used by the Sequencer to render a block in
+    // segments split at sample-accurate trigger offsets. All audio-thread only.
+
+    /** Applies queued UI + MIDI commands (their triggers land at the call site). */
+    void drainCommands() noexcept;
+
+    /** Triggers a pad immediately from the audio thread (no queue). Plays the
+        pad's configured sample/params/choke, or the interim blip if unconfigured. */
+    void triggerPadNow (int padIndex, float velocity) noexcept;
+
+    /** Renders the voice pool ADDITIVELY into `buffer[startSample, startSample+numSamples)`. */
+    void renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
+
+    //==============================================================================
     double getSampleRate()      const noexcept { return sampleRate; }
     int    getNumPads()         const noexcept { return (int) pads.size(); }
     int    getNumActiveVoices() const noexcept { return pool.getNumActive(); }

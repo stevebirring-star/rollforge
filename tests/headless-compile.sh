@@ -44,6 +44,7 @@ ENGINE_SOURCES=(
     src/engine/Clock.cpp
     src/engine/DrumEngine.cpp
     src/engine/PadMapping.cpp
+    src/engine/Sequencer.cpp
     src/engine/Voice.cpp
     src/engine/VoicePool.cpp
     src/library/SampleLoader.cpp
@@ -66,6 +67,7 @@ TEST_SOURCES=(
     tests/PadMappingTests.cpp
     tests/PatternModelTests.cpp
     tests/ClockTimingTests.cpp
+    tests/SequencerTests.cpp
     tests/TestMain.cpp
 )
 

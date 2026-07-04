@@ -53,8 +53,9 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
     const int blockSize = device != nullptr ? device->getCurrentBufferSizeSamples() : 512;
 
     // aboutToStart is bracketed around the callback stream by JUCE, so it is safe
-    // to (re)allocate the DrumEngine's rate-dependent state here.
+    // to (re)allocate rate-dependent state here.
     drumEngine.prepare (sampleRate, blockSize);
+    sequencer.prepare (sampleRate);
 
     audioRunning.store (true, std::memory_order_release);
 }
@@ -79,7 +80,9 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
     // render additively. All RT-safe: no alloc/lock/IO on this thread.
     juce::AudioBuffer<float> output (outputChannelData, numOutputChannels, numSamples);
     output.clear();
-    drumEngine.process (output);
+    // The sequencer drains the engine's UI/MIDI queues, fires sequenced triggers
+    // at sample-accurate offsets, and renders the block into `output`.
+    sequencer.process (drumEngine, output);
 }
 
 void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)

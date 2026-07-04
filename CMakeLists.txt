@@ -95,6 +95,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/PadMapping.cpp
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp
+        src/engine/Sequencer.cpp
         src/engine/Voice.cpp
         src/engine/VoicePool.cpp
         src/library/SampleLoader.cpp

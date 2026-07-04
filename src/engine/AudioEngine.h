@@ -15,6 +15,7 @@
 
 #include "engine/DrumEngine.h"
 #include "engine/PadMapping.h"
+#include "engine/Sequencer.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
@@ -66,6 +67,10 @@ public:
     /** Exposed so the app can install a Kit into the DrumEngine (KitInstaller). */
     DrumEngine& getDrumEngine() noexcept { return drumEngine; }
 
+    /** Exposed so the app/transport UI can drive the sequencer (pattern, play,
+        tempo). All of its control methods are message-thread safe. */
+    Sequencer& getSequencer() noexcept { return sequencer; }
+
 private:
     //==============================================================================
     // juce::AudioIODeviceCallback
@@ -86,6 +91,7 @@ private:
     //==============================================================================
     juce::AudioDeviceManager deviceManager;
     DrumEngine               drumEngine;
+    Sequencer                sequencer;
 
     juce::StringArray enabledMidiInputs;   // device ids we registered a callback on
     std::atomic<bool> audioRunning { false };

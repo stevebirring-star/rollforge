@@ -78,11 +78,34 @@ void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
 {
+    drainCommands();
+    renderInto (buffer, 0, buffer.getNumSamples());
+}
+
+void DrumEngine::drainCommands() noexcept
+{
     // Drain both producer queues (message thread, then MIDI) from the block's top.
     commands.drain     ([this] (const EngineCommand& c) { handleCommand (c); });
     midiCommands.drain ([this] (const EngineCommand& c) { handleCommand (c); });
+}
 
-    pool.renderAdditive (buffer, 0, buffer.getNumSamples());
+void DrumEngine::renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
+{
+    pool.renderAdditive (buffer, startSample, numSamples);
+}
+
+void DrumEngine::triggerPadNow (int padIndex, float velocity) noexcept
+{
+    if (padIndex >= 0 && padIndex < (int) pads.size() && pads[(size_t) padIndex].sample != nullptr)
+    {
+        const auto& slot = pads[(size_t) padIndex];
+        pool.trigger (slot.sample, slot.params, velocity, slot.chokeGroup);
+    }
+    else
+    {
+        // No sample configured yet -> fallback blip (keeps the app audible).
+        pool.trigger (interimSound, VoiceParameters {}, velocity, 0);
+    }
 }
 
 void DrumEngine::handleCommand (const EngineCommand& command) noexcept
@@ -105,16 +128,7 @@ void DrumEngine::handleCommand (const EngineCommand& command) noexcept
             break;
 
         case CommandType::triggerPad:
-            if (inRange && pads[(size_t) padIndex].sample != nullptr)
-            {
-                const auto& slot = pads[(size_t) padIndex];
-                pool.trigger (slot.sample, slot.params, command.velocity, slot.chokeGroup);
-            }
-            else
-            {
-                // No sample configured yet -> fallback blip (keeps the app audible).
-                pool.trigger (interimSound, VoiceParameters {}, command.velocity, 0);
-            }
+            triggerPadNow (command.padIndex, command.velocity);
             break;
 
         case CommandType::none:
