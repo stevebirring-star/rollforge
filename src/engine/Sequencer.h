@@ -37,6 +37,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace rollforge
 {
@@ -44,7 +46,7 @@ namespace rollforge
 class Sequencer
 {
 public:
-    Sequencer() = default;
+    Sequencer();   // allocates the (large) pattern state on the heap
 
     /** Prepares the clock for the sample rate. Does NOT touch the pattern, so a
         device restart keeps whatever pattern was set. */
@@ -102,14 +104,17 @@ private:
     // Pattern hand-off: the message thread publishes into `incoming` and sets a
     // mode; the audio thread copies it into the owned `active` pattern (now, or at
     // the next bar for a queued switch). `active`/`queued` are audio-thread-owned.
-    TripleBuffer<Pattern> incoming;
-    Pattern               active {};
-    Pattern               queued {};
-    bool                  hasQueued = false;
-    std::atomic<int>      incomingMode { 0 };   // 0 none, 1 immediate, 2 queued
+    // Heap-allocated: a Pattern is large (lanes + compiled rolls), so keeping 5 of
+    // them by value would overflow a small (Windows 1 MB) stack when a Sequencer is
+    // a stack local. Allocated once in the ctor; process() never allocates.
+    std::unique_ptr<TripleBuffer<Pattern>> incoming;
+    std::unique_ptr<Pattern>               active;
+    std::unique_ptr<Pattern>               queued;
+    bool                                   hasQueued = false;
+    std::atomic<int>                       incomingMode { 0 };   // 0 none, 1 immediate, 2 queued
 
-    Event pending[maxPendingEvents];
-    int   pendingCount = 0;
+    std::vector<Event> pending;              // sized to maxPendingEvents in the ctor
+    int                pendingCount = 0;
 
     std::atomic<bool>   playing        { false };
     std::atomic<float>  swing          { 0.0f };

@@ -24,6 +24,14 @@ namespace
     }
 }
 
+Sequencer::Sequencer()
+    : incoming (std::make_unique<TripleBuffer<Pattern>>()),
+      active   (std::make_unique<Pattern>()),
+      queued   (std::make_unique<Pattern>())
+{
+    pending.resize (maxPendingEvents);
+}
+
 void Sequencer::prepare (double sampleRate) noexcept
 {
     clock.prepare (sampleRate);
@@ -33,15 +41,15 @@ void Sequencer::prepare (double sampleRate) noexcept
 
 void Sequencer::setPattern (const Pattern& pattern)
 {
-    incoming.writeBuffer() = pattern;
-    incoming.publish();
+    incoming->writeBuffer() = pattern;
+    incoming->publish();
     incomingMode.store (1, std::memory_order_release);   // immediate
 }
 
 void Sequencer::queuePattern (const Pattern& pattern)
 {
-    incoming.writeBuffer() = pattern;
-    incoming.publish();
+    incoming->writeBuffer() = pattern;
+    incoming->publish();
     incomingMode.store (2, std::memory_order_release);   // swap at the next bar
 }
 
@@ -56,13 +64,13 @@ void Sequencer::applyIncomingPattern (bool nowPlaying) noexcept
     const int mode = incomingMode.exchange (0, std::memory_order_acquire);
     if (mode == 1)
     {
-        active = incoming.read();          // immediate replace
+        *active = incoming->read();        // immediate replace
         hasQueued = false;
         switchQueued.store (false, std::memory_order_release);
     }
     else if (mode == 2)
     {
-        queued = incoming.read();          // stash until the bar boundary
+        *queued = incoming->read();        // stash until the bar boundary
         hasQueued = true;
         switchQueued.store (true, std::memory_order_release);
     }
@@ -70,7 +78,7 @@ void Sequencer::applyIncomingPattern (bool nowPlaying) noexcept
     // Stopped: nothing to wait for, so apply a queued switch immediately.
     if (! nowPlaying && hasQueued)
     {
-        active = queued;
+        *active = *queued;
         hasQueued = false;
         switchQueued.store (false, std::memory_order_release);
     }
@@ -110,7 +118,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     {
         if (hasQueued && (stepIndex % barLengthSteps) == 0)
         {
-            active = queued;
+            *active = *queued;
             hasQueued = false;
             switchQueued.store (false, std::memory_order_release);
         }
@@ -125,7 +133,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
 
 void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSample) noexcept
 {
-    int lanes = active.numLanes;
+    int lanes = active->numLanes;
     if (lanes < 0)        lanes = 0;
     if (lanes > maxLanes) lanes = maxLanes;
 
@@ -134,7 +142,7 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
 
     for (int li = 0; li < lanes; ++li)
     {
-        const Lane& lane = active.lane (li);
+        const Lane& lane = active->lane (li);
 
         int len = lane.length;
         if (len < 1) continue;
@@ -184,13 +192,13 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
     // Rolls: fire any roll whose start step matches this step's position in the bar.
     // The roll's events are pre-compiled (step offsets); we just scale to samples.
     const int posInBar = (int) (((stepIndex % barLengthSteps) + barLengthSteps) % barLengthSteps);
-    int rolls = active.numRolls;
+    int rolls = active->numRolls;
     if (rolls < 0)        rolls = 0;
     if (rolls > maxRolls) rolls = maxRolls;
 
     for (int ri = 0; ri < rolls; ++ri)
     {
-        const CompiledRoll& roll = active.rolls[(size_t) ri];
+        const CompiledRoll& roll = active->rolls[(size_t) ri];
         if ((int) std::lround (roll.startStep) != posInBar)
             continue;
 
