@@ -1,7 +1,5 @@
 #include "engine/AudioEngine.h"
 
-#include <cmath>
-
 namespace rollforge
 {
 
@@ -36,14 +34,15 @@ void AudioEngine::shutdown()
 //==============================================================================
 void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 {
-    sampleRate = device != nullptr ? device->getCurrentSampleRate() : 44100.0;
+    double sampleRate = device != nullptr ? device->getCurrentSampleRate() : 44100.0;
     if (sampleRate <= 0.0)
         sampleRate = 44100.0;
 
-    phaseIncrement      = juce::MathConstants<double>::twoPi * blipFrequencyHz / sampleRate;
-    blipLengthSamples   = (int) (sampleRate * blipSeconds);
-    blipSamplesRemaining = 0;
-    phase               = 0.0;
+    const int blockSize = device != nullptr ? device->getCurrentBufferSizeSamples() : 512;
+
+    // aboutToStart is bracketed around the callback stream by JUCE, so it is safe
+    // to (re)allocate the DrumEngine's rate-dependent state here.
+    drumEngine.prepare (sampleRate, blockSize);
 
     audioRunning.store (true, std::memory_order_release);
 }
@@ -60,37 +59,15 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
                                                     int numSamples,
                                                     const juce::AudioIODeviceCallbackContext& /*context*/)
 {
-    // Always start from silence — RT-safe (no alloc/lock/IO).
-    for (int ch = 0; ch < numOutputChannels; ++ch)
-        if (outputChannelData[ch] != nullptr)
-            juce::FloatVectorOperations::clear (outputChannelData[ch], numSamples);
-
-    // Consume a pending trigger: reset the one-shot blip voice.
-    if (blipRequested.exchange (false, std::memory_order_acquire))
-    {
-        phase                = 0.0;
-        blipSamplesRemaining = blipLengthSamples;
-    }
-
-    if (blipSamplesRemaining <= 0 || blipLengthSamples <= 0)
+    if (numOutputChannels <= 0 || numSamples <= 0)
         return;
 
-    for (int i = 0; i < numSamples && blipSamplesRemaining > 0; ++i)
-    {
-        // Quadratic fade-out envelope (env^2) for a click-free, snappy blip.
-        const double env    = (double) blipSamplesRemaining / (double) blipLengthSamples;
-        const float  value  = (float) (std::sin (phase) * env * env) * blipGain;
-
-        for (int ch = 0; ch < numOutputChannels; ++ch)
-            if (outputChannelData[ch] != nullptr)
-                outputChannelData[ch][i] = value;
-
-        phase += phaseIncrement;
-        if (phase >= juce::MathConstants<double>::twoPi)
-            phase -= juce::MathConstants<double>::twoPi;
-
-        --blipSamplesRemaining;
-    }
+    // Wrap the driver's output channels (JUCE guarantees non-null output pointers
+    // for [0, numOutputChannels)), start from silence, then let the DrumEngine
+    // render additively. All RT-safe: no alloc/lock/IO on this thread.
+    juce::AudioBuffer<float> output (outputChannelData, numOutputChannels, numSamples);
+    output.clear();
+    drumEngine.process (output);
 }
 
 } // namespace rollforge

@@ -6,6 +6,14 @@
 // include a JUCE GUI module (juce_gui_basics, juce_gui_extra, juce_graphics).
 // The engine talks only to audio/basics so it can later be reused verbatim
 // inside a VST3/AU wrapper with no GUI present.
+//
+// AudioEngine owns the audio device and the real-time render callback, and
+// drives a DrumEngine (the device-agnostic sound source) each block. The
+// Phase-0 inline sine "blip" has been replaced by DrumEngine + a lock-free
+// command queue: the UI now sends triggers as commands rather than toggling an
+// atomic flag.
+
+#include "engine/DrumEngine.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
@@ -14,16 +22,12 @@
 namespace rollforge
 {
 
-/** Owns the audio device and renders audio on the real-time thread.
-
-    Phase 0 responsibility is deliberately tiny: initialise a device and, on
-    request from the UI thread, play one short sine "blip". The blip is the
-    smoke test proving the whole audio path (device -> callback -> speakers)
-    is alive before any of the real sequencer machinery arrives in Phase 1+.
+/** Owns the audio device and renders audio on the real-time thread by driving a
+    DrumEngine.
 
     Real-time safety: the audio callback performs no allocation, locking or
-    logging. The only cross-thread channel is a single lock-free atomic flag
-    set by the UI thread and consumed (exchanged) by the audio thread.
+    logging — it clears the output, then asks the DrumEngine to render. Triggers
+    cross from the UI thread through the DrumEngine's lock-free command queue.
 */
 class AudioEngine final : private juce::AudioIODeviceCallback
 {
@@ -39,8 +43,16 @@ public:
     /** Stops the callback and closes the device. Idempotent. */
     void shutdown();
 
-    /** Requests a blip from any thread. Real-time safe. */
-    void triggerBlip() noexcept { blipRequested.store (true, std::memory_order_release); }
+    /** Triggers pad 0 (the interim blip) from any thread. Real-time safe.
+        Kept named `triggerBlip` so the Phase-0 UI button / space bar keep
+        working; general pad triggering is `triggerPad`. */
+    void triggerBlip() noexcept { drumEngine.pushTrigger (0, 1.0f); }
+
+    /** Queues a pad trigger from any (producer) thread. Real-time safe. */
+    void triggerPad (int padIndex, float velocity = 1.0f) noexcept
+    {
+        drumEngine.pushTrigger (padIndex, velocity);
+    }
 
     /** True if a device is currently open and running. UI-thread use only. */
     bool isAudioRunning() const noexcept { return audioRunning.load (std::memory_order_acquire); }
@@ -63,21 +75,9 @@ private:
 
     //==============================================================================
     juce::AudioDeviceManager deviceManager;
+    DrumEngine               drumEngine;
 
-    // Cross-thread flags.
-    std::atomic<bool> blipRequested { false };
-    std::atomic<bool> audioRunning  { false };
-
-    // Blip voice state — touched only on the audio thread once running.
-    double sampleRate          = 44100.0;
-    double phase               = 0.0;   // radians
-    double phaseIncrement      = 0.0;   // radians / sample
-    int    blipSamplesRemaining = 0;
-    int    blipLengthSamples    = 0;
-
-    static constexpr double blipFrequencyHz = 880.0;   // A5
-    static constexpr double blipSeconds     = 0.12;    // 120 ms
-    static constexpr float  blipGain        = 0.5f;
+    std::atomic<bool> audioRunning { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
 };

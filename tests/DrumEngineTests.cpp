@@ -1,0 +1,106 @@
+// RollForge — DrumEngine seam unit tests.
+//
+// Headless (no audio device): drive the command -> audio-out path directly.
+// Proves the seam is silent until triggered, audible after a queued trigger,
+// additive (does not clobber the caller's buffer), and velocity-scaled.
+
+#include "engine/DrumEngine.h"
+
+namespace rollforge::tests
+{
+
+static constexpr const char* testCategory = "rollforge";
+
+namespace
+{
+    bool isSilent (const juce::AudioBuffer<float>& buffer)
+    {
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            if (buffer.getMagnitude (ch, 0, buffer.getNumSamples()) > 0.0f)
+                return false;
+        return true;
+    }
+}
+
+class DrumEngineTest final : public juce::UnitTest
+{
+public:
+    DrumEngineTest() : juce::UnitTest ("RollForge DrumEngine", testCategory) {}
+
+    void runTest() override
+    {
+        const double sampleRate = 44100.0;
+        const int    blockSize  = 256;
+
+        beginTest ("no output without a trigger");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            buffer.clear();
+            engine.process (buffer);
+
+            expect (isSilent (buffer));
+        }
+
+        beginTest ("a queued trigger produces audible output");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+            expect (engine.pushTrigger (0, 1.0f));
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            buffer.clear();
+            engine.process (buffer);
+
+            expect (! isSilent (buffer));
+        }
+
+        beginTest ("idle process is additive (leaves an existing buffer untouched)");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                juce::FloatVectorOperations::fill (buffer.getWritePointer (ch), 0.5f, blockSize);
+
+            engine.process (buffer);   // no trigger queued -> adds nothing
+
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                const auto* d = buffer.getReadPointer (ch);
+                for (int i = 0; i < blockSize; ++i)
+                    expectWithinAbsoluteError (d[i], 0.5f, 1.0e-6f);
+            }
+        }
+
+        beginTest ("velocity scales the trigger level");
+        {
+            auto peakForVelocity = [&] (float velocity)
+            {
+                DrumEngine engine;
+                engine.prepare (sampleRate, blockSize);
+                engine.pushTrigger (0, velocity);
+
+                juce::AudioBuffer<float> buffer (1, blockSize);
+                buffer.clear();
+                engine.process (buffer);
+                return buffer.getMagnitude (0, 0, blockSize);
+            };
+
+            const float loud  = peakForVelocity (1.0f);
+            const float quiet = peakForVelocity (0.25f);
+
+            expect (loud > 0.0f);
+            expect (loud > quiet);
+            // Gain is linear in velocity, so quiet ~= 0.25 * loud (same waveform).
+            expectWithinAbsoluteError (quiet, loud * 0.25f, loud * 0.02f + 1.0e-5f);
+        }
+    }
+};
+
+static DrumEngineTest drumEngineTest;
+
+} // namespace rollforge::tests

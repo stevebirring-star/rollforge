@@ -13,8 +13,11 @@ target_sources(RollForgeTests PRIVATE
     TestMain.cpp
     SampleBufferTests.cpp
     PadKitTests.cpp
+    CommandQueueTests.cpp
+    DrumEngineTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)

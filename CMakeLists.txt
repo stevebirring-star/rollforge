@@ -88,6 +88,7 @@ if(ROLLFORGE_BUILD_APP)
         src/app/Main.cpp
         src/ui/MainComponent.cpp
         src/engine/AudioEngine.cpp
+        src/engine/DrumEngine.cpp
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp
     )

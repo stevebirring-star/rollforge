@@ -36,16 +36,20 @@ fi
 OUT="${OUT:-build/headless/RollForgeTests}"   # under build/ -> already gitignored
 mkdir -p "$(dirname "$OUT")"
 
-# Pure engine/model code under test (no JUCE GUI dependency).
+# Pure engine/model code under test (no JUCE GUI dependency). AudioEngine.cpp is
+# intentionally excluded — it needs juce_audio_devices; DrumEngine is device-free.
 ENGINE_SOURCES=(
     src/engine/SampleBuffer.cpp
     src/engine/SampleRetirementPool.cpp
+    src/engine/DrumEngine.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
 TEST_SOURCES=(
     tests/SampleBufferTests.cpp
     tests/PadKitTests.cpp
+    tests/CommandQueueTests.cpp
+    tests/DrumEngineTests.cpp
     tests/TestMain.cpp
 )
 
