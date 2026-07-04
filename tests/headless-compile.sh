@@ -60,6 +60,7 @@ TEST_SOURCES=(
     tests/ChokeGroupTests.cpp
     tests/SampleLoaderTests.cpp
     tests/StarterKitTests.cpp
+    tests/KitInstallerTests.cpp
     tests/TestMain.cpp
 )
 

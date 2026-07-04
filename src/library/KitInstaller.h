@@ -13,6 +13,7 @@
 // LIBRARY LAYER: no JUCE GUI includes.
 
 #include "engine/DrumEngine.h"
+#include "engine/SampleRetirementPool.h"
 #include "model/Kit.h"
 
 namespace rollforge
@@ -23,5 +24,16 @@ VoiceParameters toVoiceParameters (const Pad& pad);
 
 /** Enqueues a setPad for every pad in `kit` (sample + params + choke group). */
 void installKitIntoEngine (const Kit& kit, DrumEngine& engine);
+
+/** Replaces pad `padIndex`'s sample with `newSample`: retires the old buffer for
+    RT-safe reclamation (so any voice still playing it is never freed on the audio
+    thread), updates the Kit, and installs the new sample + the pad's params/choke
+    into the engine. Message thread only. No-op if the index is invalid or
+    `newSample` is null. */
+void installSampleIntoPad (SampleRetirementPool& retirementPool,
+                           Kit& kit,
+                           DrumEngine& engine,
+                           int padIndex,
+                           SampleBuffer::Ptr newSample);
 
 } // namespace rollforge

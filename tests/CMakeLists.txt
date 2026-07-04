@@ -20,6 +20,7 @@ target_sources(RollForgeTests PRIVATE
     ChokeGroupTests.cpp
     SampleLoaderTests.cpp
     StarterKitTests.cpp
+    KitInstallerTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
