@@ -18,7 +18,7 @@ cmake --build build --parallel
 **Automated**
 - ☑ `ctest --test-dir build --output-on-failure` → smoke test passes _(verified locally, Release)_.
 - ☑ ASan/UBSan run green + leak-clean on Linux _(verified locally: `-DROLLFORGE_ASAN=ON -DROLLFORGE_BUILD_APP=OFF`)_.
-- ☐ CI green on `ubuntu-22.04` and `windows-latest` _(pending first push — GitHub Actions runs there)_.
+- ☑ CI green on `ubuntu-22.04` and `windows-latest` (+ Linux ASan/UBSan) _(verified on `7ddd435`, GitHub Actions run SUCCESS in ~9m48s)_.
 
 > The test runner executes only the `rollforge` category, not JUCE's internal
 > unit-test suite (faster, and avoids unrelated UBSan noise from JUCE's tests).

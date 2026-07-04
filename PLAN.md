@@ -46,7 +46,9 @@ CMake + JUCE fetch, empty window, audio device init, sine blip, CI on both OSes.
 | `.github/workflows/ci.yml` | Build+test matrix (ubuntu-22.04, windows-latest) + Linux ASan/UBSan job. |
 | `README.md`, `TESTING.md`, `LICENSE` | Docs, manual checklist, GPLv3 notice. |
 
-**Accept:** builds clean on both OSes in CI; blip audible locally.
+**Accept:** builds clean on both OSes in CI ✅ (green on `7ddd435` — Linux +
+Windows + ASan/UBSan); blip audible locally ⬜ (pending human check — headless
+build machine).
 
 ---
 

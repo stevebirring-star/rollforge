@@ -5,7 +5,8 @@ Windows. RollForge is built around one idea: *the fastest, least technical way
 to make hi-hat rolls, drum fills and finished-sounding beats.* Paint a roll,
 click FILL, turn one knob — no manual required.
 
-> **Status:** Phase 0 (skeleton) complete. See [`PLAN.md`](PLAN.md) for the
+> **Status:** Phase 0 (skeleton) complete — CI green on Linux + Windows. See
+> [`PLAN.md`](PLAN.md) for the
 > full phase roadmap and [`TESTING.md`](TESTING.md) for the manual checklist.
 
 ---
