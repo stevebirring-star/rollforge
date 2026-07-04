@@ -5,6 +5,7 @@
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
+#include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
 #include "ui/TransportBar.h"
 #include "ui/SequencerGrid.h"
@@ -36,6 +37,7 @@ private:
     void timerCallback() override;                              // retirement sweep
     void loadFileIntoPad (int padIndex, const juce::File& file);
     void updatePadLabels();
+    void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
 
     // Declared first -> destroyed last: the engine (holding pad sample refs)
     // outlives the Kit/pool/loader that also reference the samples.
@@ -44,6 +46,7 @@ private:
     SampleRetirementPool retirementPool;
     Kit                  starterKit;
     Pattern              editPattern;   // the pattern the grid edits (8 lanes -> pads 0..7)
+    juce::UndoManager    undoManager;   // undoable step edits (declared after editPattern)
 
     PadGrid          padGrid;
     TransportBar     transportBar { engine.getSequencer() };

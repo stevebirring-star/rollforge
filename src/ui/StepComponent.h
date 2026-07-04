@@ -24,6 +24,7 @@ public:
     void setPlayhead (bool isCurrent);
 
     std::function<void (bool on, float velocity)> onEdit;
+    std::function<void()> onGestureStart;   // fired at mouse-down (for undo transactions)
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;

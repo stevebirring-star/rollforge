@@ -44,13 +44,17 @@ MainComponent::MainComponent()
     addAndMakeVisible (padGrid);
     addAndMakeVisible (transportBar);
 
+    seqGrid.onGestureStart = [this] { undoManager.beginNewTransaction(); };
     seqGrid.onStepEdit = [this] (int lane, int step, bool on, float velocity)
     {
         if (lane >= 0 && lane < editPattern.numLanes && step >= 0 && step < maxStepsPerLane)
         {
-            editPattern.lane (lane).step (step).on = on;
-            editPattern.lane (lane).step (step).velocity = velocity;
-            engine.getSequencer().setPattern (editPattern);
+            const Step before = editPattern.lane (lane).step (step);
+            Step after = before;
+            after.on = on;
+            after.velocity = velocity;
+            undoManager.perform (new SetStepAction (editPattern, lane, step, before, after,
+                                                    [this] (int l, int s) { afterStepEdit (l, s); }));
         }
     };
     addAndMakeVisible (seqGrid);
@@ -102,6 +106,13 @@ void MainComponent::updatePadLabels()
     for (int i = 0; i < kitNumPads; ++i)
         if (auto sample = starterKit.pad (i).primarySample())
             padGrid.setPadLabel (i, sample->getName());
+}
+
+void MainComponent::afterStepEdit (int lane, int step)
+{
+    const Step& s = editPattern.lane (lane).step (step);
+    seqGrid.setStep (lane, step, s.on, s.velocity);
+    engine.getSequencer().setPattern (editPattern);
 }
 
 void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
@@ -217,6 +228,16 @@ void MainComponent::resized()
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
+    // Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y redo.
+    const auto mods = key.getModifiers();
+    if (mods.isCommandDown())
+    {
+        const int code = key.getKeyCode();
+        if (code == 'Z') { mods.isShiftDown() ? undoManager.redo() : undoManager.undo(); return true; }
+        if (code == 'Y') { undoManager.redo(); return true; }
+        return false;
+    }
+
     // 1234 / qwer / asdf / zxcv mirror the 4x4 grid. Space is left unhandled
     // (reserved for play/stop later).
     const int pad = keyCharToPad (juce::CharacterFunctions::toLowerCase (key.getTextCharacter()));

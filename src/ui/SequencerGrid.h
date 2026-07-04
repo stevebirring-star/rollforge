@@ -25,6 +25,7 @@ public:
     void setPlayheadStep (int step);                              // -1 = none
 
     std::function<void (int lane, int step, bool on, float velocity)> onStepEdit;
+    std::function<void()> onGestureStart;   // fired when a cell gesture begins
 
     void resized() override;
 

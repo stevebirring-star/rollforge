@@ -23,6 +23,11 @@ SequencerGrid::SequencerGrid (int lanes, int steps)
                 if (onStepEdit)
                     onStepEdit (lane, step, on, velocity);
             };
+            c->onGestureStart = [this]
+            {
+                if (onGestureStart)
+                    onGestureStart();
+            };
             addAndMakeVisible (c);
         }
     }

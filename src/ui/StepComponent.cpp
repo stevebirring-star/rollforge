@@ -27,6 +27,9 @@ float StepComponent::velocityForY (float y) const noexcept
 
 void StepComponent::mouseDown (const juce::MouseEvent& e)
 {
+    if (onGestureStart)
+        onGestureStart();
+
     on = ! on;
     if (on)
         velocity = velocityForY (e.position.y);
