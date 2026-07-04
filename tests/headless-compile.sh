@@ -44,6 +44,7 @@ ENGINE_SOURCES=(
     src/engine/Clock.cpp
     src/engine/DrumEngine.cpp
     src/engine/MasterBus.cpp
+    src/engine/OfflineRenderer.cpp
     src/engine/fx/Crush.cpp
     src/engine/fx/Drive.cpp
     src/engine/fx/MasterLimiter.cpp
@@ -98,6 +99,7 @@ TEST_SOURCES=(
     tests/KitBuilderTests.cpp
     tests/ProjectIOTests.cpp
     tests/MidiExportTests.cpp
+    tests/OfflineRenderTests.cpp
     tests/TestMain.cpp
 )
 

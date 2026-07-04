@@ -38,11 +38,13 @@ target_sources(RollForgeTests PRIVATE
     KitBuilderTests.cpp
     ProjectIOTests.cpp
     MidiExportTests.cpp
+    OfflineRenderTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/MasterBus.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/OfflineRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Crush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Drive.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterLimiter.cpp
