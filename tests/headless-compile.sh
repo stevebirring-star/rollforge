@@ -45,6 +45,8 @@ ENGINE_SOURCES=(
     src/engine/Voice.cpp
     src/engine/VoicePool.cpp
     src/library/SampleLoader.cpp
+    src/library/StarterKit.cpp
+    src/library/KitInstaller.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -57,6 +59,7 @@ TEST_SOURCES=(
     tests/VoicePoolTests.cpp
     tests/ChokeGroupTests.cpp
     tests/SampleLoaderTests.cpp
+    tests/StarterKitTests.cpp
     tests/TestMain.cpp
 )
 

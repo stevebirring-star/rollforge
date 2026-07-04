@@ -94,6 +94,8 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/Voice.cpp
         src/engine/VoicePool.cpp
         src/library/SampleLoader.cpp
+        src/library/StarterKit.cpp
+        src/library/KitInstaller.cpp
     )
 
     target_include_directories(RollForge PRIVATE src)

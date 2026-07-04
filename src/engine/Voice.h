@@ -18,6 +18,7 @@
 // ENGINE LAYER RULE: no JUCE GUI includes.
 
 #include "engine/SampleBuffer.h"
+#include "engine/VoiceParameters.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -27,17 +28,9 @@ namespace rollforge
 class Voice final
 {
 public:
-    /** Per-note parameters. DrumEngine maps a Pad onto this (5/9); keeping Voice
-        free of the model type keeps it independently testable. */
-    struct Parameters
-    {
-        float gain           = 1.0f;   // linear
-        float pan            = 0.0f;   // -1 = left .. +1 = right
-        float pitchSemitones = 0.0f;   // -12 .. +12
-        float attackMs       = 0.0f;   // >= 0
-        float releaseMs      = 0.0f;   // >= 0
-        bool  reverse        = false;
-    };
+    /** Per-note parameters (see engine/VoiceParameters.h). Aliased here so
+        existing call sites keep using Voice::Parameters. */
+    using Parameters = VoiceParameters;
 
     Voice() = default;
 

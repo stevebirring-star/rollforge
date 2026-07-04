@@ -61,6 +61,9 @@ public:
         keeps ownership; the UI only reads/edits the shared device manager. */
     juce::AudioDeviceManager& getDeviceManager() noexcept { return deviceManager; }
 
+    /** Exposed so the app can install a Kit into the DrumEngine (KitInstaller). */
+    DrumEngine& getDrumEngine() noexcept { return drumEngine; }
+
 private:
     //==============================================================================
     // juce::AudioIODeviceCallback

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "engine/AudioEngine.h"
+#include "library/StarterKit.h"
+#include "library/KitInstaller.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -30,6 +32,7 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
 
     AudioEngine engine;
+    Kit         starterKit;   // synthesised sounds; kept alive for the session
 
     juce::Label      titleLabel;
     juce::Label      statusLabel;

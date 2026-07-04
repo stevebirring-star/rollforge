@@ -19,12 +19,15 @@ target_sources(RollForgeTests PRIVATE
     VoicePoolTests.cpp
     ChokeGroupTests.cpp
     SampleLoaderTests.cpp
+    StarterKitTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/VoicePool.cpp
     ${CMAKE_SOURCE_DIR}/src/library/SampleLoader.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/StarterKit.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/KitInstaller.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)

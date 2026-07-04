@@ -7,8 +7,8 @@ namespace rollforge
 
 namespace
 {
-    // A short synthesised "blip" — the INTERIM trigger sound until StarterKit
-    // installs real per-pad samples. ~120 ms, 880 Hz, quadratic fade-out.
+    // A short synthesised "blip" — the fallback sound for a pad with no sample.
+    // ~120 ms, 880 Hz, quadratic fade-out.
     SampleBuffer::Ptr makeInterimBlip (double sampleRate)
     {
         constexpr double freqHz  = 880.0;
@@ -34,9 +34,10 @@ namespace
     }
 }
 
-DrumEngine::DrumEngine (int commandCapacity, int numVoices)
+DrumEngine::DrumEngine (int commandCapacity, int numVoices, int numPads)
     : commands (commandCapacity),
-      pool (numVoices)
+      pool (numVoices),
+      pads ((size_t) juce::jmax (1, numPads))
 {
 }
 
@@ -50,6 +51,15 @@ bool DrumEngine::pushCommand (const EngineCommand& command) noexcept
     return commands.push (command);
 }
 
+bool DrumEngine::pushSetPad (int padIndex,
+                             SampleBuffer::Ptr sample,
+                             const VoiceParameters& params,
+                             int chokeGroup) noexcept
+{
+    // The command carries a raw pointer; the caller keeps `sample` alive.
+    return commands.push (EngineCommand::makeSetPad (padIndex, sample.get(), params, chokeGroup));
+}
+
 void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
 {
     sampleRate   = newSampleRate > 0.0 ? newSampleRate : 44100.0;
@@ -59,7 +69,7 @@ void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
 {
-    // Drain producer commands first, so a trigger applies from the block's top.
+    // Drain producer commands first, so setPad/trigger apply from the block's top.
     commands.drain ([this] (const EngineCommand& c) { handleCommand (c); });
 
     pool.renderAdditive (buffer, 0, buffer.getNumSamples());
@@ -67,13 +77,34 @@ void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
 
 void DrumEngine::handleCommand (const EngineCommand& command) noexcept
 {
+    const int padIndex = command.padIndex;
+    const bool inRange = padIndex >= 0 && padIndex < (int) pads.size();
+
     switch (command.type)
     {
+        case CommandType::setPad:
+            if (inRange)
+            {
+                // Adopt the raw pointer into a Ptr (increfs). Decref of any
+                // previous sample is null/held-elsewhere at install time; a live
+                // replacement retires the old buffer on the producer side first.
+                pads[(size_t) padIndex].sample     = command.sample;
+                pads[(size_t) padIndex].params     = command.params;
+                pads[(size_t) padIndex].chokeGroup = command.chokeGroup;
+            }
+            break;
+
         case CommandType::triggerPad:
-            // Interim: every pad plays the same synth blip with default voice
-            // params and no choke group. Real per-pad sample + Voice::Parameters
-            // + choke-group mapping arrives with StarterKit (7/9).
-            pool.trigger (interimSound, Voice::Parameters {}, command.velocity, 0);
+            if (inRange && pads[(size_t) padIndex].sample != nullptr)
+            {
+                const auto& slot = pads[(size_t) padIndex];
+                pool.trigger (slot.sample, slot.params, command.velocity, slot.chokeGroup);
+            }
+            else
+            {
+                // No sample configured yet -> fallback blip (keeps the app audible).
+                pool.trigger (interimSound, VoiceParameters {}, command.velocity, 0);
+            }
             break;
 
         case CommandType::none:

@@ -40,6 +40,13 @@ MainComponent::MainComponent()
     addAndMakeVisible (settingsButton);
 
     engine.initialise();
+
+    // Install the synthesised starter kit so pads play real drum sounds. It is
+    // built once at a fixed reference rate; the Voice resamples per-voice to the
+    // device rate, so it never needs rebuilding on a device change.
+    starterKit = StarterKit::build (44100.0);
+    installKitIntoEngine (starterKit, engine.getDrumEngine());
+
     engine.getDeviceManager().addChangeListener (this);
     refreshStatus();
 
@@ -122,7 +129,7 @@ void MainComponent::paint (juce::Graphics& g)
 
     g.setColour (colours::textDim);
     g.setFont (juce::FontOptions (14.0f));
-    g.drawText ("Phase 0 — skeleton. Press the button (or the space bar) to hear a blip.",
+    g.drawText ("Starter kit loaded. Press the button (or the space bar) to play the kick.",
                 getLocalBounds().reduced (28).removeFromBottom (28),
                 juce::Justification::centredLeft, true);
 }

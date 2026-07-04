@@ -5,29 +5,32 @@
 // CommandQueue and renders audio (through a VoicePool) into a buffer supplied by
 // the host callback.
 //
-// DEVICE-AGNOSTIC BY DESIGN: DrumEngine knows nothing about AudioDeviceManager.
-// AudioEngine owns the device and drives DrumEngine via prepare()/process(), so
-// DrumEngine + VoicePool are fully unit-testable headless, with no audio hardware.
+// DEVICE-AGNOSTIC BY DESIGN: DrumEngine knows nothing about AudioDeviceManager
+// or the model layer. AudioEngine owns the device and drives DrumEngine via
+// prepare()/process(); the Kit -> pad mapping is done by a producer (see
+// library/KitInstaller) that calls pushSetPad(). So DrumEngine + VoicePool are
+// fully unit-testable headless, with no audio hardware and no model dependency.
 //
 // THREADING:
-//   * pushTrigger() / pushCommand() — PRODUCER (message thread; later also MIDI).
-//   * prepare()                     — audio/device thread, at stream start
-//                                     (allocation permitted; not in process()).
-//   * process()                     — AUDIO THREAD. No allocation/locking/IO.
+//   * pushTrigger()/pushCommand()/pushSetPad() — PRODUCER (message thread; MIDI).
+//   * prepare()                                — audio/device thread, stream start
+//                                                (allocation permitted; not process).
+//   * process()                                — AUDIO THREAD. No alloc/lock/IO.
 //
-// PHASE-1 STATUS: the command FIFO + VoicePool are in place and polyphonic. Every
-// trigger currently plays a synthesised INTERIM blip with default voice params
-// and no choke group, because there is no loaded Kit yet — the Pad -> sample +
-// Voice::Parameters + choke-group mapping is wired when StarterKit (7/9) provides
-// real per-pad sounds.
+// A pad with a configured sample plays that sample with its params + choke group;
+// a pad with no sample yet falls back to a synthesised interim blip so the app is
+// never silent before a Kit is installed.
 //
 // ENGINE LAYER RULE: no JUCE GUI includes.
 
 #include "engine/CommandQueue.h"
 #include "engine/SampleBuffer.h"
 #include "engine/VoicePool.h"
+#include "engine/VoiceParameters.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
+
+#include <vector>
 
 namespace rollforge
 {
@@ -35,7 +38,7 @@ namespace rollforge
 class DrumEngine final
 {
 public:
-    explicit DrumEngine (int commandCapacity = 1024, int numVoices = 64);
+    explicit DrumEngine (int commandCapacity = 1024, int numVoices = 64, int numPads = 16);
 
     //==============================================================================
     // Producer-thread API (message / MIDI thread).
@@ -45,6 +48,15 @@ public:
 
     /** Queues a raw command. Returns false if the command queue is full. */
     bool pushCommand (const EngineCommand& command) noexcept;
+
+    /** Queues a pad (re)configuration: sample + params + choke group. The caller
+        MUST keep `sample` alive until the pad is replaced/cleared (e.g. by holding
+        the Kit), and — when replacing a live sample — retire the previous one
+        first (SampleBuffer.h). Returns false if the queue is full. */
+    bool pushSetPad (int padIndex,
+                     SampleBuffer::Ptr sample,
+                     const VoiceParameters& params,
+                     int chokeGroup) noexcept;
 
     //==============================================================================
     // Audio-thread API.
@@ -59,19 +71,27 @@ public:
     void process (juce::AudioBuffer<float>& buffer) noexcept;
 
     //==============================================================================
-    double getSampleRate()   const noexcept { return sampleRate; }
+    double getSampleRate()      const noexcept { return sampleRate; }
+    int    getNumPads()         const noexcept { return (int) pads.size(); }
     int    getNumActiveVoices() const noexcept { return pool.getNumActive(); }
 
 private:
+    struct PadSlot
+    {
+        SampleBuffer::Ptr sample;
+        VoiceParameters   params;
+        int               chokeGroup = 0;
+    };
+
     void handleCommand (const EngineCommand& command) noexcept;
 
-    CommandQueue commands;
-    VoicePool    pool;
+    CommandQueue         commands;
+    VoicePool            pool;
+    std::vector<PadSlot> pads;
 
     double sampleRate = 44100.0;
 
-    // Interim per-trigger sound, played through the pool until StarterKit (7/9)
-    // installs real per-pad samples.
+    // Fallback sound for a pad with no sample yet (played until a Kit is installed).
     SampleBuffer::Ptr interimSound;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DrumEngine)
