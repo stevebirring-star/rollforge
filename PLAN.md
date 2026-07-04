@@ -77,7 +77,7 @@ groups; CI green on both OSes. Samples stored at native rate (Voice resamples).
 
 ---
 
-## Phase 2 — Sequencer core 🚧
+## Phase 2 — Sequencer core ✅
 
 Up to 16 lanes × 64 steps, base 1/16 grid, per-lane triplet + length (polyrhythms), rich per-step data, transport.
 
@@ -95,10 +95,15 @@ Up to 16 lanes × 64 steps, base 1/16 grid, per-lane triplet + length (polyrhyth
 | `tests/` | `ClockTimingTests` (offsets exact @ 64/256/1024), `RatchetTests`, `SwingTests`, `PatternSwitchTests`. |
 
 **Accept:** timing tests exact across buffer sizes; ratchets even; A→B on bar boundary, glitch-free.
+✅ Done (commits `234584c`..`094adce`): sample-accurate Clock (adversarially
+verified — identical across 64/256/1024 buffers), Sequencer with ratchets /
+probability / micro-shift / swing, A–H PatternBank with bar-boundary switch, and
+the TransportBar + editable SequencerGrid UI with UndoManager. Triplet timing +
+backward micro-shift deferred (see HANDOFF §5). 76 headless test groups; CI green.
 
 ---
 
-## Phase 3 — Roll Painter + Fill Engine + Humaniser ⬜ (differentiators — go deep)
+## Phase 3 — Roll Painter + Fill Engine + Humaniser 🚧 (differentiators — go deep)
 
 | File | Classes / responsibility |
 |------|--------------------------|

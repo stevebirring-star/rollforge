@@ -63,7 +63,23 @@ app and runs these on Linux + Windows + ASan/UBSan.
 - ☐ Quit → clean exit, no crash/hang (ASan-clean; no leaked sample buffers).
 
 ## Phase 2 — Sequencer core
-_(to be filled)_
+
+**Automated (headless):** `tests/headless-compile.sh` -> 76 test groups
+(PatternModel + TripleBuffer, ClockTiming, Sequencer, PatternSwitch). CI builds
+the full app and runs these on Linux + Windows + ASan/UBSan. The Clock timing was
+additionally verified by a 3-lens adversarial pass.
+
+**Manual (needs a machine with audio + a display):**
+- ☐ The window shows a transport bar + an 8-lane × 16-step grid + the pad grid.
+- ☐ Click steps to toggle them; vertical-drag a step to set velocity (top = loud).
+- ☐ Press Play → the pattern loops; a playhead column sweeps left to right.
+- ☐ Change BPM (slider) or Tap Tempo → the loop speed follows.
+- ☐ Raise Swing → off-beat steps shuffle later; 0 = straight.
+- ☐ Ratchets / probability / micro-shift sound right — a ratcheted step machine-
+  guns; low probability drops hits; forward micro-shift nudges a step late.
+- ☐ Cmd/Ctrl+Z undoes a step edit; Shift+Z (or Ctrl+Y) redoes; the grid updates.
+- ☐ Stop → playback halts (voices ring out); Play restarts from the top.
+- ☐ Quit → clean exit, no crash/hang (ASan-clean).
 
 ## Phase 3 — Roll Painter + Fill Engine
 _(to be filled)_
