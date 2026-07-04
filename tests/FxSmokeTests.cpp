@@ -8,6 +8,7 @@
 #include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
 #include "engine/fx/Punch.h"
+#include "engine/fx/Space.h"
 
 #include <juce_core/juce_core.h>
 
@@ -231,6 +232,51 @@ public:
                 for (int i = 0; i < 512; ++i)
                     maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
             expect (maxDiff > 0.001f);
+        }
+
+        beginTest ("Space at 0 is a bypass");
+        {
+            Space space;
+            space.prepare (sr);
+            space.setAmount (0.0f);
+            juce::AudioBuffer<float> b (2, 512);
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    b.setSample (c, i, 0.3f * std::sin ((float) i * 0.1f));
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            space.process (b);
+
+            float maxDiff = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
+            expect (maxDiff == 0.0f);
+        }
+
+        beginTest ("Space at full adds a reverb tail without NaN/blowup");
+        {
+            Space space;
+            space.prepare (sr);
+            space.setAmount (1.0f);
+            juce::AudioBuffer<float> b (2, 8192);
+            b.clear();
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 256; ++i)
+                    b.setSample (c, i, 0.6f * std::sin ((float) i * 0.3f));   // burst, then silence
+
+            space.process (b);
+
+            expect (! anyNaN (b));
+            expect (maxMag (b) < 4.0f);
+
+            // A reverb tail appears in the originally-silent region.
+            float tail = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 2000; i < 8192; ++i)
+                    tail = juce::jmax (tail, std::abs (b.getSample (c, i)));
+            expect (tail > 0.0f);
         }
     }
 };

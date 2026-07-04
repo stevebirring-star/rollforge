@@ -11,6 +11,7 @@
 #include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
 #include "engine/fx/Punch.h"
+#include "engine/fx/Space.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -33,6 +34,8 @@ public:
     float getCrush() const noexcept { return crush.getAmount(); }
     void setPunch (float amount) noexcept { punch.setAmount (amount); }
     float getPunch() const noexcept { return punch.getAmount(); }
+    void setSpace (float amount) noexcept { space.setAmount (amount); }
+    float getSpace() const noexcept { return space.getAmount(); }
 
     MasterLimiter& getLimiter() noexcept { return limiter; }
 
@@ -40,6 +43,7 @@ private:
     Punch         punch;
     Drive         drive;
     Crush         crush;
+    Space         space;
     MasterLimiter limiter;
 };
 
