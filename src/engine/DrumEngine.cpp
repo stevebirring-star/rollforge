@@ -36,6 +36,7 @@ namespace
 
 DrumEngine::DrumEngine (int commandCapacity, int numVoices, int numPads)
     : commands (commandCapacity),
+      midiCommands (commandCapacity),
       pool (numVoices),
       pads ((size_t) juce::jmax (1, numPads))
 {
@@ -60,6 +61,14 @@ bool DrumEngine::pushSetPad (int padIndex,
     return commands.push (EngineCommand::makeSetPad (padIndex, sample.get(), params, chokeGroup));
 }
 
+bool DrumEngine::pushMidiTrigger (int padIndex, float velocity) noexcept
+{
+    // Serialise MIDI producers (multiple device threads) so the queue stays a
+    // valid single-producer FIFO; the audio-thread consumer never locks.
+    const juce::SpinLock::ScopedLockType sl (midiProducerLock);
+    return midiCommands.push (EngineCommand::makeTrigger (padIndex, velocity));
+}
+
 void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
 {
     sampleRate   = newSampleRate > 0.0 ? newSampleRate : 44100.0;
@@ -69,8 +78,9 @@ void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
 {
-    // Drain producer commands first, so setPad/trigger apply from the block's top.
-    commands.drain ([this] (const EngineCommand& c) { handleCommand (c); });
+    // Drain both producer queues (message thread, then MIDI) from the block's top.
+    commands.drain     ([this] (const EngineCommand& c) { handleCommand (c); });
+    midiCommands.drain ([this] (const EngineCommand& c) { handleCommand (c); });
 
     pool.renderAdditive (buffer, 0, buffer.getNumSamples());
 }

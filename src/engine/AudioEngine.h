@@ -14,6 +14,7 @@
 // atomic flag.
 
 #include "engine/DrumEngine.h"
+#include "engine/PadMapping.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
@@ -29,7 +30,8 @@ namespace rollforge
     logging — it clears the output, then asks the DrumEngine to render. Triggers
     cross from the UI thread through the DrumEngine's lock-free command queue.
 */
-class AudioEngine final : private juce::AudioIODeviceCallback
+class AudioEngine final : private juce::AudioIODeviceCallback,
+                          private juce::MidiInputCallback
 {
 public:
     AudioEngine();
@@ -77,9 +79,15 @@ private:
     void audioDeviceStopped() override;
 
     //==============================================================================
+    // juce::MidiInputCallback — runs on a MIDI-input thread. Maps note-ons to pad
+    // triggers via the MIDI command queue (no mapping UI in Phase 1).
+    void handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& message) override;
+
+    //==============================================================================
     juce::AudioDeviceManager deviceManager;
     DrumEngine               drumEngine;
 
+    juce::StringArray enabledMidiInputs;   // device ids we registered a callback on
     std::atomic<bool> audioRunning { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)

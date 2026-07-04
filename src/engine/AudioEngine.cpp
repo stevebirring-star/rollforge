@@ -23,10 +23,22 @@ void AudioEngine::initialise()
     }
 
     deviceManager.addAudioCallback (this);
+
+    // Enable every available MIDI input and listen for note-ons -> pad triggers.
+    for (const auto& device : juce::MidiInput::getAvailableDevices())
+    {
+        deviceManager.setMidiInputDeviceEnabled (device.identifier, true);
+        deviceManager.addMidiInputDeviceCallback (device.identifier, this);
+        enabledMidiInputs.add (device.identifier);
+    }
 }
 
 void AudioEngine::shutdown()
 {
+    for (const auto& id : enabledMidiInputs)
+        deviceManager.removeMidiInputDeviceCallback (id, this);
+    enabledMidiInputs.clear();
+
     deviceManager.removeAudioCallback (this);
     deviceManager.closeAudioDevice();
 }
@@ -68,6 +80,17 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
     juce::AudioBuffer<float> output (outputChannelData, numOutputChannels, numSamples);
     output.clear();
     drumEngine.process (output);
+}
+
+void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
+{
+    // Runs on a MIDI-input thread; route note-ons to pad triggers (RT-safe queue).
+    if (message.isNoteOn())
+    {
+        const int pad = midiNoteToPad (message.getNoteNumber());
+        if (pad >= 0)
+            drumEngine.pushMidiTrigger (pad, message.getFloatVelocity());
+    }
 }
 
 } // namespace rollforge

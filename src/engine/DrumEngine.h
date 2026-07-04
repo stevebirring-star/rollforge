@@ -58,6 +58,13 @@ public:
                      const VoiceParameters& params,
                      int chokeGroup) noexcept;
 
+    /** Queues a trigger from a MIDI-input thread. Uses a SEPARATE queue from the
+        message-thread commands; because multiple MIDI devices deliver on multiple
+        threads, the producer side is guarded by a spin lock so it stays a valid
+        single-consumer FIFO for the (lock-free) audio thread. Returns false if
+        the MIDI queue is full. */
+    bool pushMidiTrigger (int padIndex, float velocity = 1.0f) noexcept;
+
     //==============================================================================
     // Audio-thread API.
 
@@ -85,7 +92,10 @@ private:
 
     void handleCommand (const EngineCommand& command) noexcept;
 
-    CommandQueue         commands;
+    CommandQueue   commands;        // producer: message thread (UI + keyboard + setPad)
+    CommandQueue   midiCommands;    // producer: MIDI-input thread(s), guarded below
+    juce::SpinLock midiProducerLock;
+
     VoicePool            pool;
     std::vector<PadSlot> pads;
 

@@ -98,6 +98,35 @@ public:
             // Gain is linear in velocity, so quiet ~= 0.25 * loud (same waveform).
             expectWithinAbsoluteError (quiet, loud * 0.25f, loud * 0.02f + 1.0e-5f);
         }
+
+        beginTest ("a MIDI-queued trigger produces audible output");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+            expect (engine.pushMidiTrigger (0, 1.0f));
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            buffer.clear();
+            engine.process (buffer);
+
+            expect (! isSilent (buffer));
+        }
+
+        beginTest ("message and MIDI triggers both play in one block");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+            engine.pushTrigger (0, 1.0f);        // message queue
+            engine.pushMidiTrigger (1, 1.0f);    // MIDI queue
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            buffer.clear();
+            engine.process (buffer);             // drains both queues
+
+            // No kit installed -> both fall back to the interim blip (choke 0),
+            // so both triggers occupy voices.
+            expectEquals (engine.getNumActiveVoices(), 2);
+        }
     }
 };
 

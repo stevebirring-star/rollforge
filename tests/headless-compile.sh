@@ -42,6 +42,7 @@ ENGINE_SOURCES=(
     src/engine/SampleBuffer.cpp
     src/engine/SampleRetirementPool.cpp
     src/engine/DrumEngine.cpp
+    src/engine/PadMapping.cpp
     src/engine/Voice.cpp
     src/engine/VoicePool.cpp
     src/library/SampleLoader.cpp
@@ -61,6 +62,7 @@ TEST_SOURCES=(
     tests/SampleLoaderTests.cpp
     tests/StarterKitTests.cpp
     tests/KitInstallerTests.cpp
+    tests/PadMappingTests.cpp
     tests/TestMain.cpp
 )
 

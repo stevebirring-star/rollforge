@@ -21,9 +21,11 @@ target_sources(RollForgeTests PRIVATE
     SampleLoaderTests.cpp
     StarterKitTests.cpp
     KitInstallerTests.cpp
+    PadMappingTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/PadMapping.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/VoicePool.cpp
     ${CMAKE_SOURCE_DIR}/src/library/SampleLoader.cpp

@@ -179,10 +179,13 @@ void MainComponent::resized()
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::spaceKey)
+    // 1234 / qwer / asdf / zxcv mirror the 4x4 grid. Space is left unhandled
+    // (reserved for play/stop later).
+    const int pad = keyCharToPad (juce::CharacterFunctions::toLowerCase (key.getTextCharacter()));
+    if (pad >= 0)
     {
-        engine.triggerPad (0, 1.0f);   // pad 0 = kick
-        padGrid.flashPad (0);
+        engine.triggerPad (pad, 1.0f);
+        padGrid.flashPad (pad);
         return true;
     }
 

@@ -91,6 +91,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/PadGrid.cpp
         src/engine/AudioEngine.cpp
         src/engine/DrumEngine.cpp
+        src/engine/PadMapping.cpp
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp
         src/engine/Voice.cpp
