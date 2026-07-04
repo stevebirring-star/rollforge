@@ -11,6 +11,9 @@ juce_add_console_app(RollForgeTests
 
 target_sources(RollForgeTests PRIVATE
     TestMain.cpp
+    SampleBufferTests.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)

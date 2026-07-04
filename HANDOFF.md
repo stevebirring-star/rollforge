@@ -79,6 +79,18 @@ cmake --build build-asan --target RollForgeTests
 ctest --test-dir build-asan --output-on-failure
 ```
 
+**No GUI dev libs / no sudo?** The CMake path above needs the Linux GUI dev
+packages because `juceaide` compiles `juce_gui_basics` (see §2). When you can't
+install them, run the headless engine/model tests directly — this compiles only
+`juce_core` + `juce_audio_basics` + the pure code under test, bypassing juceaide:
+
+```bash
+tests/headless-compile.sh      # builds build/headless/RollForgeTests and runs it
+```
+
+Keep its `ENGINE_SOURCES`/`TEST_SOURCES` lists in sync with `tests/CMakeLists.txt`
+as new headless tests land. CI remains the authoritative full build on both OSes.
+
 ## 4. Immediate next actions (Phase 1 — Pads + playback engine)
 
 Goal: 16 pads (4×4), 64-voice polyphonic pool, per-pad params, sample loading,
