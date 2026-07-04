@@ -101,6 +101,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/fx/Crush.cpp
         src/engine/fx/Drive.cpp
         src/engine/fx/MasterLimiter.cpp
+        src/engine/fx/Punch.cpp
         src/engine/PadMapping.cpp
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp

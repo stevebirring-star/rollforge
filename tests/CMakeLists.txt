@@ -40,6 +40,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Crush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Drive.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterLimiter.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/Punch.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/PadMapping.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Sequencer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp

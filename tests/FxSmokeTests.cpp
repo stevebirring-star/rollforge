@@ -7,6 +7,7 @@
 #include "engine/fx/Crush.h"
 #include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
+#include "engine/fx/Punch.h"
 
 #include <juce_core/juce_core.h>
 
@@ -183,6 +184,48 @@ public:
 
             expect (! anyNaN (b));
             expect (maxMag (b) < 2.0f);
+            float maxDiff = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
+            expect (maxDiff > 0.001f);
+        }
+
+        beginTest ("Punch at 0 is a bypass");
+        {
+            Punch punch;
+            punch.prepare (sr);
+            punch.setAmount (0.0f);
+            juce::AudioBuffer<float> b (1, 256);
+            for (int i = 0; i < 256; ++i)
+                b.setSample (0, i, 0.5f * std::sin ((float) i * 0.12f));
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            punch.process (b);
+
+            float maxDiff = 0.0f;
+            for (int i = 0; i < 256; ++i)
+                maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (0, i) - ref.getSample (0, i)));
+            expect (maxDiff == 0.0f);
+        }
+
+        beginTest ("Punch at full emphasises without NaN/blowup");
+        {
+            Punch punch;
+            punch.prepare (sr);
+            punch.setAmount (1.0f);
+            juce::AudioBuffer<float> b (2, 512);
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    b.setSample (c, i, 0.5f * std::sin ((float) i * 0.1f));
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            punch.process (b);
+
+            expect (! anyNaN (b));
+            expect (maxMag (b) < 8.0f);
             float maxDiff = 0.0f;
             for (int c = 0; c < 2; ++c)
                 for (int i = 0; i < 512; ++i)
