@@ -18,11 +18,13 @@ target_sources(RollForgeTests PRIVATE
     VoiceTests.cpp
     VoicePoolTests.cpp
     ChokeGroupTests.cpp
+    SampleLoaderTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/VoicePool.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/SampleLoader.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)
@@ -35,6 +37,7 @@ target_compile_definitions(RollForgeTests PRIVATE
 
 target_link_libraries(RollForgeTests PRIVATE
     juce::juce_audio_basics
+    juce::juce_audio_formats
     juce::juce_core
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags

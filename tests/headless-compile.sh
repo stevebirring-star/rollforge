@@ -44,6 +44,7 @@ ENGINE_SOURCES=(
     src/engine/DrumEngine.cpp
     src/engine/Voice.cpp
     src/engine/VoicePool.cpp
+    src/library/SampleLoader.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -55,6 +56,7 @@ TEST_SOURCES=(
     tests/VoiceTests.cpp
     tests/VoicePoolTests.cpp
     tests/ChokeGroupTests.cpp
+    tests/SampleLoaderTests.cpp
     tests/TestMain.cpp
 )
 
@@ -70,6 +72,7 @@ CXX="${CXX:-g++}"
     "$MODULES/juce_core/juce_core.cpp" \
     "$MODULES/juce_core/juce_core_CompilationTime.cpp" \
     "$MODULES/juce_audio_basics/juce_audio_basics.cpp" \
+    "$MODULES/juce_audio_formats/juce_audio_formats.cpp" \
     "${ENGINE_SOURCES[@]}" "${TEST_SOURCES[@]}" \
     -o "$OUT" \
     -lpthread -ldl -lrt -lm
