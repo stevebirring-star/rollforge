@@ -45,6 +45,7 @@ ENGINE_SOURCES=(
     src/engine/DrumEngine.cpp
     src/engine/MasterBus.cpp
     src/engine/OfflineRenderer.cpp
+    src/engine/WavExporter.cpp
     src/engine/fx/Crush.cpp
     src/engine/fx/Drive.cpp
     src/engine/fx/MasterLimiter.cpp
@@ -100,6 +101,7 @@ TEST_SOURCES=(
     tests/ProjectIOTests.cpp
     tests/MidiExportTests.cpp
     tests/OfflineRenderTests.cpp
+    tests/StemNullTests.cpp
     tests/TestMain.cpp
 )
 
