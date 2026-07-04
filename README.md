@@ -5,10 +5,10 @@ Windows. RollForge is built around one idea: *the fastest, least technical way
 to make hi-hat rolls, drum fills and finished-sounding beats.* Paint a roll,
 click FILL, turn one knob — no manual required.
 
-> **Status:** Phase 3 (roll painter + fill engine + humaniser) complete — a 16-pad
-> sampler, a sample-accurate step sequencer, and the differentiators: paint
-> accelerating rolls with a brush, one-click per-style drum fills, and a
-> Robot↔Human knob; CI green on Linux + Windows. See [`PLAN.md`](PLAN.md) for the
+> **Status:** Phase 4 (macro effects) complete — a 16-pad sampler, a sample-accurate
+> step sequencer, the roll/fill/humanise differentiators, and four master macro
+> knobs (PUNCH / SPACE / CRUSH / DRIVE) over an always-on limiter; CI green on
+> Linux + Windows. See [`PLAN.md`](PLAN.md) for the
 > full phase roadmap and [`TESTING.md`](TESTING.md) for the manual checklist.
 
 ---

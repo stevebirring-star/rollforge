@@ -104,7 +104,22 @@ Linux + Windows + ASan/UBSan.
 - ☐ Quit -> clean exit, no crash/hang (ASan-clean).
 
 ## Phase 4 — Macro effects
-_(to be filled)_
+
+**Automated (headless):** `tests/headless-compile.sh` -> 107 test groups, adding
+FxSmoke: the limiter caps loud + extreme input to its ceiling with no NaN/inf and
+passes quiet signal ~unchanged; each macro (Drive / Crush / Punch / Space) is an
+exact bypass at 0 and shapes the signal at full travel with no NaN/blow-up (Space
+grows an audible reverb tail). CI builds the full app on Linux + Windows + ASan.
+
+**Manual (needs a machine with audio + a display):**
+- ☐ Four macro knobs (PUNCH / SPACE / CRUSH / DRIVE) show below the sequencer grid,
+  all at 0 (clean) by default.
+- ☐ DRIVE up -> grittier / louder saturation; CRUSH up -> lo-fi bitcrush + aliasing;
+  PUNCH up -> snappier attacks; SPACE up -> reverb tail.
+- ☐ All knobs at max -> still no digital clipping (the limiter holds the ceiling);
+  no crackle/dropouts (CPU stays low).
+- ☐ Knobs at 0 -> output is clean (bypass) and identical to Phase-3 behaviour.
+- ☐ Quit -> clean exit, no crash/hang (ASan-clean).
 
 ## Phase 5 — Sample library + auto-kits
 _(to be filled)_

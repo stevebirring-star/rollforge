@@ -130,7 +130,7 @@ CI green.
 
 ---
 
-## Phase 4 — Macro effects 🚧
+## Phase 4 — Macro effects ✅
 
 Four master-bus macro knobs, per-pad SPACE sends, always-on transparent limiter. `juce::dsp`. Defaults 0 = bypass. No routing UI.
 
@@ -146,10 +146,16 @@ Four master-bus macro knobs, per-pad SPACE sends, always-on transparent limiter.
 | `tests/` | `FxSmokeTests` (no NaN/clip at extremes; limiter caps output). |
 
 **Accept:** each knob sounds good full-travel; no clipping at max; CPU < 15% of one core @ 44.1k/256.
+✅ Done (commits `6071e3b`..`5e393f7`, 6 commits): a `MasterBus` on the audio output
+with `Punch` / `Drive` / `Crush` / `Space` macros (each 0 = bypass) + an always-on
+brickwall `MasterLimiter`, and a `MacroKnobs` UI. All effects hand-rolled (no
+juce::dsp) and headless-tested via `FxSmokeTests` (bypass at 0; no NaN/clip at full
+travel). Per-pad SPACE sends deferred (need a send level on `Pad`). 107 headless
+test groups; CI green.
 
 ---
 
-## Phase 5 — Sample library + auto-kits ⬜
+## Phase 5 — Sample library + auto-kits 🚧
 
 | File | Classes / responsibility |
 |------|--------------------------|

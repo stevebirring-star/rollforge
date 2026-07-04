@@ -4,16 +4,17 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-04 (Phase 3 complete — roll painter, fill engine, humaniser)._
+_Last updated: 2026-07-04 (Phase 4 complete — macro effects)._
 
 ---
 
 ## 1. Where we are
 
-- **Phases 0–3 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
-  `fb01993`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
+- **Phases 0–4 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
+  `5e393f7`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
   Phase 2 = 8 commits (`234584c`..`094adce`); Phase 3 = 8 commits (`3bfcd2d`..
-  `fb01993`, + a Windows stack-overflow fix `f2e4ba8`). Run `git log --oneline` for the list.
+  `fb01993`, + a Windows stack-overflow fix `f2e4ba8`); Phase 4 = 6 commits
+  (`6071e3b`..`5e393f7`). Run `git log --oneline` for the list.
 - **What Phase 1 delivers:** `SampleBuffer` (immutable, reference-counted) + a
   message-thread retirement pool (the final delete never runs on the audio
   thread); `Pad`/`Kit` model; a lock-free command FIFO + `DrumEngine` seam;
@@ -40,13 +41,22 @@ _Last updated: 2026-07-04 (Phase 3 complete — roll painter, fill engine, human
   UI — a `FillBar` (FILL / Reroll / Humanise), a `RollBrushOverlay` (drag to paint
   an accelerating roll on a lane), and a roll-preset picker. Deferred (documented):
   per-lane triplet timing, backward micro-shift "rush", and alt-sample jitter.
-- **Verified:** 95 headless `juce::UnitTest` groups pass locally via
+- **What Phase 4 delivers:** a `MasterBus` on the audio output with four macro
+  effects — `Punch` (transient emphasis + parallel saturation), `Drive` (tanh
+  saturation + high-shelf), `Crush` (bit + sample-rate reduction), `Space` (plate
+  reverb send) — each 0 = bypass, plus an always-on brickwall `MasterLimiter`; and
+  a `MacroKnobs` UI (four rotary knobs). All effects are hand-rolled (no juce::dsp)
+  so they are headless-tested (`FxSmokeTests`: bypass at 0, no NaN/clip at full).
+  Deferred: per-pad SPACE sends (need a send level on `Pad`).
+- **Verified:** 107 headless `juce::UnitTest` groups pass locally via
   `tests/headless-compile.sh`; full CI (Linux + Windows + ASan/UBSan) is green on
-  every Phase-0/1/2 commit.
+  every Phase-0..4 commit.
 - **Still NOT verified (human checks — no audio machine was used):** actual
   *audible* output; the pad-grid + sequencer-grid UI (step editing, playhead,
   transport, swing, undo); the Phase-3 UI (paint a roll with the brush, FILL /
-  Reroll, the Humanise knob); drag-and-drop file→pad; and live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
+  Reroll, the Humanise knob); the Phase-4 macro knobs (PUNCH / SPACE / CRUSH /
+  DRIVE) actually sounding good full-travel; drag-and-drop file→pad; and live MIDI
+  input. The build machine is headless, so every audio/GUI path compiles, links,
   is RT-safe and unit-tested, but *hearing* it and *clicking* pads needs a human
   at a machine with audio (see TESTING.md).
 
@@ -119,44 +129,49 @@ as new headless tests land. Device-coupled code (`AudioEngine`, using
 `juce_audio_devices`) and all `ui/` code are NOT in the headless build — only CI
 compiles those. CI remains the authoritative full build on both OSes.
 
-## 4. Immediate next actions (Phase 4 — Macro effects)
+## 4. Immediate next actions (Phase 5 — Sample library + auto-kits)
 
-Phase 3 is complete (see §1). Next is Phase 4: four master-bus macro knobs
-(PUNCH / SPACE / CRUSH / DRIVE), per-pad SPACE sends, and an always-on transparent
-limiter, built on `juce::dsp`. Defaults 0 = bypass; no routing UI. Full file/class
-map: PLAN.md Phase 4. Acceptance: each knob sounds good full-travel; no clipping at
-max; CPU < 15% of one core @ 44.1k/256.
+Phase 4 is complete (see §1). Next is Phase 5: a vendored-SQLite sample library
+that scans folders in the background, extracts audio features, auto-categorises
+sounds, and builds coherent random kits ("NEW KIT"). Full file/class map: PLAN.md
+Phase 5. Acceptance: scan 5k files < 60s; categoriser ~85% on obviously-named
+files; NEW KIT always playable.
 
-**Recommended first commit:** `engine/MasterBus` + `engine/fx/MasterLimiter` — the
-bus that chains the effects and the always-on brickwall limiter, wired post-
-`Sequencer` in the `AudioEngine` callback (0 effects = clean pass-through). This
-establishes the master-bus seam the four macros plug into, and `FxSmokeTests`
-(no NaN/clip at extremes; limiter caps output) can be headless from day one.
+**Recommended first commit:** `library/FeatureExtractor` + `library/Categoriser` —
+the pure analysis core (RMS / spectral centroid / ZCR / onset count -> a category
+{kick,snare,clap,hat-closed,hat-open,tom,perc,fx}, filename tokens first then a
+feature-rule fallback). Fully headless-testable (`CategoriserTests` on named
+files); the DB, scanner, and browser wrap it.
 
 **Suggested build order (each a commit):**
-1. `engine/MasterBus` + `engine/fx/MasterLimiter` — bus seam + always-on limiter,
-   wired post-`Sequencer` in the `AudioEngine` callback. `FxSmokeTests`.
-2. `engine/fx/Drive` (saturation + gentle high-shelf), dry/wet, 0 = bypass.
-3. `engine/fx/Crush` (bitcrush/downsample + soft clip), dry/wet.
-4. `engine/fx/Punch` (transient emphasis + parallel compression blend).
-5. `engine/fx/Space` (pre-filtered short plate reverb) as a per-pad SEND bus.
-6. `ui/MacroKnobs` — four big knobs (PUNCH/SPACE/CRUSH/DRIVE) driving the bus.
+1. `library/FeatureExtractor` (RMS, centroid, ZCR, onsets) + `library/Categoriser`
+   (filename tokens -> feature-rule fallback). `CategoriserTests`.
+2. `library/sqlite/sqlite3.{c,h}` (vendored amalgamation) + `library/LibraryDb`
+   (schema + queries). Round-trip test.
+3. `library/Scanner` (background recursive scan via `juce::ThreadPool` -> features
+   -> DB). Test a small folder scans + populates.
+4. `library/KitBuilder` (NEW KIT: coherent, level-matched random kit; per-pad
+   locks; seeded RNG). `KitBuilderTests` (always playable).
+5. `ui/BrowserPanel` (category tabs, search, similarity sort, audition, drag->pad,
+   favourites) + `SimilaritySortTests`.
 
-**Carry forward:** each effect is a small, RT-safe `juce::dsp` block that is 0 =
-bypass and clamps its output so `FxSmokeTests` can prove no NaN/clip at full
-travel. The DSP is non-GUI, so keep the effect classes free of GUI includes and
-add `juce_dsp` to `headless-compile.sh`'s module list — then the whole master bus
-is headless-testable and only the `MacroKnobs` UI needs CI.
+**Carry forward:** the analysis / DB / kit-builder code is non-GUI, so keep it
+headless-testable (add `sqlite3.c` + the library `.cpp` to `headless-compile.sh`;
+SQLite is C, the amalgamation compiles as-is). The scanner runs OFF the audio
+thread (a `juce::ThreadPool`); only the `BrowserPanel` UI needs CI. Seed
+`KitBuilder`'s RNG so `KitBuilderTests` can pin it.
 
-**Decisions to pin for Phase 4:** limiter lookahead vs simple brickwall; where
-per-pad SPACE send levels live (a field on `Pad`?); macro-knob taper; per-buffer
-vs sample-split processing. Default to the simplest testable choice and note it.
+**Decisions to pin for Phase 5:** where the DB file lives (user app-data dir);
+categoriser token list + feature thresholds; similarity metric (feature-vector
+distance); NEW KIT coherence rules. Default to the simplest testable choice.
 
 ## 5. Open items / risks
 
-- **CI proven on both OSes, through all of Phase 3.** `.github/workflows/ci.yml`
+- **CI proven on both OSes, through all of Phase 4.** `.github/workflows/ci.yml`
   (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job) is green on every
-  Phase-0/1/2/3 commit up to HEAD `fb01993`. History worth knowing: the first-ever
+  Phase-0..4 commit up to HEAD `5e393f7`. (Linux + ASan finish in a couple of
+  minutes; the Windows job — a cold MSVC + JUCE build — often takes 10–15 min but
+  has never failed on a green Linux commit.) History worth knowing: the first-ever
   run failed on Windows (`jack/jack.h`), fixed by per-platform backend gating; 8/9
   first failed to compile the app (a JUCE override name — `isInterestedInFileDrag`,
   not `...AndDrop`), fixed by `900be7f`; and a Phase-3 commit SEGFAULTed the Windows
