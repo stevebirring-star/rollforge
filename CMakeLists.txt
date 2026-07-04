@@ -116,6 +116,7 @@ if(ROLLFORGE_BUILD_APP)
         src/library/FeatureExtractor.cpp
         src/library/Categoriser.cpp
         src/library/LibraryDb.cpp
+        src/library/Scanner.cpp
         src/library/sqlite/sqlite3.c
         src/model/RollCompiler.cpp
         src/model/RollPresets.cpp

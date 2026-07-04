@@ -59,6 +59,7 @@ ENGINE_SOURCES=(
     src/library/FeatureExtractor.cpp
     src/library/Categoriser.cpp
     src/library/LibraryDb.cpp
+    src/library/Scanner.cpp
     src/model/RollCompiler.cpp
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
@@ -90,6 +91,7 @@ TEST_SOURCES=(
     tests/FxSmokeTests.cpp
     tests/CategoriserTests.cpp
     tests/LibraryDbTests.cpp
+    tests/ScannerTests.cpp
     tests/TestMain.cpp
 )
 
