@@ -7,6 +7,7 @@
 //
 // ENGINE LAYER RULE: no JUCE GUI includes.
 
+#include "engine/fx/Crush.h"
 #include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
 
@@ -27,11 +28,14 @@ public:
     // Macro controls (0..1, 0 = bypass). Message-thread safe.
     void setDrive (float amount) noexcept { drive.setAmount (amount); }
     float getDrive() const noexcept { return drive.getAmount(); }
+    void setCrush (float amount) noexcept { crush.setAmount (amount); }
+    float getCrush() const noexcept { return crush.getAmount(); }
 
     MasterLimiter& getLimiter() noexcept { return limiter; }
 
 private:
     Drive         drive;
+    Crush         crush;
     MasterLimiter limiter;
 };
 

@@ -4,6 +4,7 @@
 // passes quiet signal ~unchanged, and the MasterBus delegates to it.
 
 #include "engine/MasterBus.h"
+#include "engine/fx/Crush.h"
 #include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
 
@@ -140,6 +141,48 @@ public:
 
             expect (! anyNaN (b));
             expect (maxMag (b) < 4.0f);
+            float maxDiff = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
+            expect (maxDiff > 0.001f);
+        }
+
+        beginTest ("Crush at 0 is a bypass");
+        {
+            Crush crush;
+            crush.prepare (sr);
+            crush.setAmount (0.0f);
+            juce::AudioBuffer<float> b (1, 256);
+            for (int i = 0; i < 256; ++i)
+                b.setSample (0, i, 0.4f * std::sin ((float) i * 0.15f));
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            crush.process (b);
+
+            float maxDiff = 0.0f;
+            for (int i = 0; i < 256; ++i)
+                maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (0, i) - ref.getSample (0, i)));
+            expect (maxDiff == 0.0f);
+        }
+
+        beginTest ("Crush at full quantises the signal without NaN/blowup");
+        {
+            Crush crush;
+            crush.prepare (sr);
+            crush.setAmount (1.0f);
+            juce::AudioBuffer<float> b (2, 512);
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    b.setSample (c, i, 0.5f * std::sin ((float) i * 0.1f));
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            crush.process (b);
+
+            expect (! anyNaN (b));
+            expect (maxMag (b) < 2.0f);
             float maxDiff = 0.0f;
             for (int c = 0; c < 2; ++c)
                 for (int i = 0; i < 512; ++i)
