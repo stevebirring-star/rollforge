@@ -124,6 +124,7 @@ if(ROLLFORGE_BUILD_APP)
         src/model/RollPresets.cpp
         src/model/FillEngine.cpp
         src/model/Humaniser.cpp
+        src/model/ProjectIO.cpp
     )
 
     target_include_directories(RollForge PRIVATE src)

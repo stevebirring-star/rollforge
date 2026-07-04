@@ -36,6 +36,7 @@ target_sources(RollForgeTests PRIVATE
     LibraryDbTests.cpp
     ScannerTests.cpp
     KitBuilderTests.cpp
+    ProjectIOTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
@@ -63,6 +64,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/model/RollPresets.cpp
     ${CMAKE_SOURCE_DIR}/src/model/FillEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Humaniser.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/ProjectIO.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)
