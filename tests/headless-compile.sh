@@ -56,6 +56,8 @@ ENGINE_SOURCES=(
     src/library/SampleLoader.cpp
     src/library/StarterKit.cpp
     src/library/KitInstaller.cpp
+    src/library/FeatureExtractor.cpp
+    src/library/Categoriser.cpp
     src/model/RollCompiler.cpp
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
@@ -85,6 +87,7 @@ TEST_SOURCES=(
     tests/FillEngineTests.cpp
     tests/HumaniserTests.cpp
     tests/FxSmokeTests.cpp
+    tests/CategoriserTests.cpp
     tests/TestMain.cpp
 )
 

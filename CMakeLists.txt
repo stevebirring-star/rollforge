@@ -113,6 +113,8 @@ if(ROLLFORGE_BUILD_APP)
         src/library/SampleLoader.cpp
         src/library/StarterKit.cpp
         src/library/KitInstaller.cpp
+        src/library/FeatureExtractor.cpp
+        src/library/Categoriser.cpp
         src/model/RollCompiler.cpp
         src/model/RollPresets.cpp
         src/model/FillEngine.cpp
