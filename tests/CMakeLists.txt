@@ -23,8 +23,10 @@ target_sources(RollForgeTests PRIVATE
     KitInstallerTests.cpp
     PadMappingTests.cpp
     PatternModelTests.cpp
+    ClockTimingTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/PadMapping.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp

@@ -41,6 +41,7 @@ mkdir -p "$(dirname "$OUT")"
 ENGINE_SOURCES=(
     src/engine/SampleBuffer.cpp
     src/engine/SampleRetirementPool.cpp
+    src/engine/Clock.cpp
     src/engine/DrumEngine.cpp
     src/engine/PadMapping.cpp
     src/engine/Voice.cpp
@@ -64,6 +65,7 @@ TEST_SOURCES=(
     tests/KitInstallerTests.cpp
     tests/PadMappingTests.cpp
     tests/PatternModelTests.cpp
+    tests/ClockTimingTests.cpp
     tests/TestMain.cpp
 )
 

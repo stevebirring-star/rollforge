@@ -90,6 +90,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/PadComponent.cpp
         src/ui/PadGrid.cpp
         src/engine/AudioEngine.cpp
+        src/engine/Clock.cpp
         src/engine/DrumEngine.cpp
         src/engine/PadMapping.cpp
         src/engine/SampleBuffer.cpp
