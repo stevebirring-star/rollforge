@@ -2,6 +2,8 @@
 
 #include "engine/AudioEngine.h"
 #include "engine/SampleRetirementPool.h"
+#include "engine/WavExporter.h"
+#include "model/MidiExporter.h"
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
@@ -15,9 +17,11 @@
 #include "ui/RollBrushOverlay.h"
 #include "ui/MacroKnobs.h"
 #include "ui/BrowserPanel.h"
+#include "ui/ExportPanel.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <memory>
 #include <vector>
 
 namespace rollforge
@@ -41,6 +45,10 @@ public:
 private:
     void openAudioSettings();
     void openLibrary();
+    void openExport();
+    void doExportMidi();
+    void doExportWav();
+    void doExportStems();
     void refreshStatus();
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep
@@ -72,9 +80,12 @@ private:
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };
     juce::TextButton libraryButton { "Library" };
+    juce::TextButton exportButton { "Export" };
 
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
     juce::Component::SafePointer<juce::DialogWindow> libraryWindow;
+    juce::Component::SafePointer<juce::DialogWindow> exportWindow;
+    std::unique_ptr<juce::FileChooser>               exportChooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

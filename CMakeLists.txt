@@ -96,6 +96,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/RollBrushOverlay.cpp
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
+        src/ui/ExportPanel.cpp
         src/engine/AudioEngine.cpp
         src/engine/Clock.cpp
         src/engine/DrumEngine.cpp

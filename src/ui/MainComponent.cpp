@@ -38,6 +38,11 @@ MainComponent::MainComponent()
     libraryButton.onClick = [this] { openLibrary(); };
     addAndMakeVisible (libraryButton);
 
+    exportButton.setColour (juce::TextButton::buttonColourId, colours::panel);
+    exportButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    exportButton.onClick = [this] { openExport(); };
+    addAndMakeVisible (exportButton);
+
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
         engine.triggerPad (index, velocity);   // the pad flashes itself on click
@@ -173,6 +178,9 @@ MainComponent::~MainComponent()
 
     if (libraryWindow != nullptr)
         libraryWindow.deleteAndZero();
+
+    if (exportWindow != nullptr)
+        exportWindow.deleteAndZero();
 
     engine.shutdown();   // stops the audio thread before members (and samples) are destroyed
 }
@@ -334,6 +342,96 @@ void MainComponent::openLibrary()
     libraryWindow = options.launchAsync();
 }
 
+void MainComponent::openExport()
+{
+    if (exportWindow != nullptr)
+    {
+        exportWindow->toFront (true);
+        return;
+    }
+
+    auto panel = std::make_unique<ExportPanel>();
+    panel->onExportMidi  = [this] { doExportMidi(); };
+    panel->onExportWav   = [this] { doExportWav(); };
+    panel->onExportStems = [this] { doExportStems(); };
+
+    juce::DialogWindow::LaunchOptions options;
+    options.content.setOwned (panel.release());
+    options.dialogTitle                  = "Export";
+    options.dialogBackgroundColour       = colours::background;
+    options.componentToCentreAround      = this;
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar            = true;
+    options.resizable                    = false;
+    exportWindow = options.launchAsync();
+}
+
+void MainComponent::doExportMidi()
+{
+    exportChooser = std::make_unique<juce::FileChooser> ("Export MIDI", juce::File(), "*.mid");
+    exportChooser->launchAsync (juce::FileBrowserComponent::saveMode
+                                    | juce::FileBrowserComponent::canSelectFiles
+                                    | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this] (const juce::FileChooser& fc)
+        {
+            auto f = fc.getResult();
+            if (f == juce::File())
+                return;
+            if (! f.hasFileExtension ("mid"))
+                f = f.withFileExtension ("mid");
+            MidiExporter::save (editPattern, f, 1);
+        });
+}
+
+void MainComponent::doExportWav()
+{
+    exportChooser = std::make_unique<juce::FileChooser> ("Export WAV (mix)", juce::File(), "*.wav");
+    exportChooser->launchAsync (juce::FileBrowserComponent::saveMode
+                                    | juce::FileBrowserComponent::canSelectFiles
+                                    | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this] (const juce::FileChooser& fc)
+        {
+            auto f = fc.getResult();
+            if (f == juce::File())
+                return;
+            if (! f.hasFileExtension ("wav"))
+                f = f.withFileExtension ("wav");
+
+            // Render on a fresh engine (with the current kit) so the live audio
+            // thread is never touched.
+            DrumEngine exportEngine;
+            installKitIntoEngine (starterKit, exportEngine);
+
+            OfflineRenderer::Options opts;
+            opts.sampleRate = 44100.0;
+            opts.bars = 1;
+            auto& bus = engine.getMasterBus();
+            opts.punch = bus.getPunch(); opts.drive = bus.getDrive();
+            opts.crush = bus.getCrush(); opts.space = bus.getSpace();
+            WavExporter::exportMix (exportEngine, editPattern, f, opts);
+        });
+}
+
+void MainComponent::doExportStems()
+{
+    exportChooser = std::make_unique<juce::FileChooser> ("Choose a folder for the stems");
+    exportChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                    | juce::FileBrowserComponent::canSelectDirectories,
+        [this] (const juce::FileChooser& fc)
+        {
+            const auto dir = fc.getResult();
+            if (! dir.isDirectory())
+                return;
+
+            DrumEngine exportEngine;
+            installKitIntoEngine (starterKit, exportEngine);
+
+            OfflineRenderer::Options opts;
+            opts.bars = 1;
+            WavExporter::exportStems (exportEngine, editPattern, dir, opts);
+        });
+}
+
 void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (colours::background);
@@ -355,7 +453,9 @@ void MainComponent::resized()
     auto statusRow = area.removeFromTop (26);
     settingsButton.setBounds (statusRow.removeFromRight (150));
     statusRow.removeFromRight (8);
-    libraryButton.setBounds (statusRow.removeFromRight (90));
+    libraryButton.setBounds (statusRow.removeFromRight (80));
+    statusRow.removeFromRight (8);
+    exportButton.setBounds (statusRow.removeFromRight (72));
     statusRow.removeFromRight (12);
     statusLabel.setBounds (statusRow);
 
