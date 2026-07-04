@@ -44,6 +44,17 @@ MainComponent::MainComponent()
     addAndMakeVisible (padGrid);
     addAndMakeVisible (transportBar);
 
+    seqGrid.onStepEdit = [this] (int lane, int step, bool on, float velocity)
+    {
+        if (lane >= 0 && lane < editPattern.numLanes && step >= 0 && step < maxStepsPerLane)
+        {
+            editPattern.lane (lane).step (step).on = on;
+            editPattern.lane (lane).step (step).velocity = velocity;
+            engine.getSequencer().setPattern (editPattern);
+        }
+    };
+    addAndMakeVisible (seqGrid);
+
     engine.initialise();
 
     // Install the synthesised starter kit so pads play real drum sounds. Built
@@ -53,11 +64,24 @@ MainComponent::MainComponent()
     installKitIntoEngine (starterKit, engine.getDrumEngine());
     updatePadLabels();
 
+    // Editable sequencer pattern: 8 lanes, each targeting pads 0..7, all off.
+    editPattern.numLanes = 8;
+    for (int lane = 0; lane < 8; ++lane)
+    {
+        editPattern.lane (lane).targetPad = lane;
+        editPattern.lane (lane).length = 16;
+        if (auto sample = starterKit.pad (lane).primarySample())
+            seqGrid.setLaneLabel (lane, sample->getName());
+        for (int step = 0; step < 16; ++step)
+            seqGrid.setStep (lane, step, false, 0.8f);
+    }
+    engine.getSequencer().setPattern (editPattern);
+
     engine.getDeviceManager().addChangeListener (this);
     refreshStatus();
 
-    startTimer (1000);   // periodically reclaim retired sample buffers
-    setSize (720, 560);
+    startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
+    setSize (760, 720);
 }
 
 MainComponent::~MainComponent()
@@ -94,8 +118,16 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
 
 void MainComponent::timerCallback()
 {
-    // Free retired sample buffers that no voice references any more (message thread).
+    // Reclaim retired sample buffers that no voice references any more.
     retirementPool.sweep();
+
+    // Drive the sequencer playhead highlight.
+    auto& seq = engine.getSequencer();
+    const int nSteps = seqGrid.getNumSteps();
+    const int step = (seq.isPlaying() && seq.getCurrentStep() >= 0)
+                       ? (int) (seq.getCurrentStep() % nSteps)
+                       : -1;
+    seqGrid.setPlayheadStep (step);
 }
 
 void MainComponent::refreshStatus()
@@ -177,6 +209,9 @@ void MainComponent::resized()
     transportBar.setBounds (area.removeFromTop (40));
     area.removeFromTop (10);
     area.removeFromBottom (26);   // leave room for the hint text
+
+    seqGrid.setBounds (area.removeFromTop ((int) (area.getHeight() * 0.58f)));
+    area.removeFromTop (10);
     padGrid.setBounds (area);
 }
 

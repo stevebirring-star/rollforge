@@ -7,6 +7,7 @@
 #include "library/KitInstaller.h"
 #include "ui/PadGrid.h"
 #include "ui/TransportBar.h"
+#include "ui/SequencerGrid.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -42,9 +43,11 @@ private:
     SampleLoader         loader;
     SampleRetirementPool retirementPool;
     Kit                  starterKit;
+    Pattern              editPattern;   // the pattern the grid edits (8 lanes -> pads 0..7)
 
     PadGrid          padGrid;
     TransportBar     transportBar { engine.getSequencer() };
+    SequencerGrid    seqGrid { 8, 16 };
     juce::Label      titleLabel;
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };
