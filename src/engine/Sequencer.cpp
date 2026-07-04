@@ -24,13 +24,6 @@ namespace
     }
 }
 
-Sequencer::Sequencer()
-{
-    // Publish an empty pattern so read() always returns a valid one.
-    patterns.writeBuffer() = Pattern {};
-    patterns.publish();
-}
-
 void Sequencer::prepare (double sampleRate) noexcept
 {
     clock.prepare (sampleRate);
@@ -40,8 +33,16 @@ void Sequencer::prepare (double sampleRate) noexcept
 
 void Sequencer::setPattern (const Pattern& pattern)
 {
-    patterns.writeBuffer() = pattern;
-    patterns.publish();
+    incoming.writeBuffer() = pattern;
+    incoming.publish();
+    incomingMode.store (1, std::memory_order_release);   // immediate
+}
+
+void Sequencer::queuePattern (const Pattern& pattern)
+{
+    incoming.writeBuffer() = pattern;
+    incoming.publish();
+    incomingMode.store (2, std::memory_order_release);   // swap at the next bar
 }
 
 void Sequencer::setTempo (double bpm) noexcept
@@ -50,18 +51,44 @@ void Sequencer::setTempo (double bpm) noexcept
     tempoDirty.store (true, std::memory_order_release);
 }
 
+void Sequencer::applyIncomingPattern (bool nowPlaying) noexcept
+{
+    const int mode = incomingMode.exchange (0, std::memory_order_acquire);
+    if (mode == 1)
+    {
+        active = incoming.read();          // immediate replace
+        hasQueued = false;
+        switchQueued.store (false, std::memory_order_release);
+    }
+    else if (mode == 2)
+    {
+        queued = incoming.read();          // stash until the bar boundary
+        hasQueued = true;
+        switchQueued.store (true, std::memory_order_release);
+    }
+
+    // Stopped: nothing to wait for, so apply a queued switch immediately.
+    if (! nowPlaying && hasQueued)
+    {
+        active = queued;
+        hasQueued = false;
+        switchQueued.store (false, std::memory_order_release);
+    }
+}
+
 void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) noexcept
 {
-    // Apply transport control marshaled from the message thread.
+    // Transport control marshaled from the message thread.
     if (tempoDirty.exchange (false, std::memory_order_acquire))
         clock.setTempo (pendingTempo.load (std::memory_order_relaxed));
     if (resetRequested.exchange (false, std::memory_order_acquire))
     {
         clock.reset();
-        pendingCount = 0;   // drop scheduled events on rewind
+        pendingCount = 0;
     }
 
     const bool nowPlaying = playing.load (std::memory_order_acquire);
+    applyIncomingPattern (nowPlaying);
     clock.setPlaying (nowPlaying);
 
     const int numSamples = buffer.getNumSamples();
@@ -76,13 +103,19 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
         return;
     }
 
-    const Pattern& pattern = patterns.read();
     const std::int64_t blockStart = clock.getSampleCounter();
 
-    // 1. Generate this block's step events into the pending buffer.
+    // 1. Generate this block's step events (swapping a queued pattern on the bar).
     clock.processBlock (numSamples, [&] (std::int64_t stepIndex, int offset) noexcept
     {
-        generateStepEvents (pattern, stepIndex, blockStart + (std::int64_t) offset);
+        if (hasQueued && (stepIndex % barLengthSteps) == 0)
+        {
+            active = queued;
+            hasQueued = false;
+            switchQueued.store (false, std::memory_order_release);
+        }
+
+        generateStepEvents (stepIndex, blockStart + (std::int64_t) offset);
         currentStep.store (stepIndex, std::memory_order_release);
     });
 
@@ -90,9 +123,9 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     renderWithEvents (engine, buffer, blockStart, numSamples);
 }
 
-void Sequencer::generateStepEvents (const Pattern& pattern, std::int64_t stepIndex, std::int64_t stepSample) noexcept
+void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSample) noexcept
 {
-    int lanes = pattern.numLanes;
+    int lanes = active.numLanes;
     if (lanes < 0)        lanes = 0;
     if (lanes > maxLanes) lanes = maxLanes;
 
@@ -100,7 +133,7 @@ void Sequencer::generateStepEvents (const Pattern& pattern, std::int64_t stepInd
 
     for (int li = 0; li < lanes; ++li)
     {
-        const Lane& lane = pattern.lane (li);
+        const Lane& lane = active.lane (li);
 
         int len = lane.length;
         if (len < 1) continue;
@@ -178,7 +211,7 @@ void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& 
             break;   // nothing left before blockEnd
 
         int offset = (int) (pending[best].sample - blockStart);
-        offset = clampVal (offset, cursor, numSamples);   // clamp past/backward events into the block
+        offset = clampVal (offset, cursor, numSamples);   // clamp past events into the block
 
         if (offset > cursor)
         {
