@@ -122,7 +122,24 @@ grows an audible reverb tail). CI builds the full app on Linux + Windows + ASan.
 - ☐ Quit -> clean exit, no crash/hang (ASan-clean).
 
 ## Phase 5 — Sample library + auto-kits
-_(to be filled)_
+
+**Automated (headless):** `tests/headless-compile.sh` -> 115 test groups, adding
+Categoriser (filename tokens ≥85% on named files + feature fallback), LibraryDb
+(in-memory round-trip, upsert-by-path, category/favourites filters), Scanner
+(writes temp WAVs -> scans -> DB populated), and KitBuilder (per-category selection,
+deterministic per seed, locks respected). CI builds the full app (incl. the
+vendored SQLite) on Linux + Windows + ASan.
+
+**Manual (needs a machine with audio + a display):**
+- ☐ Click "Library" -> the browser window opens.
+- ☐ "Scan Folder..." -> pick a folder of samples -> the status shows a count and
+  the list fills; the category filter narrows it (Kick / Snare / Hat / …).
+- ☐ Categories look right for obviously-named files (a "Kick_*.wav" lands in Kick).
+- ☐ "NEW KIT" -> the 16 pads load a coherent kit (kick/snare/hats/… by pad); the
+  pad labels update; playing a pattern uses the new sounds. Repeat -> a different
+  kit each time.
+- ☐ The library persists across app restarts (DB under the user app-data dir).
+- ☐ Quit -> clean exit, no crash/hang.
 
 ## Phase 6 — Export & interop
 _(to be filled)_

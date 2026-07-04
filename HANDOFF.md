@@ -4,17 +4,18 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-04 (Phase 4 complete — macro effects)._
+_Last updated: 2026-07-04 (Phase 5 complete — sample library + auto-kits)._
 
 ---
 
 ## 1. Where we are
 
-- **Phases 0–4 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
-  `5e393f7`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
+- **Phases 0–5 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
+  `d18ec8b`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
   Phase 2 = 8 commits (`234584c`..`094adce`); Phase 3 = 8 commits (`3bfcd2d`..
   `fb01993`, + a Windows stack-overflow fix `f2e4ba8`); Phase 4 = 6 commits
-  (`6071e3b`..`5e393f7`). Run `git log --oneline` for the list.
+  (`6071e3b`..`5e393f7`); Phase 5 = 5 commits (`f2a0d7c`..`d18ec8b`). Run
+  `git log --oneline` for the list.
 - **What Phase 1 delivers:** `SampleBuffer` (immutable, reference-counted) + a
   message-thread retirement pool (the final delete never runs on the audio
   thread); `Pad`/`Kit` model; a lock-free command FIFO + `DrumEngine` seam;
@@ -48,15 +49,23 @@ _Last updated: 2026-07-04 (Phase 4 complete — macro effects)._
   a `MacroKnobs` UI (four rotary knobs). All effects are hand-rolled (no juce::dsp)
   so they are headless-tested (`FxSmokeTests`: bypass at 0, no NaN/clip at full).
   Deferred: per-pad SPACE sends (need a send level on `Pad`).
-- **Verified:** 107 headless `juce::UnitTest` groups pass locally via
+- **What Phase 5 delivers:** a vendored-SQLite sample library — `FeatureExtractor`
+  (RMS / ZCR / decay / onsets), `Categoriser` (filename tokens then feature rules
+  → a drum category), `LibraryDb` (SQLite 3.53.3 amalgamation wrapper: upsert,
+  category / favourites queries), `Scanner` (recursive folder scan → features →
+  DB), and `KitBuilder` (NEW KIT: a seeded, coherent kit with per-pad locks), plus
+  a `BrowserPanel` UI (scan / filter / NEW KIT, opened from a "Library" button).
+  Deferred: background-threaded scan, audition-on-click, drag→pad.
+- **Verified:** 115 headless `juce::UnitTest` groups pass locally via
   `tests/headless-compile.sh`; full CI (Linux + Windows + ASan/UBSan) is green on
-  every Phase-0..4 commit.
+  every Phase-0..5 commit.
 - **Still NOT verified (human checks — no audio machine was used):** actual
   *audible* output; the pad-grid + sequencer-grid UI (step editing, playhead,
   transport, swing, undo); the Phase-3 UI (paint a roll with the brush, FILL /
   Reroll, the Humanise knob); the Phase-4 macro knobs (PUNCH / SPACE / CRUSH /
-  DRIVE) actually sounding good full-travel; drag-and-drop file→pad; and live MIDI
-  input. The build machine is headless, so every audio/GUI path compiles, links,
+  DRIVE) actually sounding good full-travel; the Phase-5 library (scan a real
+  folder → browse by category → NEW KIT loads a playable kit); drag-and-drop
+  file→pad; and live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
   is RT-safe and unit-tested, but *hearing* it and *clicking* pads needs a human
   at a machine with audio (see TESTING.md).
 
@@ -129,47 +138,47 @@ as new headless tests land. Device-coupled code (`AudioEngine`, using
 `juce_audio_devices`) and all `ui/` code are NOT in the headless build — only CI
 compiles those. CI remains the authoritative full build on both OSes.
 
-## 4. Immediate next actions (Phase 5 — Sample library + auto-kits)
+## 4. Immediate next actions (Phase 6 — Export & interop)
 
-Phase 4 is complete (see §1). Next is Phase 5: a vendored-SQLite sample library
-that scans folders in the background, extracts audio features, auto-categorises
-sounds, and builds coherent random kits ("NEW KIT"). Full file/class map: PLAN.md
-Phase 5. Acceptance: scan 5k files < 60s; categoriser ~85% on obviously-named
-files; NEW KIT always playable.
+Phase 5 is complete (see §1). Next is Phase 6: get music OUT — MIDI export, WAV +
+per-pad stems, and `.rollforge` project save/load, driven by a faster-than-realtime
+offline renderer. Full file/class map: PLAN.md Phase 6.
 
-**Recommended first commit:** `library/FeatureExtractor` + `library/Categoriser` —
-the pure analysis core (RMS / spectral centroid / ZCR / onset count -> a category
-{kick,snare,clap,hat-closed,hat-open,tom,perc,fx}, filename tokens first then a
-feature-rule fallback). Fully headless-testable (`CategoriserTests` on named
-files); the DB, scanner, and browser wrap it.
+**Recommended first commit:** `model/ProjectIO` — `.rollforge` JSON save/load of
+the whole session (kit + patterns + FX macro values + tempo/swing), with relative
+sample paths. Pure model (juce_core JSON), fully headless-testable
+(`ProjectRoundTripTests`: save → load → identical), and it de-risks everything else
+(the exporters serialise from a known-good project format).
 
 **Suggested build order (each a commit):**
-1. `library/FeatureExtractor` (RMS, centroid, ZCR, onsets) + `library/Categoriser`
-   (filename tokens -> feature-rule fallback). `CategoriserTests`.
-2. `library/sqlite/sqlite3.{c,h}` (vendored amalgamation) + `library/LibraryDb`
-   (schema + queries). Round-trip test.
-3. `library/Scanner` (background recursive scan via `juce::ThreadPool` -> features
-   -> DB). Test a small folder scans + populates.
-4. `library/KitBuilder` (NEW KIT: coherent, level-matched random kit; per-pad
-   locks; seeded RNG). `KitBuilderTests` (always playable).
-5. `ui/BrowserPanel` (category tabs, search, similarity sort, audition, drag->pad,
-   favourites) + `SimilaritySortTests`.
+1. `model/ProjectIO` — `.rollforge` JSON round-trip (kit / patterns / FX / tempo).
+   `ProjectRoundTripTests`.
+2. `model/MidiExporter` — Pattern → MIDI (rolls/ratchets flattened; GM drum map +
+   remap table). `MidiExportTests`.
+3. `engine/OfflineRenderer` — sample-accurate faster-than-realtime render of a
+   pattern span (reuses the `Sequencer` + `MasterBus`, no audio device).
+4. `model/WavExporter` — full-mix WAV + per-pad stems (pre/post master-FX option),
+   via the OfflineRenderer. `StemNullTests` (stems sum to the mix).
+5. `ui/ExportDialog` + `ui/DragOutGrip` — export UI; drag-out via
+   `performExternalDragDropOfFiles`.
 
-**Carry forward:** the analysis / DB / kit-builder code is non-GUI, so keep it
-headless-testable (add `sqlite3.c` + the library `.cpp` to `headless-compile.sh`;
-SQLite is C, the amalgamation compiles as-is). The scanner runs OFF the audio
-thread (a `juce::ThreadPool`); only the `BrowserPanel` UI needs CI. Seed
-`KitBuilder`'s RNG so `KitBuilderTests` can pin it.
+**Carry forward:** ProjectIO / MidiExporter / WavExporter / OfflineRenderer are all
+non-GUI → keep them headless-testable (the OfflineRenderer reuses the existing
+Sequencer + DrumEngine + MasterBus with no audio device, so it compiles into the
+headless build). Only the ExportDialog / DragOutGrip UI needs CI. The offline
+render must be deterministic so `StemNullTests` (stems sum to the mix) holds.
 
-**Decisions to pin for Phase 5:** where the DB file lives (user app-data dir);
-categoriser token list + feature thresholds; similarity metric (feature-vector
-distance); NEW KIT coherence rules. Default to the simplest testable choice.
+**Decisions to pin for Phase 6:** JSON schema + a version field for `.rollforge`;
+whether the "collect samples" option copies files next to the project; GM drum-map
+note assignments; stems pre- or post-master-FX (offer both). Default to the
+simplest testable choice and note it.
 
 ## 5. Open items / risks
 
-- **CI proven on both OSes, through all of Phase 4.** `.github/workflows/ci.yml`
+- **CI proven on both OSes, through all of Phase 5.** `.github/workflows/ci.yml`
   (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job) is green on every
-  Phase-0..4 commit up to HEAD `5e393f7`. (Linux + ASan finish in a couple of
+  Phase-0..5 commit up to HEAD `d18ec8b` — including the vendored SQLite
+  amalgamation compiling under MSVC + ASan. (Linux + ASan finish in a couple of
   minutes; the Windows job — a cold MSVC + JUCE build — often takes 10–15 min but
   has never failed on a green Linux commit.) History worth knowing: the first-ever
   run failed on Windows (`jack/jack.h`), fixed by per-platform backend gating; 8/9

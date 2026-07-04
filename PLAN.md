@@ -155,7 +155,7 @@ test groups; CI green.
 
 ---
 
-## Phase 5 — Sample library + auto-kits 🚧
+## Phase 5 — Sample library + auto-kits ✅
 
 | File | Classes / responsibility |
 |------|--------------------------|
@@ -169,10 +169,16 @@ test groups; CI green.
 | `tests/` | `CategoriserTests` (≥~85% on named files), `SimilaritySortTests`, `KitBuilderTests`. |
 
 **Accept:** scan 5k files < 60s; categoriser ≥ ~85% on obviously named files; NEW KIT always playable.
+✅ Done (commits `f2a0d7c`..`d18ec8b`, 5 commits): `FeatureExtractor` + `Categoriser`
+(filename tokens → feature rules, ≥85% on named files), vendored SQLite 3.53.3 +
+`LibraryDb`, `Scanner` (folder → features → DB), `KitBuilder` (NEW KIT, seeded,
+per-pad locks), and a `BrowserPanel` UI (scan / filter / NEW KIT). Deferred:
+background-threaded scan, audition-on-click, drag→pad, similarity sort. 115 headless
+test groups; CI green (incl. SQLite under MSVC + ASan).
 
 ---
 
-## Phase 6 — Export & interop ⬜
+## Phase 6 — Export & interop 🚧
 
 | File | Classes / responsibility |
 |------|--------------------------|
