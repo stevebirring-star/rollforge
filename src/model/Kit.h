@@ -36,8 +36,8 @@ struct Kit
 
     //==========================================================================
     /** Pad by linear index 0..15. */
-    Pad&       pad (int index)       noexcept { jassert (isValidIndex (index)); return pads[(size_t) index]; }
-    const Pad& pad (int index) const noexcept { jassert (isValidIndex (index)); return pads[(size_t) index]; }
+    Pad&       pad (int index)       noexcept { jassert (isValidIndex (index)); return pads[(std::size_t) index]; }
+    const Pad& pad (int index) const noexcept { jassert (isValidIndex (index)); return pads[(std::size_t) index]; }
 
     /** Pad by (column, row). */
     Pad&       pad (int column, int row)       noexcept { return pad (indexFor (column, row)); }

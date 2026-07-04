@@ -28,8 +28,8 @@ struct Pattern
     std::array<CompiledRoll, maxRolls> rolls {};   // pre-compiled roll overlays
     int    numRolls = 0;         // active rolls, 0..maxRolls
 
-    Lane&       lane (int index)       noexcept { return lanes[(size_t) index]; }
-    const Lane& lane (int index) const noexcept { return lanes[(size_t) index]; }
+    Lane&       lane (int index)       noexcept { return lanes[(std::size_t) index]; }
+    const Lane& lane (int index) const noexcept { return lanes[(std::size_t) index]; }
 };
 
 } // namespace rollforge

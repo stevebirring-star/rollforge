@@ -22,8 +22,8 @@ struct Lane
     bool triplet   = false;   // triplet subdivision for this lane
     int  targetPad = 0;       // pad index this lane triggers (0..15)
 
-    Step&       step (int index)       noexcept { return steps[(size_t) index]; }
-    const Step& step (int index) const noexcept { return steps[(size_t) index]; }
+    Step&       step (int index)       noexcept { return steps[(std::size_t) index]; }
+    const Step& step (int index) const noexcept { return steps[(std::size_t) index]; }
 };
 
 } // namespace rollforge
