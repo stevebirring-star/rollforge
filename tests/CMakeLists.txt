@@ -37,6 +37,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/DrumEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/MasterBus.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/Drive.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterLimiter.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/PadMapping.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Sequencer.cpp

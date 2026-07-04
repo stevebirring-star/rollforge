@@ -4,6 +4,7 @@
 // passes quiet signal ~unchanged, and the MasterBus delegates to it.
 
 #include "engine/MasterBus.h"
+#include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
 
 #include <juce_core/juce_core.h>
@@ -104,6 +105,46 @@ public:
             bus.process (b);
             expect (! anyNaN (b));
             expect (maxMag (b) <= bus.getLimiter().getCeiling() + 1.0e-4f);
+        }
+
+        beginTest ("Drive at 0 is a bypass");
+        {
+            Drive drive;
+            drive.prepare (sr);
+            drive.setAmount (0.0f);
+            juce::AudioBuffer<float> b (1, 256);
+            for (int i = 0; i < 256; ++i)
+                b.setSample (0, i, 0.3f * std::sin ((float) i * 0.2f));
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            drive.process (b);
+
+            float maxDiff = 0.0f;
+            for (int i = 0; i < 256; ++i)
+                maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (0, i) - ref.getSample (0, i)));
+            expect (maxDiff == 0.0f);
+        }
+
+        beginTest ("Drive at full shapes the signal without NaN/blowup");
+        {
+            Drive drive;
+            drive.prepare (sr);
+            drive.setAmount (1.0f);
+            juce::AudioBuffer<float> b (2, 512);
+            fill (b, 0.5f);
+
+            juce::AudioBuffer<float> ref;
+            ref.makeCopyOf (b);
+            drive.process (b);
+
+            expect (! anyNaN (b));
+            expect (maxMag (b) < 4.0f);
+            float maxDiff = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
+            expect (maxDiff > 0.001f);
         }
     }
 };

@@ -7,6 +7,7 @@
 //
 // ENGINE LAYER RULE: no JUCE GUI includes.
 
+#include "engine/fx/Drive.h"
 #include "engine/fx/MasterLimiter.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
@@ -20,12 +21,17 @@ public:
     void prepare (double sampleRate, int blockSize) noexcept;
     void reset() noexcept;
 
-    /** Processes the master mix in place: (future) macro FX chain, then the limiter. */
+    /** Processes the master mix in place: macro FX chain, then the limiter. */
     void process (juce::AudioBuffer<float>& buffer) noexcept;
+
+    // Macro controls (0..1, 0 = bypass). Message-thread safe.
+    void setDrive (float amount) noexcept { drive.setAmount (amount); }
+    float getDrive() const noexcept { return drive.getAmount(); }
 
     MasterLimiter& getLimiter() noexcept { return limiter; }
 
 private:
+    Drive         drive;
     MasterLimiter limiter;
 };
 
