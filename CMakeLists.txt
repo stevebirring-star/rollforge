@@ -88,7 +88,9 @@ if(ROLLFORGE_BUILD_APP)
         src/app/Main.cpp
         src/app/Autosave.cpp
         src/app/AppSettings.cpp
+        src/app/FirstRunState.cpp
         src/ui/MainComponent.cpp
+        src/ui/FirstRun.cpp
         src/ui/PadComponent.cpp
         src/ui/PadGrid.cpp
         src/ui/TransportBar.cpp

@@ -71,6 +71,7 @@ ENGINE_SOURCES=(
     src/model/MidiExporter.cpp
     src/app/Autosave.cpp
     src/app/AppSettings.cpp
+    src/app/FirstRunState.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -106,6 +107,7 @@ TEST_SOURCES=(
     tests/StemNullTests.cpp
     tests/AutosaveTests.cpp
     tests/AppSettingsTests.cpp
+    tests/FirstRunStateTests.cpp
     tests/TestMain.cpp
 )
 

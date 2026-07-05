@@ -6,7 +6,9 @@
 #include "model/MidiExporter.h"
 #include "app/Autosave.h"
 #include "app/AppSettings.h"
+#include "app/FirstRunState.h"
 #include "ui/SettingsView.h"
+#include "ui/FirstRun.h"
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
@@ -92,6 +94,8 @@ private:
     juce::Component::SafePointer<juce::DialogWindow> libraryWindow;
     juce::Component::SafePointer<juce::DialogWindow> exportWindow;
     std::unique_ptr<juce::FileChooser>               exportChooser;
+
+    std::unique_ptr<FirstRun> firstRun;   // one-time welcome overlay (first launch only)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

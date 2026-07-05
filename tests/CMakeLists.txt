@@ -42,6 +42,7 @@ target_sources(RollForgeTests PRIVATE
     StemNullTests.cpp
     AutosaveTests.cpp
     AppSettingsTests.cpp
+    FirstRunStateTests.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleBuffer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/SampleRetirementPool.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Clock.cpp
@@ -75,6 +76,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/model/MidiExporter.cpp
     ${CMAKE_SOURCE_DIR}/src/app/Autosave.cpp
     ${CMAKE_SOURCE_DIR}/src/app/AppSettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/FirstRunState.cpp
 )
 
 target_include_directories(RollForgeTests PRIVATE ${CMAKE_SOURCE_DIR}/src)

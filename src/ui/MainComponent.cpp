@@ -176,6 +176,25 @@ MainComponent::MainComponent()
 
     startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
     setSize (780, 880);
+
+    // One-time welcome overlay: shown only on the very first launch (gated by a
+    // marker file in app-data). It dims the app and lists a few tips; dismissing it
+    // writes the marker so it never returns.
+    if (FirstRunState::shouldShow())
+    {
+        firstRun = std::make_unique<FirstRun>();
+        firstRun->onDismissed = [this]
+        {
+            FirstRunState::markShown();
+            // Delete the overlay *after* this button-click callback unwinds (deleting
+            // it synchronously would destroy the button mid-click). SafePointer guards
+            // against the window closing before the async fires.
+            juce::Component::SafePointer<MainComponent> safe (this);
+            juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->firstRun.reset(); });
+        };
+        addAndMakeVisible (*firstRun);         // added last -> drawn on top of everything
+        firstRun->setBounds (getLocalBounds());
+    }
 }
 
 MainComponent::~MainComponent()
@@ -524,6 +543,9 @@ void MainComponent::resized()
     macroKnobs.setBounds (area.removeFromTop (74));
     area.removeFromTop (8);
     padGrid.setBounds (area);
+
+    if (firstRun != nullptr)
+        firstRun->setBounds (getLocalBounds());   // overlay always covers the whole window
 }
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
