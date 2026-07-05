@@ -52,7 +52,10 @@ else
     echo "note: no rsvg-convert/ImageMagick; using SVG icon directly."
 fi
 
-# --- fetch linuxdeploy (cached) ----------------------------------------------
+# --- fetch linuxdeploy + its appimage output plugin (cached) -----------------
+# `--output appimage` is served by a SEPARATE binary (linuxdeploy-plugin-appimage),
+# which linuxdeploy discovers by scanning PATH for linuxdeploy-plugin-* — it is NOT
+# bundled inside linuxdeploy and is not preinstalled on CI runners. Download both.
 LINUXDEPLOY="$TOOLSDIR/linuxdeploy-$ARCH.AppImage"
 if [[ ! -x "$LINUXDEPLOY" ]]; then
     echo "Downloading linuxdeploy..."
@@ -60,6 +63,18 @@ if [[ ! -x "$LINUXDEPLOY" ]]; then
         "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$ARCH.AppImage"
     chmod +x "$LINUXDEPLOY"
 fi
+
+APPIMAGE_PLUGIN="$TOOLSDIR/linuxdeploy-plugin-appimage-$ARCH.AppImage"
+if [[ ! -x "$APPIMAGE_PLUGIN" ]]; then
+    echo "Downloading linuxdeploy-plugin-appimage..."
+    curl -fL --retry 3 -o "$APPIMAGE_PLUGIN" \
+        "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-$ARCH.AppImage"
+    chmod +x "$APPIMAGE_PLUGIN"
+fi
+
+# linuxdeploy runs from a temp extract dir (APPIMAGE_EXTRACT_AND_RUN), so the plugin
+# must be reachable via PATH (an absolute entry), not merely "next to" the binary.
+export PATH="$(cd "$TOOLSDIR" && pwd):$PATH"
 
 # --- stage the AppDir + build the AppImage -----------------------------------
 APPDIR="build/AppDir"
