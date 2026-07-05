@@ -199,17 +199,33 @@ CI green.
 
 ---
 
-## Phase 7 — Packaging & polish 🚧
+## Phase 7 — Packaging & polish ✅ (the last phase)
 
 | File | Purpose |
 |------|---------|
-| `packaging/linux/` | AppImage via linuxdeploy (CI) + plain tar.gz; X11/XWayland test notes. |
-| `packaging/windows/` | Inno Setup installer (CI) + portable zip. |
-| `ui/FirstRun.{h,cpp}` | Starter kit + muted demo loop, pulsing Play, 3 coach marks (never a modal tutorial). |
-| `ui/SettingsView.{h,cpp}` | Device, buffer size, theme scale 125/150%, sample folders. |
-| `app/Autosave.{h,cpp}` | Recovery file every 60 s. |
+| `app/Autosave.{h,cpp}` | Recovery `.rollforge` written every ~60 s; restored if present at launch. |
+| `app/AppSettings.{h,cpp}` | Persisted prefs (UI scale + sample folders) as JSON under app-data. |
+| `app/FirstRunState.{h,cpp}` | The one-time-welcome gate: a marker file in app-data (pure, headless-tested). |
+| `ui/SettingsView.{h,cpp}` | Audio device + buffer size (device selector), UI scale 100/125/150%, sample folders. |
+| `ui/FirstRun.{h,cpp}` | One-time welcome overlay (dim + tips + dismiss); never a modal tutorial. |
+| `packaging/linux/` | AppImage via linuxdeploy (+ its appimage plugin) + portable tar.gz; `.desktop` + SVG icon. |
+| `packaging/windows/` | Inno Setup installer + portable zip; static MSVC runtime → no vcredist. |
+| `.github/workflows/release.yml` | Packaging workflow: `v*` tag cuts a GitHub Release; `workflow_dispatch` smoke-tests. |
 
 **Accept:** clean install → sound in under 3 clicks on both OSes.
+✅ Done (commits `e1d0264`..`404824f`, 5 sub-phases + 1 review fixup): crash-recovery
+`Autosave`, persisted `AppSettings` + a `SettingsView` (device / buffer / UI scale /
+sample folders), a one-time `FirstRun` welcome overlay gated by a pure headless-tested
+`FirstRunState` marker, and dual-OS packaging — a Linux AppImage + tar.gz
+(`build-appimage.sh` via linuxdeploy) and a Windows Inno-Setup installer + portable zip
+(`build-packages.ps1`), with the app statically linking the MSVC runtime so the Windows
+artifacts need no redistributable. Packaging is driven by a new `release.yml`
+(tags → a published GitHub Release; manual dispatch → an unpublished smoke build). An
+adversarial multi-agent review of the changes caught one blocker (the missing
+linuxdeploy appimage-output plugin), fixed in `404824f`. Deferred (documented): the
+FirstRun *muted demo loop / pulsing Play / coach marks* (shipped a simpler welcome
+overlay instead) and any macOS packaging (out of v1 scope). 130 headless test groups;
+CI green. **RollForge is feature-complete for v1.**
 
 ---
 

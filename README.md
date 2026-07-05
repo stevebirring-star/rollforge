@@ -5,12 +5,13 @@ Windows. RollForge is built around one idea: *the fastest, least technical way
 to make hi-hat rolls, drum fills and finished-sounding beats.* Paint a roll,
 click FILL, turn one knob — no manual required.
 
-> **Status:** Phase 6 (export & interop) complete — a 16-pad sampler, a
-> sample-accurate step sequencer, the roll/fill/humanise differentiators, master
-> macro FX, a vendored-SQLite sample library with auto-kits, and export to MIDI /
-> WAV / per-pad stems (plus `.rollforge` project I/O); CI green on Linux + Windows.
-> See [`PLAN.md`](PLAN.md) for the
-> full phase roadmap and [`TESTING.md`](TESTING.md) for the manual checklist.
+> **Status:** **v1 feature-complete** (Phase 7 — packaging & polish — done). A 16-pad
+> sampler, a sample-accurate step sequencer, the roll/fill/humanise differentiators,
+> master macro FX, a vendored-SQLite sample library with auto-kits, export to MIDI /
+> WAV / per-pad stems (plus `.rollforge` project I/O), crash-recovery autosave, a
+> settings view, a one-time welcome, and dual-OS packaging (Linux AppImage + tar.gz,
+> Windows installer + portable zip); CI green on Linux + Windows. See [`PLAN.md`](PLAN.md)
+> for the full phase roadmap and [`TESTING.md`](TESTING.md) for the manual checklist.
 
 ---
 
@@ -81,6 +82,35 @@ compatibility layers — both appear to RollForge as ordinary ALSA/JACK devices.
 **ASIO** (Windows) is intentionally excluded for now due to Steinberg SDK
 licensing; a clearly-marked stub is documented in
 [`packaging/README.md`](packaging/README.md) for a future opt-in build.
+
+---
+
+## Downloads & packaging
+
+Prebuilt packages are attached to each tagged **[GitHub Release](https://github.com/stevebirring-star/rollforge/releases)**:
+
+| OS      | Installer                     | Portable                          |
+|---------|-------------------------------|-----------------------------------|
+| Linux   | `RollForge-<ver>-x86_64.AppImage` | `RollForge-<ver>-x86_64.tar.gz` (extract → `./AppRun`) |
+| Windows | `RollForge-<ver>-setup.exe` (Inno Setup) | `RollForge-<ver>-windows-x64.zip` (self-contained `.exe`) |
+
+The AppImage bundles the app's libraries (runs on a clean box, no dev packages
+needed); the Windows `.exe` statically links the MSVC runtime, so the installer and
+the portable zip need **no** Visual C++ redistributable.
+
+Packages are built by [`.github/workflows/release.yml`](.github/workflows/release.yml):
+pushing a `v*` tag builds the Release app on both OSes, packages it, and publishes a
+GitHub Release; a manual **workflow_dispatch** run produces the same artifacts without
+publishing (a packaging smoke test). To build them yourself after a Release build:
+
+```bash
+# Linux (needs curl + the app already built in build/)
+VERSION=0.1.0 packaging/linux/build-appimage.sh          # -> dist/*.AppImage + *.tar.gz
+```
+```powershell
+# Windows (needs Inno Setup 6 + the app already built in build\)
+packaging\windows\build-packages.ps1 -Version 0.1.0      # -> dist\*-setup.exe + *.zip
+```
 
 ---
 

@@ -1,27 +1,50 @@
 # Packaging
 
-This directory holds the release/packaging tooling for RollForge. Most of it is
-scaffolded in **Phase 7 — Packaging & polish**; this README documents the plan
-and the few decisions that already matter earlier.
+This directory holds the release/packaging tooling for RollForge, built in
+**Phase 7 — Packaging & polish**.
 
-## Layout (planned)
+## Layout
 
 ```
 packaging/
-  ci/         # notes/scripts referenced by .github/workflows/ci.yml
-  linux/      # AppImage (linuxdeploy) build script + .desktop / icon (Phase 7)
-  windows/    # Inno Setup script + portable-zip manifest (Phase 7)
+  ci/         # (reserved) notes/scripts referenced by the workflows
+  linux/      # build-appimage.sh + rollforge.desktop + rollforge.svg
+  windows/    # build-packages.ps1 + rollforge.iss
 ```
 
 ## Targets
 
-| OS      | Primary artifact           | Also                |
-|---------|----------------------------|---------------------|
-| Linux   | AppImage (via linuxdeploy) | plain `tar.gz`      |
-| Windows | Inno Setup installer       | portable `zip`      |
+| OS      | Primary artifact           | Also                          |
+|---------|----------------------------|-------------------------------|
+| Linux   | AppImage (via linuxdeploy) | portable `tar.gz`             |
+| Windows | Inno Setup installer       | portable `zip` (self-contained) |
 
-CI builds and tests on `ubuntu-22.04` and `windows-latest`; see
-[`../.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+## How packages are built
+
+Packaging is a **separate** workflow from the per-push CI:
+
+- **[`../.github/workflows/ci.yml`](../.github/workflows/ci.yml)** — builds + tests on
+  `ubuntu-22.04` and `windows-latest` (+ a Linux ASan job) on every push. Authoritative.
+- **[`../.github/workflows/release.yml`](../.github/workflows/release.yml)** — builds the
+  Release app on both OSes and packages it. A **`v*` tag** publishes a GitHub Release
+  with all four artifacts; a **workflow_dispatch** run produces them without publishing
+  (a smoke test).
+
+The two build scripts also run locally after a Release build:
+
+```bash
+VERSION=0.1.0 packaging/linux/build-appimage.sh          # Linux: AppImage + tar.gz
+```
+```powershell
+packaging\windows\build-packages.ps1 -Version 0.1.0      # Windows: setup.exe + zip
+```
+
+`build-appimage.sh` downloads `linuxdeploy` **and** its separate
+`linuxdeploy-plugin-appimage` output plugin, renders the SVG icon to PNG, bundles the
+app's non-system libraries, and runs FUSE-free (`APPIMAGE_EXTRACT_AND_RUN=1`) so it
+works on headless CI. `build-packages.ps1` builds the portable zip and drives Inno
+Setup's `ISCC`; the app statically links the MSVC runtime (see `../CMakeLists.txt`), so
+neither Windows artifact needs a Visual C++ redistributable.
 
 ## ASIO stub (Windows)
 

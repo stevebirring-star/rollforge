@@ -4,18 +4,21 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-04 (Phase 6 complete — export & interop)._
+_Last updated: 2026-07-05 (Phase 7 complete — packaging & polish; RollForge is v1 feature-complete)._
 
 ---
 
 ## 1. Where we are
 
-- **Phases 0–6 are complete, committed, pushed, and CI-green on both OSes.** HEAD =
-  `5e69e57`. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`);
-  Phase 2 = 8 commits (`234584c`..`094adce`); Phase 3 = 8 commits (`3bfcd2d`..
-  `fb01993`, + a Windows stack-overflow fix `f2e4ba8`); Phase 4 = 6 commits
-  (`6071e3b`..`5e393f7`); Phase 5 = 5 commits (`f2a0d7c`..`d18ec8b`); Phase 6 = 5
-  commits (`3c88551`..`5e69e57`). Run `git log --oneline` for the list.
+- **Phases 0–7 are complete and committed — RollForge is v1 feature-complete.**
+  Phases 0–6 are pushed and CI-green on both OSes; the Phase-7 commits
+  (`e1d0264`..`404824f`) are committed and pushed this session for the same CI to
+  verify. Phase 1 = 9 commits (`7ffbb6a`..`e16e87f`, + fixup `900be7f`); Phase 2 = 8
+  commits (`234584c`..`094adce`); Phase 3 = 8 commits (`3bfcd2d`..`fb01993`, + a
+  Windows stack-overflow fix `f2e4ba8`); Phase 4 = 6 commits (`6071e3b`..`5e393f7`);
+  Phase 5 = 5 commits (`f2a0d7c`..`d18ec8b`); Phase 6 = 5 commits (`3c88551`..
+  `5e69e57`); Phase 7 = 5 sub-phases + 1 review fixup (`e1d0264`..`404824f`). Run
+  `git log --oneline` for the list.
 - **What Phase 1 delivers:** `SampleBuffer` (immutable, reference-counted) + a
   message-thread retirement pool (the final delete never runs on the audio
   thread); `Pad`/`Kit` model; a lock-free command FIFO + `DrumEngine` seam;
@@ -64,19 +67,39 @@ _Last updated: 2026-07-04 (Phase 6 complete — export & interop)._
   UI (Export MIDI / WAV / stems, from an "Export" button; render on a fresh engine
   so live audio is untouched). Deferred: project save/load UI (needs per-pad path
   tracking) + drag-out (`performExternalDragDropOfFiles`).
-- **Verified:** 125 headless `juce::UnitTest` groups pass locally via
-  `tests/headless-compile.sh`; full CI (Linux + Windows + ASan/UBSan) is green on
-  every Phase-0..6 commit.
+- **What Phase 7 delivers (packaging & polish — the last phase):** crash-recovery
+  `app/Autosave` (writes a recovery `.rollforge` via ProjectIO every ~60 s on the UI
+  timer, restores it if present at launch, clears it on a clean quit); persisted
+  `app/AppSettings` (UI scale + sample folders as JSON under app-data) + a
+  `ui/SettingsView` (audio device/buffer selector + UI-scale chooser + add-sample-
+  folder); a one-time `ui/FirstRun` welcome overlay gated by a pure, headless-tested
+  `app/FirstRunState` marker file (deleted-safely on dismiss via SafePointer +
+  callAsync); and dual-OS packaging — `packaging/linux` (`build-appimage.sh` → an
+  AppImage via linuxdeploy + its appimage plugin, plus a portable tar.gz; a `.desktop`
+  entry + SVG icon) and `packaging/windows` (`build-packages.ps1` → an Inno-Setup
+  installer + a portable zip; the app statically links the MSVC runtime so neither
+  needs a vcredist) — all driven by a new `.github/workflows/release.yml` (a `v*` tag
+  publishes a GitHub Release; `workflow_dispatch` smoke-tests). Deferred: the FirstRun
+  muted-demo-loop / pulsing-Play / coach-marks (a simpler welcome overlay shipped).
+- **Verified:** 130 headless `juce::UnitTest` groups pass locally via
+  `tests/headless-compile.sh` (Phase 7 added Autosave + AppSettings + FirstRunState);
+  full CI (Linux + Windows + ASan/UBSan) is green on every Phase-0..6 commit, and the
+  Phase-7 commits (`e1d0264`..`404824f`) are pushed for the same CI to verify. An
+  adversarial multi-agent review of the Phase-7 diff caught one blocker (the missing
+  linuxdeploy appimage plugin, fixed in `404824f`); the C++/CMake/CI-YAML review
+  dimensions came back clean.
 - **Still NOT verified (human checks — no audio machine was used):** actual
   *audible* output; the pad-grid + sequencer-grid UI (step editing, playhead,
   transport, swing, undo); the Phase-3 UI (paint a roll with the brush, FILL /
   Reroll, the Humanise knob); the Phase-4 macro knobs (PUNCH / SPACE / CRUSH /
   DRIVE) actually sounding good full-travel; the Phase-5 library (scan a real
   folder → browse by category → NEW KIT loads a playable kit); the Phase-6 export
-  (Export MIDI / WAV / stems open in a DAW correctly); drag-and-drop file→pad; and
-  live MIDI input. The build machine is headless, so every audio/GUI path compiles, links,
-  is RT-safe and unit-tested, but *hearing* it and *clicking* pads needs a human
-  at a machine with audio (see TESTING.md).
+  (Export MIDI / WAV / stems open in a DAW correctly); drag-and-drop file→pad; live
+  MIDI input; and the Phase-7 polish (install the AppImage / installer on a clean box
+  → sound in ≤ 3 clicks, the first-run welcome overlay, settings persistence + UI
+  scale, and autosave crash-recovery). The build machine is headless, so every
+  audio/GUI path compiles, links, is RT-safe and unit-tested, but *hearing* it and
+  *clicking* pads needs a human at a machine with audio (see TESTING.md).
 
 ## 2. Machine / environment gotchas (READ FIRST when resuming)
 
@@ -147,45 +170,48 @@ as new headless tests land. Device-coupled code (`AudioEngine`, using
 `juce_audio_devices`) and all `ui/` code are NOT in the headless build — only CI
 compiles those. CI remains the authoritative full build on both OSes.
 
-## 4. Immediate next actions (Phase 7 — Packaging & polish)
+## 4. Immediate next actions (v1 is feature-complete)
 
-Phase 6 is complete (see §1). Next is Phase 7, the LAST phase: ship it — installers
-+ portable builds on both OSes, a first-run experience, a settings view, and
-autosave/recovery. Full file/class map: PLAN.md Phase 7. Acceptance: a clean
-install makes sound in under 3 clicks on both OSes.
+All seven phases are done (see §1). RollForge is **v1 feature-complete**: pads +
+sequencer, the roll/fill/humanise differentiators, master macro FX, the SQLite
+sample library + auto-kits, MIDI/WAV/stems export + `.rollforge` I/O, and Phase-7
+packaging & polish (Autosave, Settings, a one-time welcome, and Linux + Windows
+installers/portable builds). What remains is **not** new features — it is
+verification and release mechanics:
 
-**Recommended first commit:** `app/Autosave` — write a recovery `.rollforge` every
-~60 s (reuse the Phase-6 `ProjectIO`) and offer to restore it on next launch.
-Timer + ProjectIO; the restore-decision logic is headless-testable, and it protects
-real work immediately.
+1. **Cut a release.** Push a `v*` tag (via the VPS relay, §2) — `release.yml` builds
+   the Release app on both OSes, produces the AppImage + tar.gz (Linux) and the Inno
+   installer + portable zip (Windows), and publishes a GitHub Release. To dry-run the
+   packaging without publishing, trigger `release.yml` via **workflow_dispatch** and
+   inspect the uploaded artifacts.
+2. **Human acceptance on real hardware** (the one thing no build machine has done —
+   see the NOT-verified list in §1 and TESTING.md): install each package on a clean
+   box and confirm sound in ≤ 3 clicks; click through pads / sequencer / roll brush /
+   FILL / macro knobs / library + NEW KIT / export; verify the first-run overlay,
+   settings persistence + UI scale, and autosave recovery; verify live MIDI input.
+3. **Optional follow-ups (documented, not blockers):** the deferred items in §5 (a
+   linked static engine lib, single-instance policy, MP3-decode flag, triplet timing,
+   backward micro-shift, alt-sample jitter, per-pad SPACE sends, project save/load UI
+   + drag-out, the FirstRun muted-demo-loop/coach-marks) and — if closed-source
+   distribution is ever wanted — a commercial JUCE license (see README / LICENSE).
 
-**Suggested build order (each a commit):**
-1. `app/Autosave` — periodic recovery file via `ProjectIO`; restore-on-launch
-   prompt. Test the "should offer restore?" logic headless.
-2. `ui/SettingsView` — device / buffer size / theme scale (125/150%) / sample
-   folders, persisted to app-data. (The audio-device selector already exists.)
-3. `ui/FirstRun` — starter kit + a muted demo loop, a pulsing Play, ~3 coach marks
-   (never a modal tutorial). Shown once (a flag in app-data).
-4. `packaging/linux/` — AppImage via linuxdeploy in CI + a plain tar.gz.
-5. `packaging/windows/` — Inno Setup installer in CI + a portable zip.
-
-**Carry forward:** packaging is mostly CI-workflow + scripts (not C++ unit-tested);
-add release jobs to `.github/workflows/` that build the app in Release and bundle
-it. Keep Autosave's decision logic pure so it stays headless-testable. This is the
-last phase — after it, see the "Scope guard" in PLAN.md for what is deliberately
-NOT in v1.
-
-**Decisions to pin for Phase 7:** autosave interval + recovery-file location;
-which settings persist + where; whether first-run is a one-time flag or a menu item
-too; AppImage vs Flatpak for Linux (PLAN says AppImage). Default to the simplest
-shippable choice.
+**Release gotchas:** `release.yml` is packaging-only (tags + manual dispatch); the
+everyday build+test signal stays in `ci.yml`. The Windows exe statically links the
+MSVC runtime (CMakeLists) so the zip/installer need no vcredist. The Linux AppImage
+build needs BOTH `linuxdeploy` and its separate `linuxdeploy-plugin-appimage` (the
+`--output appimage` backend) — `build-appimage.sh` downloads both and puts the tools
+dir on PATH; missing that plugin was a real bug caught in review (fixed in `404824f`).
 
 ## 5. Open items / risks
 
-- **CI proven on both OSes, through all of Phase 6.** `.github/workflows/ci.yml`
-  (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job) is green on every
-  Phase-0..6 commit up to HEAD `5e69e57` — including the vendored SQLite
-  amalgamation compiling under MSVC + ASan. (Linux + ASan finish in a couple of
+- **CI proven on both OSes, through Phase 6; Phase 7 pushed for the same CI.**
+  `.github/workflows/ci.yml` (ubuntu-22.04 + windows-latest + a Linux ASan/UBSan job)
+  is green on every Phase-0..6 commit up to `5e69e57` — including the vendored SQLite
+  amalgamation compiling under MSVC + ASan. Phase 7 adds two new CI surfaces to watch
+  on the pushed run: the **static MSVC runtime** on the Windows app build
+  (`MSVC_RUNTIME_LIBRARY` — a /MT vs /MD mismatch would surface as a link error) and
+  the packaging-only **`release.yml`** (only runs on `v*` tags / `workflow_dispatch`,
+  so exercise it deliberately — it is not part of the per-push signal). (Linux + ASan finish in a couple of
   minutes; the Windows job — a cold MSVC + JUCE build — often takes 10–15 min but
   has never failed on a green Linux commit.) History worth knowing: the first-ever
   run failed on Windows (`jack/jack.h`), fixed by per-platform backend gating; 8/9
@@ -223,7 +249,8 @@ shippable choice.
   before shipping. _(nit.)_
 - **MP3 decoding is present but off** (`JUCE_USE_MP3AUDIOFORMAT=0`) — enable the
   flag if MP3 import is wanted (patents expired; matches the ASIO-off caution).
-- `packaging/ci/` is an empty dir (real packaging = Phase 7).
+- `packaging/ci/` is a reserved (currently empty) dir; the real packaging lives in
+  `packaging/linux` + `packaging/windows` + `.github/workflows/release.yml` (Phase 7).
 
 ## 6. Key decisions & rationale
 

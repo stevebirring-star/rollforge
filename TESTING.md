@@ -161,4 +161,42 @@ stems sum to the full mix with master FX off; a WAV per active pad is written).
 - ☐ Quit -> clean exit, no crash/hang.
 
 ## Phase 7 — Packaging & polish
-_(to be filled)_
+
+**Automated (headless):** `tests/headless-compile.sh` -> 130 test groups, adding
+Autosave (recovery file save / detect / load / clear round-trip; a missing or empty
+file is not a recovery), AppSettings (UI scale + sample-folders JSON + file
+round-trip; defaults for a missing file), and FirstRunState (the welcome is offered
+until the marker is written, then never again; marking is idempotent; clearing
+re-arms it). CI builds the full app on Linux + Windows + ASan.
+
+**Packaging (CI — `.github/workflows/release.yml`):** the packaging is produced by a
+separate workflow, not the per-push CI. Trigger it with **workflow_dispatch** (a
+smoke build that uploads artifacts but publishes nothing) or by pushing a **`v*`
+tag** (which also cuts a GitHub Release).
+- ☐ `release.yml` Linux job builds the Release app on `ubuntu-22.04`, and
+  `build-appimage.sh` produces `RollForge-<ver>-x86_64.AppImage` + a
+  `RollForge-<ver>-x86_64.tar.gz` (both uploaded as the `rollforge-linux` artifact).
+- ☐ `release.yml` Windows job builds on `windows-latest`, and `build-packages.ps1`
+  produces `RollForge-<ver>-setup.exe` (Inno Setup) + `RollForge-<ver>-windows-x64.zip`
+  (portable), uploaded as `rollforge-windows`.
+- ☐ On a `v*` tag, the `release` job gathers both platforms' artifacts into one
+  published GitHub Release with generated notes.
+
+**Manual (needs a machine with audio + a display — the acceptance test):**
+- ☐ **Linux AppImage:** `chmod +x RollForge-*.AppImage && ./RollForge-*.AppImage`
+  on a clean box (no dev libs installed) -> the app launches and pads make sound in
+  ≤ 3 clicks. The portable tar.gz extracts and runs via `./AppRun`.
+- ☐ **Windows installer:** run `RollForge-*-setup.exe` -> installs to Program Files,
+  Start-menu (and optional desktop) shortcut works, app launches and makes sound; the
+  portable `.zip` runs `RollForge.exe` directly with **no** Visual C++ redistributable
+  installed (static MSVC runtime).
+- ☐ **First run:** on the very first launch the welcome overlay dims the app and
+  shows tips; "Let's go" dismisses it and it never reappears (a `welcome.done` marker
+  is written under the user app-data dir).
+- ☐ **Settings:** open Settings -> change the audio device / buffer size (selector),
+  the UI scale (100/125/150 % applies immediately and after a restart), and add a
+  sample folder (persists to `settings.json`).
+- ☐ **Autosave recovery:** with unsaved work, kill the app (don't quit cleanly) ->
+  relaunch -> the previous pattern + macro-FX are restored from the recovery file. A
+  clean quit clears the recovery file so the next launch starts fresh.
+- ☐ Quit -> clean exit, no crash/hang (ASan-clean).
