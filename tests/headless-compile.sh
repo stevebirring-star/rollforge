@@ -70,6 +70,7 @@ ENGINE_SOURCES=(
     src/model/ProjectIO.cpp
     src/model/MidiExporter.cpp
     src/app/Autosave.cpp
+    src/app/AppSettings.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -104,6 +105,7 @@ TEST_SOURCES=(
     tests/OfflineRenderTests.cpp
     tests/StemNullTests.cpp
     tests/AutosaveTests.cpp
+    tests/AppSettingsTests.cpp
     tests/TestMain.cpp
 )
 

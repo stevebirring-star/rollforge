@@ -5,6 +5,8 @@
 #include "engine/WavExporter.h"
 #include "model/MidiExporter.h"
 #include "app/Autosave.h"
+#include "app/AppSettings.h"
+#include "ui/SettingsView.h"
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
@@ -44,7 +46,7 @@ public:
     bool keyPressed (const juce::KeyPress& key) override;
 
 private:
-    void openAudioSettings();
+    void openSettings();
     void openLibrary();
     void openExport();
     void doExportMidi();
@@ -82,7 +84,7 @@ private:
     int              autosaveCounter = 0;   // ticks since the last recovery save
     juce::Label      titleLabel;
     juce::Label      statusLabel;
-    juce::TextButton settingsButton { "Audio Settings" };
+    juce::TextButton settingsButton { "Settings" };
     juce::TextButton libraryButton { "Library" };
     juce::TextButton exportButton { "Export" };
 

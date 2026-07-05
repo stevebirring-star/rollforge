@@ -87,6 +87,7 @@ if(ROLLFORGE_BUILD_APP)
     target_sources(RollForge PRIVATE
         src/app/Main.cpp
         src/app/Autosave.cpp
+        src/app/AppSettings.cpp
         src/ui/MainComponent.cpp
         src/ui/PadComponent.cpp
         src/ui/PadGrid.cpp
@@ -98,6 +99,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
         src/ui/ExportPanel.cpp
+        src/ui/SettingsView.cpp
         src/engine/AudioEngine.cpp
         src/engine/Clock.cpp
         src/engine/DrumEngine.cpp

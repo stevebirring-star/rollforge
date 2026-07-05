@@ -17,6 +17,9 @@ MainComponent::MainComponent()
 {
     setWantsKeyboardFocus (true);
 
+    // Apply the saved UI scale (default 1.0 when there are no settings yet).
+    juce::Desktop::getInstance().setGlobalScaleFactor (AppSettings::load().uiScale);
+
     titleLabel.setText ("RollForge", juce::dontSendNotification);
     titleLabel.setFont (juce::FontOptions (30.0f, juce::Font::bold));
     titleLabel.setColour (juce::Label::textColourId, colours::text);
@@ -30,7 +33,7 @@ MainComponent::MainComponent()
 
     settingsButton.setColour (juce::TextButton::buttonColourId, colours::panel);
     settingsButton.setColour (juce::TextButton::textColourOffId, colours::text);
-    settingsButton.onClick = [this] { openAudioSettings(); };
+    settingsButton.onClick = [this] { openSettings(); };
     addAndMakeVisible (settingsButton);
 
     libraryButton.setColour (juce::TextButton::buttonColourId, colours::panel);
@@ -319,7 +322,7 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
         refreshStatus();
 }
 
-void MainComponent::openAudioSettings()
+void MainComponent::openSettings()
 {
     if (settingsWindow != nullptr)
     {
@@ -327,24 +330,20 @@ void MainComponent::openAudioSettings()
         return;
     }
 
-    auto selector = std::make_unique<juce::AudioDeviceSelectorComponent> (
-        engine.getDeviceManager(),
-        /*minInputChannels*/  0, /*maxInputChannels*/  0,
-        /*minOutputChannels*/ 1, /*maxOutputChannels*/ 2,
-        /*showMidiInput*/     false,
-        /*showMidiOutput*/    false,
-        /*showChannelsAsStereoPairs*/ true,
-        /*hideAdvancedOptionsWithButton*/ false);
-    selector->setSize (500, 420);
+    auto view = std::make_unique<SettingsView> (engine.getDeviceManager());
+    view->onScaleChanged = [] (float scale)
+    {
+        juce::Desktop::getInstance().setGlobalScaleFactor (scale);
+    };
 
     juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned (selector.release());
-    options.dialogTitle              = "Audio Settings";
-    options.dialogBackgroundColour   = colours::background;
-    options.componentToCentreAround  = this;
+    options.content.setOwned (view.release());
+    options.dialogTitle                  = "Settings";
+    options.dialogBackgroundColour       = colours::background;
+    options.componentToCentreAround      = this;
     options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar        = true;
-    options.resizable                = true;
+    options.useNativeTitleBar            = true;
+    options.resizable                    = true;
 
     settingsWindow = options.launchAsync();
 }
