@@ -161,6 +161,15 @@ if(ROLLFORGE_BUILD_APP)
     )
 
     rollforge_apply_sanitizers(RollForge)
+
+    # Windows: statically link the MSVC runtime so the portable .zip and the Inno
+    # installer are self-contained (no Visual C++ redistributable dependency). JUCE
+    # module sources compile into this target, so they pick up the same runtime.
+    # CMP0091 is NEW by default at cmake_minimum_required 3.22, making this work.
+    if(MSVC)
+        set_target_properties(RollForge PROPERTIES
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------

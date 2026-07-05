@@ -64,3 +64,67 @@ jobs:
           name: rollforge-linux
           path: dist/*
           if-no-files-found: error
+
+  windows:
+    name: Package (Windows — installer + portable zip)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Ninja + Inno Setup
+        run: |
+          choco install ninja -y --no-progress
+          choco install innosetup -y --no-progress
+
+      - name: Derive version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure (Release, app only)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DROLLFORGE_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package installer + portable zip
+        shell: pwsh
+        run: ./packaging/windows/build-packages.ps1 -Version "${{ steps.ver.outputs.version }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollforge-windows
+          path: dist/*
+          if-no-files-found: error
+
+  # On a version tag only: gather both platforms' artifacts into one GitHub Release.
+  release:
+    name: Publish GitHub Release
+    needs: [linux, windows]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "RollForge ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            artifacts/*/*
