@@ -4,6 +4,7 @@
 #include "engine/SampleRetirementPool.h"
 #include "engine/WavExporter.h"
 #include "model/MidiExporter.h"
+#include "app/Autosave.h"
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
@@ -56,6 +57,8 @@ private:
     void updatePadLabels();
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
     void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
+    Project captureProject();                  // snapshot the session (pattern + FX)
+    void    applyProject (const Project&);      // restore a session (pattern + FX)
 
     // Declared first -> destroyed last: the engine (holding pad sample refs)
     // outlives the Kit/pool/loader that also reference the samples.
@@ -76,6 +79,7 @@ private:
     juce::ComboBox   rollPresetBox;
     MacroKnobs       macroKnobs { engine.getMasterBus() };
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
+    int              autosaveCounter = 0;   // ticks since the last recovery save
     juce::Label      titleLabel;
     juce::Label      statusLabel;
     juce::TextButton settingsButton { "Audio Settings" };

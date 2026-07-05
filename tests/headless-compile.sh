@@ -69,6 +69,7 @@ ENGINE_SOURCES=(
     src/model/Humaniser.cpp
     src/model/ProjectIO.cpp
     src/model/MidiExporter.cpp
+    src/app/Autosave.cpp
 )
 
 # Test translation units (TestMain.cpp provides main() + the category runner).
@@ -102,6 +103,7 @@ TEST_SOURCES=(
     tests/MidiExportTests.cpp
     tests/OfflineRenderTests.cpp
     tests/StemNullTests.cpp
+    tests/AutosaveTests.cpp
     tests/TestMain.cpp
 )
 

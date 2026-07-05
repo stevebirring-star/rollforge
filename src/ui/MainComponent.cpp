@@ -162,6 +162,15 @@ MainComponent::MainComponent()
     engine.getDeviceManager().addChangeListener (this);
     refreshStatus();
 
+    // Crash recovery: a recovery file present at launch means the previous session
+    // did not exit cleanly -- restore its pattern + FX.
+    if (Autosave::hasRecovery())
+    {
+        Project recovered;
+        if (Autosave::load (recovered))
+            applyProject (recovered);
+    }
+
     startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
     setSize (780, 880);
 }
@@ -169,6 +178,9 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+
+    // Clean exit -> drop the recovery file so the next launch starts fresh.
+    Autosave::clear();
 
     // Stop listening before any teardown so no callback lands on a half-dead component.
     engine.getDeviceManager().removeChangeListener (this);
@@ -228,6 +240,30 @@ void MainComponent::refreshGridFromPattern()
     }
 }
 
+Project MainComponent::captureProject()
+{
+    Project p;
+    p.pattern = editPattern;
+    auto& bus = engine.getMasterBus();
+    p.punch = bus.getPunch(); p.drive = bus.getDrive();
+    p.crush = bus.getCrush(); p.space = bus.getSpace();
+    for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
+        if (auto sample = starterKit.pad (i).primarySample())
+            p.pads[(size_t) i].samplePath = sample->getName();
+    return p;
+}
+
+void MainComponent::applyProject (const Project& p)
+{
+    editPattern = p.pattern;
+    refreshGridFromPattern();
+    engine.getSequencer().setPattern (editPattern);
+    auto& bus = engine.getMasterBus();
+    bus.setPunch (p.punch); bus.setDrive (p.drive);
+    bus.setCrush (p.crush); bus.setSpace (p.space);
+    // Pads/kit are not restored yet (per-pad sample paths aren't tracked) -- pattern + FX only.
+}
+
 void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
 {
     // Decode on the message thread (fast for typical drum one-shots), then swap
@@ -252,6 +288,13 @@ void MainComponent::timerCallback()
                        ? (int) (seq.getCurrentStep() % nSteps)
                        : -1;
     seqGrid.setPlayheadStep (step);
+
+    // Autosave a recovery file every ~60 s (30 Hz timer -> 1800 ticks).
+    if (++autosaveCounter >= 1800)
+    {
+        autosaveCounter = 0;
+        Autosave::save (captureProject());
+    }
 }
 
 void MainComponent::refreshStatus()
