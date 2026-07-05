@@ -1,0 +1,66 @@
+name: Release
+
+# Builds the Release app on each OS and produces distributable packages:
+#   Linux   -> AppImage + portable tar.gz
+#   Windows -> Inno Setup installer + portable zip   (added in Phase 7 commit 5)
+#
+# Triggers on a version tag (v*) to cut a real GitHub Release, and on manual
+# dispatch to smoke-test the packaging without publishing anything. The everyday
+# build+test signal lives in ci.yml; this workflow is packaging only.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # gh release create/upload on a tag
+
+jobs:
+  linux:
+    name: Package (Linux — AppImage + tar.gz)
+    runs-on: ubuntu-22.04   # oldest supported runner -> widest glibc compatibility
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build + packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libasound2-dev libjack-jackd2-dev \
+            libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev \
+            librsvg2-bin file
+
+      - name: Derive version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure (Release, app only)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DROLLFORGE_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package AppImage + tar.gz
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: packaging/linux/build-appimage.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollforge-linux
+          path: dist/*
+          if-no-files-found: error

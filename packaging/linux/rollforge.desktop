@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=RollForge
+GenericName=Drum Machine
+Comment=The fastest way to make drum rolls, fills and finished-sounding beats
+Exec=RollForge
+Icon=rollforge
+Categories=AudioVideo;Audio;Music;
+Keywords=drum;drums;beats;sampler;sequencer;groovebox;rolls;
+Terminal=false
+StartupWMClass=RollForge
