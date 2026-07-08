@@ -30,6 +30,18 @@ void PadGrid::setPadLabel (int index, const juce::String& text)
         pad->setLabelText (text);
 }
 
+void PadGrid::setPadLevel (int index, float level)
+{
+    if (auto* pad = pads[index])
+        pad->setMeter (level);
+}
+
+void PadGrid::setPadWaveform (int index, const std::vector<float>& peaks)
+{
+    if (auto* pad = pads[index])
+        pad->setWaveform (peaks);
+}
+
 void PadGrid::flashPad (int index)
 {
     if (auto* pad = pads[index])

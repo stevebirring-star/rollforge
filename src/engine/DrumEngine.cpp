@@ -74,6 +74,8 @@ void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
     sampleRate   = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     interimSound = makeInterimBlip (sampleRate);
     pool.prepare (sampleRate);
+    for (auto& m : padMeter)
+        m.store (0.0f, std::memory_order_relaxed);
 }
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
@@ -92,6 +94,15 @@ void DrumEngine::drainCommands() noexcept
 void DrumEngine::renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
 {
     pool.renderAdditive (buffer, startSample, numSamples);
+    publishPadMeters();
+}
+
+void DrumEngine::publishPadMeters() noexcept
+{
+    float levels[maxMeterPads] = { 0.0f };
+    pool.addPadLevels (levels, juce::jmin ((int) pads.size(), maxMeterPads));
+    for (int p = 0; p < maxMeterPads; ++p)
+        padMeter[(size_t) p].store (levels[p], std::memory_order_relaxed);
 }
 
 void DrumEngine::triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones) noexcept
@@ -101,14 +112,14 @@ void DrumEngine::triggerPadNow (int padIndex, float velocity, float pitchOffsetS
         const auto& slot = pads[(size_t) padIndex];
         VoiceParameters params = slot.params;
         params.pitchSemitones += pitchOffsetSemitones;
-        pool.trigger (slot.sample, params, velocity, slot.chokeGroup);
+        pool.trigger (slot.sample, params, velocity, slot.chokeGroup, padIndex);
     }
     else
     {
         // No sample configured yet -> fallback blip (keeps the app audible).
         VoiceParameters params;
         params.pitchSemitones = pitchOffsetSemitones;
-        pool.trigger (interimSound, params, velocity, 0);
+        pool.trigger (interimSound, params, velocity, 0, padIndex);
     }
 }
 

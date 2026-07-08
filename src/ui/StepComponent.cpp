@@ -30,6 +30,7 @@ void StepComponent::mouseDown (const juce::MouseEvent& e)
     if (onGestureStart)
         onGestureStart();
 
+    editing = true;
     on = ! on;
     if (on)
         velocity = velocityForY (e.position.y);
@@ -51,6 +52,15 @@ void StepComponent::mouseDrag (const juce::MouseEvent& e)
         onEdit (on, velocity);
 }
 
+void StepComponent::mouseUp (const juce::MouseEvent&)
+{
+    if (editing)
+    {
+        editing = false;
+        repaint();
+    }
+}
+
 void StepComponent::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat().reduced (1.5f);
@@ -69,6 +79,26 @@ void StepComponent::paint (juce::Graphics& g)
         auto fill = bounds.withTrimmedTop (bounds.getHeight() * (1.0f - velocity));
         g.setColour (onLow.interpolatedWith (onHigh, velocity));
         g.fillRoundedRectangle (fill, corner);
+
+        // Percentage readout so you can gauge how much of the sound this step
+        // applies. Prominent (with a dark chip) while you're setting it; a subtle
+        // number the rest of the time.
+        const int pct = juce::roundToInt (velocity * 100.0f);
+        if (editing)
+        {
+            auto chip = bounds.withSizeKeepingCentre (bounds.getWidth() * 0.86f, 15.0f);
+            g.setColour (juce::Colours::black.withAlpha (0.55f));
+            g.fillRoundedRectangle (chip, 3.0f);
+            g.setColour (juce::Colours::white);
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+            g.drawText (juce::String (pct) + "%", bounds, juce::Justification::centred, false);
+        }
+        else
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.72f));
+            g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
+            g.drawText (juce::String (pct), bounds, juce::Justification::centred, false);
+        }
     }
     else
     {

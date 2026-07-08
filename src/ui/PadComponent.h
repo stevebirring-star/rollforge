@@ -9,6 +9,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
+#include <vector>
 
 namespace rollforge
 {
@@ -21,6 +22,14 @@ public:
     explicit PadComponent (int padIndex);
 
     void setLabelText (const juce::String& text);
+
+    /** Live output level 0..1 for the pad's meter. Call regularly (the UI timer):
+        applies fast-attack / slow-release smoothing for a VU feel. */
+    void setMeter (float level);
+
+    /** Downsampled |amplitude| peaks (0..1) of the pad's sample, drawn as a
+        thumbnail behind the label. Empty clears it. */
+    void setWaveform (const std::vector<float>& peaks);
 
     /** Brief visual flash (also used for keyboard / MIDI triggers). */
     void flash();
@@ -40,10 +49,12 @@ public:
 private:
     void timerCallback() override;
 
-    const int    index;
-    juce::String label;
-    float        flashLevel = 0.0f;
-    bool         dragOver   = false;
+    const int          index;
+    juce::String       label;
+    float              flashLevel  = 0.0f;
+    float              meterLevel  = 0.0f;   // smoothed 0..1 for the level meter
+    std::vector<float> waveform;             // downsampled |amp| peaks, 0..1
+    bool               dragOver    = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PadComponent)
 };

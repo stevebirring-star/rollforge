@@ -11,6 +11,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
+#include <vector>
 
 namespace rollforge
 {
@@ -21,6 +22,8 @@ public:
     PadGrid();
 
     void setPadLabel (int index, const juce::String& text);
+    void setPadLevel (int index, float level);                       // live meter (UI timer)
+    void setPadWaveform (int index, const std::vector<float>& peaks); // sample thumbnail
     void flashPad (int index);
 
     std::function<void (int padIndex, float velocity)>        onPadTrigger;

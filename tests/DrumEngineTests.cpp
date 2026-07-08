@@ -127,6 +127,26 @@ public:
             // so both triggers occupy voices.
             expectEquals (engine.getNumActiveVoices(), 2);
         }
+
+        beginTest ("per-pad level meter tracks only the triggered pad");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+
+            // Nothing triggered -> every pad meter reads 0; out-of-range is 0 too.
+            expectWithinAbsoluteError (engine.getPadLevel (0), 0.0f, 1.0e-6f);
+            expectWithinAbsoluteError (engine.getPadLevel (3), 0.0f, 1.0e-6f);
+            expectWithinAbsoluteError (engine.getPadLevel (-1), 0.0f, 1.0e-6f);
+            expectWithinAbsoluteError (engine.getPadLevel (999), 0.0f, 1.0e-6f);
+
+            engine.pushTrigger (3, 1.0f);
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            buffer.clear();
+            engine.process (buffer);   // drains, renders, publishes the meters
+
+            expect (engine.getPadLevel (3) > 0.0f);                            // hit pad lights up
+            expectWithinAbsoluteError (engine.getPadLevel (7), 0.0f, 1.0e-6f);  // untouched pads stay dark
+        }
     }
 };
 

@@ -41,14 +41,21 @@ public:
     void prepare (double deviceSampleRate);
 
     /** Triggers a note: applies the choke group, allocates a voice (stealing if
-        needed), and starts it. Null sample is ignored. AUDIO THREAD. */
+        needed), and starts it. Null sample is ignored. `padIndex` (-1 = unknown)
+        is recorded so per-pad level meters can attribute this voice. AUDIO THREAD. */
     void trigger (SampleBuffer::Ptr sample,
                   const Voice::Parameters& params,
                   float velocity,
-                  int chokeGroup = 0) noexcept;
+                  int chokeGroup = 0,
+                  int padIndex   = -1) noexcept;
 
     /** Sums every active voice ADDITIVELY into `buffer`. AUDIO THREAD. */
     void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
+
+    /** Peak-combines each active voice's level into out[voicePad] for per-pad
+        meters (does NOT zero `out` first). out must hold >= numPads entries.
+        AUDIO THREAD; allocation/lock free. */
+    void addPadLevels (float* out, int numPads) const noexcept;
 
     /** Hard-stops every voice. */
     void reset() noexcept;
@@ -68,6 +75,7 @@ private:
     std::unique_ptr<Voice[]> voices;
     std::vector<int>         chokeGroups;   // per voice; 0 when idle / no group
     std::vector<juce::int64> ages;          // trigger counter at last start()
+    std::vector<int>         voicePads;     // per voice; pad index at last start() (-1 = unknown)
 
     int         numVoices = 0;
     juce::int64 nextAge   = 0;

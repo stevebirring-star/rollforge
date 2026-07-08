@@ -30,6 +30,8 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
+#include <array>
+#include <atomic>
 #include <vector>
 
 namespace rollforge
@@ -97,7 +99,21 @@ public:
     int    getNumPads()         const noexcept { return (int) pads.size(); }
     int    getNumActiveVoices() const noexcept { return pool.getNumActive(); }
 
+    /** Latest published output level (0..~1) for a pad, for UI level meters.
+        Written by the audio thread each render, read by the UI timer (relaxed
+        atomic — a benign meter race). Out-of-range pads read 0. */
+    float getPadLevel (int padIndex) const noexcept
+    {
+        return (padIndex >= 0 && padIndex < maxMeterPads)
+                   ? padMeter[(size_t) padIndex].load (std::memory_order_relaxed)
+                   : 0.0f;
+    }
+
 private:
+    static constexpr int maxMeterPads = 16;
+
+    void publishPadMeters() noexcept;   // audio thread: snapshot pool levels -> atomics
+
     struct PadSlot
     {
         SampleBuffer::Ptr sample;
@@ -118,6 +134,9 @@ private:
 
     // Fallback sound for a pad with no sample yet (played until a Kit is installed).
     SampleBuffer::Ptr interimSound;
+
+    // Per-pad output level for UI meters: audio thread publishes, UI timer reads.
+    std::array<std::atomic<float>, maxMeterPads> padMeter {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DrumEngine)
 };

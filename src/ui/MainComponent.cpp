@@ -2,6 +2,8 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include <cmath>
+
 namespace rollforge
 {
 
@@ -11,6 +13,44 @@ namespace colours
     static const juce::Colour panel      { 0xff26262c };
     static const juce::Colour text       { 0xffe8e8ec };
     static const juce::Colour textDim    { 0xff9a9aa4 };
+}
+
+namespace
+{
+    // Downsample a sample to `bins` |amplitude| peaks (0..1), normalised to the
+    // loudest bin, for a pad's waveform thumbnail. Message-thread only (runs at
+    // sample-load time, never on the audio thread).
+    std::vector<float> computeWaveform (const SampleBuffer& sb, int bins)
+    {
+        std::vector<float> peaks ((size_t) juce::jmax (1, bins), 0.0f);
+        const int n  = sb.getNumSamples();
+        const int ch = juce::jmax (1, sb.getNumChannels());
+        if (n <= 0)
+            return peaks;
+
+        for (int b = 0; b < bins; ++b)
+        {
+            const int s0 = (int) ((juce::int64) b       * n / bins);
+            const int s1 = (int) ((juce::int64) (b + 1) * n / bins);
+            float peak = 0.0f;
+            for (int s = s0; s < s1; ++s)
+            {
+                float m = 0.0f;
+                for (int c = 0; c < ch; ++c)
+                    m += sb.getSample (c, s);
+                peak = juce::jmax (peak, std::abs (m / (float) ch));
+            }
+            peaks[(size_t) b] = peak;
+        }
+
+        float mx = 0.0f;
+        for (float p : peaks)
+            mx = juce::jmax (mx, p);
+        if (mx > 1.0e-6f)
+            for (float& p : peaks)
+                p /= mx;
+        return peaks;
+    }
 }
 
 MainComponent::MainComponent()
@@ -111,30 +151,20 @@ MainComponent::MainComponent()
         if (lane < 0 || lane >= editPattern.numLanes || editPattern.numRolls >= maxRolls)
             return;
 
-        const int pad = editPattern.lane (lane).targetPad;
-        const int len = juce::jmax (1, length);
-        const int sel = rollPresetBox.getSelectedId();
-
-        RollRegion r;
-        if (sel <= 1)   // Auto: an accelerating roll whose end density follows the vertical drag
-        {
-            r.startStep   = startStep;
-            r.lengthSteps = (double) len;
-            r.targetPad   = pad;
-            r.speed       = { 2.0f, 2.0f + density * 14.0f, 0.3f };
-            r.volume      = { 1.0f, 0.7f, 0.0f };
-            r.pitch       = { 0.0f, 0.0f, 0.0f };
-        }
-        else            // a named preset shape
-        {
-            r = RollPresets::make ((RollPresets::Preset) (sel - 2), startStep, (double) len, pad);
-        }
-        editPattern.rolls[(std::size_t) editPattern.numRolls] = RollCompiler::compile (r);
+        editPattern.rolls[(std::size_t) editPattern.numRolls]
+            = RollCompiler::compile (buildBrushRegion (lane, startStep, length, density));
         ++editPattern.numRolls;
 
         paintedRolls.push_back ({ lane, startStep, juce::jmax (1, length) });
         rollOverlay.setRolls (paintedRolls);
         engine.getSequencer().setPattern (editPattern);
+    };
+
+    // Live meter: how many hits the roll under the brush would produce right now
+    // (same region-builder as the paint above, so the preview matches the result).
+    rollOverlay.getHitCount = [this] (int lane, int startStep, int length, float density)
+    {
+        return RollCompiler::compile (buildBrushRegion (lane, startStep, length, density)).count;
     };
     addAndMakeVisible (rollOverlay);   // added after seqGrid -> drawn on top
 
@@ -223,7 +253,20 @@ void MainComponent::updatePadLabels()
 {
     for (int i = 0; i < kitNumPads; ++i)
         if (auto sample = starterKit.pad (i).primarySample())
+        {
             padGrid.setPadLabel (i, sample->getName());
+            padGrid.setPadWaveform (i, computeWaveform (*sample, 48));
+        }
+}
+
+void MainComponent::updatePadWaveform (int padIndex)
+{
+    if (padIndex < 0 || padIndex >= kitNumPads)
+        return;
+    if (auto sample = starterKit.pad (padIndex).primarySample())
+        padGrid.setPadWaveform (padIndex, computeWaveform (*sample, 48));
+    else
+        padGrid.setPadWaveform (padIndex, {});
 }
 
 void MainComponent::afterStepEdit (int lane, int step)
@@ -262,6 +305,26 @@ void MainComponent::refreshGridFromPattern()
     }
 }
 
+RollRegion MainComponent::buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const
+{
+    const int pad = (lane >= 0 && lane < editPattern.numLanes) ? editPattern.lane (lane).targetPad : 0;
+    const int len = juce::jmax (1, lengthSteps);
+    const int sel = rollPresetBox.getSelectedId();
+
+    if (sel <= 1)   // Auto: an accelerating roll whose end density follows the vertical drag
+    {
+        RollRegion r;
+        r.startStep   = startStep;
+        r.lengthSteps = (double) len;
+        r.targetPad   = pad;
+        r.speed       = { 2.0f, 2.0f + density * 14.0f, 0.3f };
+        r.volume      = { 1.0f, 0.7f, 0.0f };
+        r.pitch       = { 0.0f, 0.0f, 0.0f };
+        return r;
+    }
+    return RollPresets::make ((RollPresets::Preset) (sel - 2), startStep, (double) len, pad);
+}
+
 Project MainComponent::captureProject()
 {
     Project p;
@@ -294,6 +357,7 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
     {
         installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), padIndex, sample);
         padGrid.setPadLabel (padIndex, file.getFileNameWithoutExtension());
+        updatePadWaveform (padIndex);
         padGrid.flashPad (padIndex);
     }
 }
@@ -310,6 +374,11 @@ void MainComponent::timerCallback()
                        ? (int) (seq.getCurrentStep() % nSteps)
                        : -1;
     seqGrid.setPlayheadStep (step);
+
+    // Drive the per-pad level meters (called every tick so silent pads decay too).
+    auto& drum = engine.getDrumEngine();
+    for (int p = 0; p < kitNumPads; ++p)
+        padGrid.setPadLevel (p, drum.getPadLevel (p));
 
     // Autosave a recovery file every ~60 s (30 Hz timer -> 1800 ticks).
     if (++autosaveCounter >= 1800)
@@ -387,6 +456,7 @@ void MainComponent::openLibrary()
             {
                 installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
                 padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
+                updatePadWaveform (p);
             }
         }
     };

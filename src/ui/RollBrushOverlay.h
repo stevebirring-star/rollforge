@@ -29,6 +29,11 @@ public:
     /** Fired on mouse-up: (lane, startStep, lengthSteps, endDensity 0..1). */
     std::function<void (int, int, int, float)> onRollPainted;
 
+    /** Optional: while painting, the owner returns how many hits the roll currently
+        under the brush would compile to (via RollCompiler), for the live meter.
+        Keeping the count here rather than the compiler keeps this overlay model-free. */
+    std::function<int (int lane, int startStep, int lengthSteps, float density)> getHitCount;
+
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp   (const juce::MouseEvent&) override;
@@ -38,6 +43,7 @@ private:
     int laneAt (int y) const noexcept;
     int stepAt (int x) const noexcept;
     juce::Rectangle<int> cellRect (int lane, int startStep, int len) const noexcept;
+    void updatePreview() noexcept;   // recompute previewHits from the current drag
 
     const int numLanes;
     const int numSteps;
@@ -50,6 +56,7 @@ private:
     int   dragCurStep   = 0;
     int   dragStartY    = 0;
     float dragDensity   = 0.5f;
+    int   previewHits   = 0;   // hits the current stroke would produce (via getHitCount)
 
     std::vector<RollRect> rolls;
 

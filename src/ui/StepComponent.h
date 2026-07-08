@@ -29,6 +29,7 @@ public:
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+    void mouseUp   (const juce::MouseEvent&) override;
 
 private:
     float velocityForY (float y) const noexcept;
@@ -36,6 +37,7 @@ private:
     bool  on       = false;
     float velocity = 0.8f;
     bool  current  = false;
+    bool  editing  = false;   // mouse held on this cell -> show a prominent % readout
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepComponent)
 };
