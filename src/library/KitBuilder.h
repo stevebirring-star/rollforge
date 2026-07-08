@@ -33,6 +33,11 @@ public:
     /** The category assigned to each pad in the fixed layout. */
     static SoundCategory categoryForPad (int pad) noexcept;
 
+    /** The choke group a freshly-built kit gives `pad`: every closed + open hat
+        pad shares one group, so a closed hat cuts an open one automatically (no
+        setup — unlike Atlas). All other pads report noChokeGroup. */
+    static int chokeGroupForPad (int pad) noexcept;
+
 private:
     const LibraryDb& db;
 };

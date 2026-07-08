@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include "library/KitBuilder.h"
+
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include <cmath>
@@ -454,6 +456,9 @@ void MainComponent::openLibrary()
             const juce::File file (paths[(size_t) p]);
             if (auto sample = loader.loadFile (file))
             {
+                // Auto-choke hats (closed cuts open) before installing, so the pad's
+                // choke group is carried into the engine with the new sample.
+                starterKit.pad (p).chokeGroup = KitBuilder::chokeGroupForPad (p);
                 installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
                 padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
                 updatePadWaveform (p);

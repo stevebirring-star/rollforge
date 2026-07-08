@@ -33,6 +33,14 @@ SoundCategory KitBuilder::categoryForPad (int pad) noexcept
     return kPadLayout[pad];
 }
 
+int KitBuilder::chokeGroupForPad (int pad) noexcept
+{
+    constexpr int hatChokeGroup = 1;   // all hat pads share this one group
+    const SoundCategory c = categoryForPad (pad);
+    return (c == SoundCategory::HatClosed || c == SoundCategory::HatOpen)
+               ? hatChokeGroup : noChokeGroup;
+}
+
 KitBuilder::Selection KitBuilder::build (const Selection& current,
                                          std::uint64_t seed,
                                          const std::array<bool, kitNumPads>& locked) const

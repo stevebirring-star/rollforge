@@ -85,6 +85,18 @@ public:
             expect (KitBuilder::categoryForPad (0) == SoundCategory::Kick);
             expect (KitBuilder::categoryForPad (2) == SoundCategory::HatClosed);
         }
+
+        beginTest ("all hat pads share one choke group; non-hats are unchoked");
+        {
+            const int hc  = KitBuilder::chokeGroupForPad (2);    // closed hat
+            const int ho  = KitBuilder::chokeGroupForPad (3);    // open hat
+            const int hc2 = KitBuilder::chokeGroupForPad (10);   // 2nd closed hat
+            expect (hc != noChokeGroup);
+            expectEquals (ho, hc);     // open hat shares the closed hat's group -> closed cuts open
+            expectEquals (hc2, hc);    // the 2nd closed hat is in the same group
+            expectEquals (KitBuilder::chokeGroupForPad (0), noChokeGroup);   // kick unchoked
+            expectEquals (KitBuilder::chokeGroupForPad (1), noChokeGroup);   // snare unchoked
+        }
     }
 };
 

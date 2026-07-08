@@ -30,14 +30,21 @@ void StepComponent::mouseDown (const juce::MouseEvent& e)
     if (onGestureStart)
         onGestureStart();
 
-    editing = true;
-    on = ! on;
-    if (on)
-        velocity = velocityForY (e.position.y);
-    repaint();
+    editing   = true;
+    downWasOn = on;
 
-    if (onEdit)
-        onEdit (on, velocity);
+    // Turning a step ON lights it and sets velocity from the click height now, so a
+    // continued drag adjusts it. An already-on step waits: a drag adjusts its
+    // velocity (below), while a plain click toggles it off in mouseUp — so you can
+    // fine-tune a live step's level without having to switch it off first.
+    if (! on)
+    {
+        on = true;
+        velocity = velocityForY (e.position.y);
+        if (onEdit)
+            onEdit (on, velocity);
+    }
+    repaint();
 }
 
 void StepComponent::mouseDrag (const juce::MouseEvent& e)
@@ -52,13 +59,18 @@ void StepComponent::mouseDrag (const juce::MouseEvent& e)
         onEdit (on, velocity);
 }
 
-void StepComponent::mouseUp (const juce::MouseEvent&)
+void StepComponent::mouseUp (const juce::MouseEvent& e)
 {
-    if (editing)
+    // A plain click on an already-on step turns it off; a drag was a velocity edit.
+    if (downWasOn && ! e.mouseWasDraggedSinceMouseDown())
     {
-        editing = false;
-        repaint();
+        on = false;
+        if (onEdit)
+            onEdit (on, velocity);
     }
+
+    editing = false;
+    repaint();
 }
 
 void StepComponent::paint (juce::Graphics& g)

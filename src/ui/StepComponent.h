@@ -34,10 +34,11 @@ public:
 private:
     float velocityForY (float y) const noexcept;
 
-    bool  on       = false;
-    float velocity = 0.8f;
-    bool  current  = false;
-    bool  editing  = false;   // mouse held on this cell -> show a prominent % readout
+    bool  on        = false;
+    float velocity  = 0.8f;
+    bool  current   = false;
+    bool  editing   = false;   // mouse held on this cell -> show a prominent % readout
+    bool  downWasOn = false;    // step's on-state at mouse-down (click vs velocity-drag)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepComponent)
 };
