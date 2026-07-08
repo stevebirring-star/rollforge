@@ -53,8 +53,10 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine/MasterBus.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/OfflineRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/WavExporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/Compressor.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Crush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Drive.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterEq.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterLimiter.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Punch.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Space.cpp

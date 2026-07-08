@@ -9,6 +9,8 @@ void MasterBus::prepare (double sampleRate, int /*blockSize*/) noexcept
     drive.prepare (sampleRate);
     crush.prepare (sampleRate);
     space.prepare (sampleRate);
+    eq.prepare (sampleRate);
+    comp.prepare (sampleRate);
     limiter.prepare (sampleRate);
 }
 
@@ -18,6 +20,8 @@ void MasterBus::reset() noexcept
     drive.reset();
     crush.reset();
     space.reset();
+    eq.reset();
+    comp.reset();
     limiter.reset();
 }
 
@@ -28,6 +32,9 @@ void MasterBus::process (juce::AudioBuffer<float>& buffer) noexcept
     drive.process (buffer);
     crush.process (buffer);
     space.process (buffer);
+    // Tone + glue on the near-final mix (EQ flat / comp 0 = bypass)...
+    eq.process (buffer);
+    comp.process (buffer);
     // ...then the always-on limiter has the last word.
     limiter.process (buffer);
 }

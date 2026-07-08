@@ -486,6 +486,8 @@ Project MainComponent::captureProject()
     auto& bus = engine.getMasterBus();
     p.punch = bus.getPunch(); p.drive = bus.getDrive();
     p.crush = bus.getCrush(); p.space = bus.getSpace();
+    p.lowEq = bus.getLowEqDb(); p.midEq = bus.getMidEqDb(); p.highEq = bus.getHighEqDb();
+    p.comp  = bus.getComp();
 
     auto& drum = engine.getDrumEngine();
     for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
@@ -552,7 +554,9 @@ void MainComponent::applyProject (const Project& p)
     auto& bus = engine.getMasterBus();
     bus.setPunch (p.punch); bus.setDrive (p.drive);
     bus.setCrush (p.crush); bus.setSpace (p.space);
-    macroKnobs.syncFromBus();   // reflect the restored macro values into the knobs
+    bus.setLowEqDb (p.lowEq); bus.setMidEqDb (p.midEq); bus.setHighEqDb (p.highEq);
+    bus.setComp (p.comp);
+    macroKnobs.syncFromBus();   // reflect the restored macro + EQ/comp values into the knobs
 }
 
 void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)

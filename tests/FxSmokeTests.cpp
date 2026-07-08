@@ -4,8 +4,10 @@
 // passes quiet signal ~unchanged, and the MasterBus delegates to it.
 
 #include "engine/MasterBus.h"
+#include "engine/fx/Compressor.h"
 #include "engine/fx/Crush.h"
 #include "engine/fx/Drive.h"
+#include "engine/fx/MasterEq.h"
 #include "engine/fx/MasterLimiter.h"
 #include "engine/fx/Punch.h"
 #include "engine/fx/Space.h"
@@ -277,6 +279,96 @@ public:
                 for (int i = 2000; i < 8192; ++i)
                     tail = juce::jmax (tail, std::abs (b.getSample (c, i)));
             expect (tail > 0.0f);
+        }
+
+        beginTest ("MasterEq flat (0 dB) is a bypass");
+        {
+            MasterEq eq; eq.prepare (sr);
+            eq.setLowDb (0.0f); eq.setMidDb (0.0f); eq.setHighDb (0.0f);
+            juce::AudioBuffer<float> b (2, 512);
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    b.setSample (c, i, 0.3f * std::sin ((float) i * 0.1f));
+
+            juce::AudioBuffer<float> ref; ref.makeCopyOf (b);
+            eq.process (b);
+
+            float maxDiff = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 512; ++i)
+                    maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
+            expect (maxDiff == 0.0f);
+        }
+
+        beginTest ("MasterEq boost changes the signal without NaN/blowup");
+        {
+            MasterEq eq; eq.prepare (sr);
+            eq.setLowDb (6.0f); eq.setHighDb (12.0f);
+            juce::AudioBuffer<float> b (2, 2048);
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 2048; ++i)
+                    b.setSample (c, i, 0.3f * std::sin ((float) i * 0.05f));
+
+            juce::AudioBuffer<float> ref; ref.makeCopyOf (b);
+            eq.process (b);
+
+            expect (! anyNaN (b));
+            expect (maxMag (b) < 4.0f);
+            float maxDiff = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < 2048; ++i)
+                    maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (c, i) - ref.getSample (c, i)));
+            expect (maxDiff > 0.001f);
+        }
+
+        beginTest ("Compressor at 0 is a bypass");
+        {
+            Compressor comp; comp.prepare (sr);
+            comp.setAmount (0.0f);
+            juce::AudioBuffer<float> b (1, 256);
+            for (int i = 0; i < 256; ++i)
+                b.setSample (0, i, 0.4f * std::sin ((float) i * 0.15f));
+
+            juce::AudioBuffer<float> ref; ref.makeCopyOf (b);
+            comp.process (b);
+
+            float maxDiff = 0.0f;
+            for (int i = 0; i < 256; ++i)
+                maxDiff = juce::jmax (maxDiff, std::abs (b.getSample (0, i) - ref.getSample (0, i)));
+            expect (maxDiff == 0.0f);
+        }
+
+        beginTest ("Compressor at full attenuates loud more than quiet (glue), no NaN");
+        {
+            auto steadyGain = [&] (float level)
+            {
+                Compressor comp; comp.prepare (sr);
+                comp.setAmount (1.0f);
+                const int n = 8192;
+                juce::AudioBuffer<float> b (2, n);
+                for (int c = 0; c < 2; ++c)
+                    for (int i = 0; i < n; ++i)
+                        b.setSample (c, i, level);
+                comp.process (b);
+                expect (! anyNaN (b));
+                return b.getSample (0, n - 1) / level;   // steady-state output / input
+            };
+
+            const float gLoud  = steadyGain (0.5f);    // above the -24 dBFS threshold
+            const float gQuiet = steadyGain (0.03f);   // below it
+            expect (gLoud > 0.0f && gQuiet > 0.0f);
+            expect (gLoud < gQuiet);                    // the loud signal is compressed more
+        }
+
+        beginTest ("MasterBus still caps output with EQ + comp engaged");
+        {
+            MasterBus bus; bus.prepare (sr, 512);
+            bus.setLowEqDb (12.0f); bus.setHighEqDb (12.0f); bus.setComp (1.0f);
+            juce::AudioBuffer<float> b (2, 512);
+            fill (b, 0.8f);
+            bus.process (b);
+            expect (! anyNaN (b));
+            expect (maxMag (b) <= bus.getLimiter().getCeiling() + 1.0e-4f);
         }
     }
 };

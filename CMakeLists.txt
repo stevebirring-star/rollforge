@@ -111,8 +111,10 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/MasterBus.cpp
         src/engine/OfflineRenderer.cpp
         src/engine/WavExporter.cpp
+        src/engine/fx/Compressor.cpp
         src/engine/fx/Crush.cpp
         src/engine/fx/Drive.cpp
+        src/engine/fx/MasterEq.cpp
         src/engine/fx/MasterLimiter.cpp
         src/engine/fx/Punch.cpp
         src/engine/fx/Space.cpp

@@ -36,6 +36,8 @@ struct Project
     Pattern pattern;
 
     float  punch = 0.0f, space = 0.0f, crush = 0.0f, drive = 0.0f;  // master-FX macros
+    float  lowEq = 0.0f, midEq = 0.0f, highEq = 0.0f;              // master EQ (dB per band)
+    float  comp  = 0.0f;                                            // glue-compressor amount
     double bpm   = 120.0;
     float  swing = 0.0f;
 };

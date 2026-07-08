@@ -152,6 +152,10 @@ juce::String toJson (const Project& proj)
     root->setProperty ("space",   proj.space);
     root->setProperty ("crush",   proj.crush);
     root->setProperty ("drive",   proj.drive);
+    root->setProperty ("lowEq",   proj.lowEq);
+    root->setProperty ("midEq",   proj.midEq);
+    root->setProperty ("highEq",  proj.highEq);
+    root->setProperty ("comp",    proj.comp);
 
     juce::Array<var> pads;
     for (const auto& pad : proj.pads)
@@ -187,6 +191,10 @@ bool fromJson (const juce::String& json, Project& out)
     out.space   = (float) (double) root.getProperty ("space", 0.0);
     out.crush   = (float) (double) root.getProperty ("crush", 0.0);
     out.drive   = (float) (double) root.getProperty ("drive", 0.0);
+    out.lowEq   = (float) (double) root.getProperty ("lowEq", 0.0);
+    out.midEq   = (float) (double) root.getProperty ("midEq", 0.0);
+    out.highEq  = (float) (double) root.getProperty ("highEq", 0.0);
+    out.comp    = (float) (double) root.getProperty ("comp", 0.0);
 
     if (auto* pads = root.getProperty ("pads", var()).getArray())
     {
