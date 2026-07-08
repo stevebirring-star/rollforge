@@ -41,6 +41,7 @@ private:
     // juce::ListBoxModel
     int  getNumRows() override;
     void paintListBoxItem (int row, juce::Graphics&, int width, int height, bool selected) override;
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // right-click = re-tag
 
     LibraryDb                 db;
     std::vector<LibraryEntry> entries;

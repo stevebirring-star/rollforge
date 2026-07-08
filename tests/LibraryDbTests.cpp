@@ -64,6 +64,35 @@ public:
             expectEquals ((int) db.favourites().size(), 1);
             expect (db.favourites()[0].favourite);
         }
+
+        beginTest ("manual re-tag override survives re-scan + moves the sample");
+        {
+            LibraryDb db;
+            expect (db.openInMemory());
+
+            LibraryEntry s;
+            s.path = "/x/mystery.wav"; s.name = "mystery"; s.category = SoundCategory::Perc;
+            expect (db.upsert (s));
+            expectEquals ((int) db.byCategory (SoundCategory::Perc).size(), 1);
+            expect (db.byCategory (SoundCategory::Kick).empty());
+
+            // Re-tag it as a kick: it moves category, and every query sees the override.
+            expect (db.setCategoryOverride ("/x/mystery.wav", SoundCategory::Kick));
+            expect (db.byCategory (SoundCategory::Perc).empty());
+            expectEquals ((int) db.byCategory (SoundCategory::Kick).size(), 1);
+            expect (db.all()[0].category == SoundCategory::Kick);
+
+            // A re-scan (upsert with the ORIGINAL auto category) must NOT clobber it.
+            s.category = SoundCategory::Perc;
+            expect (db.upsert (s));
+            expectEquals ((int) db.byCategory (SoundCategory::Kick).size(), 1);
+            expect (db.byCategory (SoundCategory::Perc).empty());
+
+            // Clearing the override restores the auto category.
+            expect (db.clearCategoryOverride ("/x/mystery.wav"));
+            expectEquals ((int) db.byCategory (SoundCategory::Perc).size(), 1);
+            expect (db.byCategory (SoundCategory::Kick).empty());
+        }
     }
 };
 

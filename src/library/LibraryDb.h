@@ -44,6 +44,13 @@ public:
 
     bool upsert (const LibraryEntry& entry);                     // insert or replace by path
     bool setFavourite (const juce::String& path, bool favourite);
+
+    // Manual re-tag: a persistent per-path category override, kept in its own table
+    // so it SURVIVES a re-scan (which replaces the samples row) and is consulted by
+    // every query. Correcting a misjudged sample sticks.
+    bool setCategoryOverride (const juce::String& path, SoundCategory category);
+    bool clearCategoryOverride (const juce::String& path);
+
     int  count() const;
 
     std::vector<LibraryEntry> all() const;

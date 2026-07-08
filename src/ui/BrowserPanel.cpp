@@ -107,6 +107,35 @@ void BrowserPanel::paintListBoxItem (int row, juce::Graphics& g, int width, int 
     g.drawText (categoryName (e.category), width - 90, 0, 84, height, juce::Justification::centredRight, true);
 }
 
+void BrowserPanel::listBoxItemClicked (int row, const juce::MouseEvent& e)
+{
+    // Right-click (or ctrl-click) a sample to correct its category — the auto-tagger
+    // gets things wrong sometimes, and Atlas flatly can't fix it. The override is
+    // persisted and survives a re-scan.
+    if (row < 0 || row >= (int) entries.size() || ! e.mods.isPopupMenu())
+        return;
+
+    const juce::String  path    = entries[(size_t) row].path;
+    const juce::String  name    = entries[(size_t) row].name;
+    const SoundCategory current = entries[(size_t) row].category;
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Re-tag \"" + name.substring (0, 22) + "\" as");
+    for (int i = 0; i <= (int) SoundCategory::Fx; ++i)          // real categories, not Unknown
+        menu.addItem (i + 1, categoryName ((SoundCategory) i),
+                      /*enabled*/ true, /*ticked*/ current == (SoundCategory) i);
+
+    juce::Component::SafePointer<BrowserPanel> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&list),
+        [safe, path] (int choice)
+        {
+            if (safe == nullptr || choice <= 0)
+                return;
+            safe->db.setCategoryOverride (path, (SoundCategory) (choice - 1));
+            safe->refresh();
+        });
+}
+
 void BrowserPanel::resized()
 {
     auto r = getLocalBounds().reduced (8);
