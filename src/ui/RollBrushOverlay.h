@@ -34,6 +34,10 @@ public:
         Keeping the count here rather than the compiler keeps this overlay model-free. */
     std::function<int (int lane, int startStep, int lengthSteps, float density)> getHitCount;
 
+    // Never claim the lane-header column (labels + lock padlocks live there and
+    // belong to the grid beneath); only the step area is ours to paint on.
+    bool hitTest (int x, int /*y*/) override { return x >= labelWidth; }
+
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp   (const juce::MouseEvent&) override;

@@ -23,9 +23,11 @@
 #include "ui/MacroKnobs.h"
 #include "ui/BrowserPanel.h"
 #include "ui/ExportPanel.h"
+#include "ui/AboutView.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -51,6 +53,7 @@ private:
     void openSettings();
     void openLibrary();
     void openExport();
+    void openHelp();
     void doExportMidi();
     void doExportWav();
     void doExportStems();
@@ -84,6 +87,7 @@ private:
     juce::TextButton clearRollsButton { "Clear Rolls" };
     juce::ComboBox   rollPresetBox;
     MacroKnobs       macroKnobs { engine.getMasterBus() };
+    std::array<bool, (size_t) maxLanes> laneLocked {};   // per-lane "keep on reroll" locks
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     int              autosaveCounter = 0;   // ticks since the last recovery save
     juce::Label      titleLabel;
@@ -91,11 +95,15 @@ private:
     juce::TextButton settingsButton { "Settings" };
     juce::TextButton libraryButton { "Library" };
     juce::TextButton exportButton { "Export" };
+    juce::TextButton helpButton { "Help" };
 
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
     juce::Component::SafePointer<juce::DialogWindow> libraryWindow;
     juce::Component::SafePointer<juce::DialogWindow> exportWindow;
+    juce::Component::SafePointer<juce::DialogWindow> helpWindow;
     std::unique_ptr<juce::FileChooser>               exportChooser;
+
+    juce::TooltipWindow tooltipWindow { this };   // enables tooltips app-wide (lane locks, sliders)
 
     std::unique_ptr<FirstRun> firstRun;   // one-time welcome overlay (first launch only)
 

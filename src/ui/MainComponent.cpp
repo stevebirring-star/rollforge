@@ -88,6 +88,11 @@ MainComponent::MainComponent()
     exportButton.onClick = [this] { openExport(); };
     addAndMakeVisible (exportButton);
 
+    helpButton.setColour (juce::TextButton::buttonColourId, colours::panel);
+    helpButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    helpButton.onClick = [this] { openHelp(); };
+    addAndMakeVisible (helpButton);
+
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
         engine.triggerPad (index, velocity);   // the pad flashes itself on click
@@ -112,6 +117,14 @@ MainComponent::MainComponent()
                                                     [this] (int l, int s) { afterStepEdit (l, s); }));
         }
     };
+    seqGrid.onLaneLockToggled = [this] (int lane)
+    {
+        if (lane >= 0 && lane < maxLanes)
+        {
+            laneLocked[(size_t) lane] = ! laneLocked[(size_t) lane];
+            seqGrid.setLaneLocked (lane, laneLocked[(size_t) lane]);
+        }
+    };
     addAndMakeVisible (seqGrid);
 
     // FILL / Reroll generate a drum fill into the edit pattern; Humanise is wired
@@ -123,6 +136,12 @@ MainComponent::MainComponent()
         Pattern before = editPattern;
         Pattern after  = editPattern;
         FillEngine::generateFill (after, style, intensity, seed);
+
+        // Lock-and-reroll: any locked lane keeps its current steps instead of the
+        // freshly generated ones ("keep the kick, gamble the rest").
+        for (int lane = 0; lane < after.numLanes && lane < before.numLanes; ++lane)
+            if (laneLocked[(size_t) lane])
+                after.lane (lane) = before.lane (lane);
 
         auto refresh = [this]
         {
@@ -258,6 +277,9 @@ MainComponent::~MainComponent()
 
     if (exportWindow != nullptr)
         exportWindow.deleteAndZero();
+
+    if (helpWindow != nullptr)
+        helpWindow.deleteAndZero();
 
     engine.shutdown();   // stops the audio thread before members (and samples) are destroyed
 }
@@ -513,6 +535,25 @@ void MainComponent::openExport()
     exportWindow = options.launchAsync();
 }
 
+void MainComponent::openHelp()
+{
+    if (helpWindow != nullptr)
+    {
+        helpWindow->toFront (true);
+        return;
+    }
+
+    juce::DialogWindow::LaunchOptions options;
+    options.content.setOwned (new AboutView());
+    options.dialogTitle                  = "Help & About";
+    options.dialogBackgroundColour       = colours::background;
+    options.componentToCentreAround      = this;
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar            = true;
+    options.resizable                    = true;
+    helpWindow = options.launchAsync();
+}
+
 void MainComponent::doExportMidi()
 {
     exportChooser = std::make_unique<juce::FileChooser> ("Export MIDI", juce::File(), "*.mid");
@@ -603,6 +644,8 @@ void MainComponent::resized()
     libraryButton.setBounds (statusRow.removeFromRight (80));
     statusRow.removeFromRight (8);
     exportButton.setBounds (statusRow.removeFromRight (72));
+    statusRow.removeFromRight (8);
+    helpButton.setBounds (statusRow.removeFromRight (64));
     statusRow.removeFromRight (12);
     statusLabel.setBounds (statusRow);
 

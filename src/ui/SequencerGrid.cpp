@@ -9,6 +9,14 @@ SequencerGrid::SequencerGrid (int lanes, int steps)
 {
     for (int lane = 0; lane < numLanes; ++lane)
     {
+        auto* lock = lockButtons.add (new LaneLockButton());
+        lock->onToggle = [this, lane]
+        {
+            if (onLaneLockToggled)
+                onLaneLockToggled (lane);
+        };
+        addAndMakeVisible (lock);
+
         auto* label = laneLabels.add (new juce::Label());
         label->setFont (juce::FontOptions (12.0f));
         label->setColour (juce::Label::textColourId, juce::Colour (0xffbcbcc4));
@@ -46,6 +54,12 @@ void SequencerGrid::setLaneLabel (int lane, const juce::String& text)
         label->setText (text, juce::dontSendNotification);
 }
 
+void SequencerGrid::setLaneLocked (int lane, bool locked)
+{
+    if (auto* b = lockButtons[lane])
+        b->setLocked (locked);
+}
+
 void SequencerGrid::setStep (int lane, int step, bool on, float velocity)
 {
     if (auto* c = cell (lane, step))
@@ -72,11 +86,14 @@ void SequencerGrid::resized()
     const int gridW = area.getWidth() - labelColumnWidth;
     const int cellW = gridW / numSteps;
 
+    constexpr int lockW = 18;   // narrow padlock column at the left of each lane header
     for (int lane = 0; lane < numLanes; ++lane)
     {
         const int y = lane * rowH;
+        if (auto* lock = lockButtons[lane])
+            lock->setBounds (0, y, lockW, rowH);
         if (auto* label = laneLabels[lane])
-            label->setBounds (0, y, labelColumnWidth - 4, rowH);
+            label->setBounds (lockW, y, labelColumnWidth - lockW - 4, rowH);
 
         for (int step = 0; step < numSteps; ++step)
             if (auto* c = cell (lane, step))
