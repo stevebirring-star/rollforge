@@ -82,6 +82,7 @@ void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
 {
     drainCommands();
     renderInto (buffer, 0, buffer.getNumSamples());
+    publishPadMeters();   // once per block (renderInto no longer self-publishes)
 }
 
 void DrumEngine::drainCommands() noexcept
@@ -94,7 +95,6 @@ void DrumEngine::drainCommands() noexcept
 void DrumEngine::renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
 {
     pool.renderAdditive (buffer, startSample, numSamples);
-    publishPadMeters();
 }
 
 void DrumEngine::publishPadMeters() noexcept

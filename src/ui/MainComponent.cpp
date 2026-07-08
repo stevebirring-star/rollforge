@@ -139,8 +139,11 @@ MainComponent::MainComponent()
     {
         // "Make a Beat": generate a full groove into a copy, then swap it in as ONE
         // undoable step so a single Cmd/Ctrl+Z reverts the whole generated beat.
+        // Capture the CURRENT audible swing into `before` (swing is a live control,
+        // not stored in editPattern) so undo restores the user's swing, not 0.
         Pattern before = editPattern;
-        Pattern after  = editPattern;
+        before.swing   = engine.getSequencer().getSwing();
+        Pattern after  = before;
         FillEngine::generateFill (after, style, intensity, seed);
 
         // Lock-and-reroll: any locked lane keeps its current steps instead of the
@@ -149,20 +152,20 @@ MainComponent::MainComponent()
             if (laneLocked[(size_t) lane])
                 after.lane (lane) = before.lane (lane);
 
+        // refresh runs on BOTH perform and undo, so applying the (restored) pattern's
+        // swing here keeps the transport + engine swing in sync through undo/redo:
+        // the genre's curated swing is audible on generate; undo puts the user's back.
         auto refresh = [this]
         {
             refreshGridFromPattern();
             paintedRolls.clear();             // generated rolls play but aren't drawn on the grid
             rollOverlay.setRolls (paintedRolls);
+            transportBar.setSwing (editPattern.swing);   // drives sequencer.setSwing via the slider
             engine.getSequencer().setPattern (editPattern);
         };
 
         undoManager.beginNewTransaction();
         undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
-
-        // Make the genre's curated swing audible: the Sequencer reads swing from a
-        // live control (not the pattern), so apply the generated feel to the transport.
-        transportBar.setSwing (after.swing);
     };
     // "Vary": mutate the CURRENT groove instead of regenerating it — a few hits on/
     // off, ghost notes, accents — as one undoable step, then flash what changed.
@@ -367,6 +370,21 @@ void MainComponent::updatePadWaveform (int padIndex)
         padGrid.setPadWaveform (padIndex, {});
 }
 
+void MainComponent::updateLaneLabelForPad (int padIndex)
+{
+    // Keep the sequencer row label in step with the pad's sound after a load / NEW
+    // KIT (otherwise the rows keep their starter-kit names until the next Make a
+    // Beat). Uses the sample name, matching refreshGridFromPattern().
+    if (padIndex < 0 || padIndex >= kitNumPads)
+        return;
+    juce::String label;
+    if (auto sample = starterKit.pad (padIndex).primarySample())
+        label = sample->getName();
+    for (int lane = 0; lane < editPattern.numLanes; ++lane)
+        if (editPattern.lane (lane).targetPad == padIndex)
+            seqGrid.setLaneLabel (lane, label);
+}
+
 void MainComponent::afterStepEdit (int lane, int step)
 {
     const Step& s = editPattern.lane (lane).step (step);
@@ -456,6 +474,7 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
         installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), padIndex, sample);
         padGrid.setPadLabel (padIndex, file.getFileNameWithoutExtension());
         updatePadWaveform (padIndex);
+        updateLaneLabelForPad (padIndex);
         padGrid.flashPad (padIndex);
     }
 }
@@ -558,6 +577,7 @@ void MainComponent::openLibrary()
                 installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
                 padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
                 updatePadWaveform (p);
+                updateLaneLabelForPad (p);
             }
         }
     };
@@ -756,8 +776,15 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return false;
     }
 
-    // 1234 / qwer / asdf / zxcv mirror the 4x4 grid. Space is left unhandled
-    // (reserved for play/stop later).
+    // Space auditions the kick (pad 0) — matches the on-screen hint + Help text.
+    if (key == juce::KeyPress::spaceKey)
+    {
+        engine.triggerPad (0, 1.0f);
+        padGrid.flashPad (0);
+        return true;
+    }
+
+    // 1234 / qwer / asdf / zxcv mirror the 4x4 grid.
     const int pad = keyCharToPad (juce::CharacterFunctions::toLowerCase (key.getTextCharacter()));
     if (pad >= 0)
     {

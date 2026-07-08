@@ -11,7 +11,7 @@ BrowserPanel::BrowserPanel()
                       .getChildFile ("RollForge")
                       .getChildFile ("library.db");
     dbFile.getParentDirectory().createDirectory();
-    db.open (dbFile);
+    dbOpen = db.open (dbFile);
 
     scanButton.onClick = [this] { chooseFolderAndScan(); };
     addAndMakeVisible (scanButton);
@@ -66,6 +66,15 @@ void BrowserPanel::chooseFolderAndScan()
 
 void BrowserPanel::refresh()
 {
+    if (! dbOpen)
+    {
+        entries.clear();
+        list.updateContent();
+        list.repaint();
+        statusLabel.setText ("Library unavailable (could not open library.db)", juce::dontSendNotification);
+        return;
+    }
+
     const int sel = categoryFilter.getSelectedId();
     entries = (sel <= 1) ? db.all()
                          : db.byCategory ((SoundCategory) (sel - 2));

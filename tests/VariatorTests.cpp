@@ -1,8 +1,10 @@
 // RollForge — Variator determinism + musical-guardrail tests.
 //
 // Headless: same pattern+amount+seed -> identical mutation and identical change
-// list; reported cells really toggled; anchor hits (downbeat kick, snare
-// backbeats) survive; locked lanes are untouched; an empty pattern stays silent.
+// list; the change list is exactly the net-toggled set; reported cells really
+// toggled; ghost taps are clean single hits (no inherited ratchets/probability);
+// anchor hits (downbeat kick, snare backbeats) survive; locked lanes are
+// untouched; an empty pattern stays silent.
 
 #include "model/Variator.h"
 #include "model/FillEngine.h"
@@ -11,6 +13,8 @@
 
 #include <array>
 #include <cmath>
+#include <set>
+#include <utility>
 
 namespace rollforge::tests
 {
@@ -132,6 +136,65 @@ public:
             Variator::vary (a, 0.7f, 1, noLocks());
             Variator::vary (b, 0.7f, 987654, noLocks());
             expect (! samePattern (a, b));
+        }
+
+        beginTest ("Vary's ghost taps are clean single hits (no inherited ratchets/probability)");
+        {
+            // A lane of ratcheted, low-probability, sample-locked off-beat hits at
+            // velocity 1.0: Vary drops some and re-ghosts empty steps. A re-enabled
+            // "ghost" must be a plain single hit — NOT inherit a dropped step's 3x
+            // ratchet (which would play as a buzz). With 2 attempts/lane (amount 0.5)
+            // an original never falls below ~0.6, so any post-vary on-step under the
+            // ghost ceiling (~0.37) is necessarily a ghost.
+            for (std::uint64_t seed = 0; seed < 500; ++seed)
+            {
+                Pattern p;
+                p.numLanes = 1;
+                p.lane (0).targetPad = 6;    // a non-anchor pad (toms): every hit is removable
+                p.lane (0).length    = 16;
+                for (int s = 1; s < 16; s += 2)   // off-beat 16ths -> ghost-eligible once dropped
+                {
+                    Step& st       = p.lane (0).step (s);
+                    st.on          = true;
+                    st.velocity    = 1.0f;
+                    st.ratchets    = 3;
+                    st.probability = 50;
+                    st.microShift  = 0.25f;
+                    st.sampleLock  = 4;
+                }
+
+                Variator::vary (p, 0.5f, seed, noLocks());
+
+                for (int s = 0; s < 16; ++s)
+                {
+                    const Step& st = p.lane (0).step (s);
+                    if (st.on && st.velocity < 0.45f)   // a ghost (originals stay >= ~0.6 here)
+                    {
+                        expectEquals (st.ratchets, 1);
+                        expectEquals (st.probability, 100);
+                        expect (std::abs (st.microShift) < 1.0e-6f);
+                        expectEquals (st.sampleLock, -1);
+                    }
+                }
+            }
+        }
+
+        beginTest ("the change list is exactly the set of net-toggled cells");
+        {
+            Pattern base; FillEngine::generateFill (base, FillEngine::Trap, 4, 314);
+            Pattern after = base;
+            const auto changes = Variator::vary (after, 0.9f, 271828, noLocks());
+
+            std::set<std::pair<int, int>> reported;
+            for (const auto& c : changes)
+                expect (reported.insert ({ c.lane, c.step }).second);   // no duplicate cells
+
+            for (int li = 0; li < after.numLanes; ++li)
+                for (int s = 0; s < maxStepsPerLane; ++s)
+                {
+                    const bool toggled = base.lane (li).step (s).on != after.lane (li).step (s).on;
+                    expect (toggled == (reported.count ({ li, s }) > 0));   // reported <=> toggled
+                }
         }
     }
 };

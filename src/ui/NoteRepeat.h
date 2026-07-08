@@ -27,7 +27,7 @@ public:
 
     void setEnabled (bool shouldBeEnabled) noexcept;   // turning off stops any active repeat
     bool isEnabled() const noexcept { return enabled; }
-    void setRate (Rate r) noexcept { rate = r; }
+    void setRate (Rate r) noexcept;   // retimes an in-progress hold to the new rate
 
     /** Pad pressed: begin repeating (only if enabled). `bpm` is the current tempo. */
     void noteOn (int pad, float velocity, double currentBpm);

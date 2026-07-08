@@ -3,6 +3,15 @@
 namespace rollforge
 {
 
+namespace
+{
+    // A fresh step enable uses this fixed level (matches the model / grid default),
+    // so a plain "turn it on" click gives a predictable velocity; a drag afterwards
+    // fine-tunes it. Deriving the level from the click-Y on enable made a click land
+    // anywhere from ~5% to ~95% on the short 16-lane rows.
+    constexpr float defaultOnVelocity = 0.8f;
+}
+
 void StepComponent::setState (bool isOn, float vel)
 {
     on = isOn;
@@ -42,14 +51,14 @@ void StepComponent::mouseDown (const juce::MouseEvent& e)
     editing   = true;
     downWasOn = on;
 
-    // Turning a step ON lights it and sets velocity from the click height now, so a
-    // continued drag adjusts it. An already-on step waits: a drag adjusts its
-    // velocity (below), while a plain click toggles it off in mouseUp — so you can
-    // fine-tune a live step's level without having to switch it off first.
+    // Turning a step ON lights it at a consistent default level; a continued drag
+    // then adjusts its velocity from the pointer height (see mouseDrag). An already-on
+    // step waits: a drag adjusts its velocity (below), while a plain click toggles it
+    // off in mouseUp — so you can fine-tune a live step's level without switching it off.
     if (! on)
     {
         on = true;
-        velocity = velocityForY (e.position.y);
+        velocity = defaultOnVelocity;
         if (onEdit)
             onEdit (on, velocity);
     }

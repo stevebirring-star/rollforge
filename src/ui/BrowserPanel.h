@@ -44,6 +44,7 @@ private:
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // right-click = re-tag
 
     LibraryDb                 db;
+    bool                      dbOpen = false;   // false -> library.db could not be opened
     std::vector<LibraryEntry> entries;
 
     juce::TextButton scanButton   { "Scan Folder..." };

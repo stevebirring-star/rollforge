@@ -94,6 +94,11 @@ public:
     /** Renders the voice pool ADDITIVELY into `buffer[startSample, startSample+numSamples)`. */
     void renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
 
+    /** Snapshots current pad output levels into the meter atomics for the UI. Call
+        ONCE per audio block, after the block's renderInto() segment(s): the Sequencer
+        renders a block in many segments, and publishing per-segment is wasted work. */
+    void publishPadMeters() noexcept;
+
     //==============================================================================
     double getSampleRate()      const noexcept { return sampleRate; }
     int    getNumPads()         const noexcept { return (int) pads.size(); }
@@ -111,8 +116,6 @@ public:
 
 private:
     static constexpr int maxMeterPads = 16;
-
-    void publishPadMeters() noexcept;   // audio thread: snapshot pool levels -> atomics
 
     struct PadSlot
     {

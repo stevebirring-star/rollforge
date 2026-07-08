@@ -34,6 +34,17 @@ namespace
     {
         return lane.length < 1 ? 1 : (lane.length > maxStepsPerLane ? maxStepsPerLane : lane.length);
     }
+
+    // Place a clean "ghost" tap. A re-enabled step must NOT inherit stale ratchets /
+    // probability / micro-shift / sample-lock from whatever hit used to live there
+    // (a dropped step keeps its fields), or a quiet ghost can play as a buzzing
+    // ratchet roll. Reset the whole step to a plain single hit, then set the ghost.
+    void placeGhost (Step& st, float velocity) noexcept
+    {
+        st          = Step {};      // defaults: ratchets 1, probability 100, shift 0, lock -1
+        st.on       = true;
+        st.velocity = velocity;
+    }
 }
 
 std::vector<Change> vary (Pattern& pattern,
@@ -116,8 +127,7 @@ std::vector<Change> vary (Pattern& pattern,
             {
                 const int s = nEmptyOdd > 0 ? emptyOdd[rng.range (0, nEmptyOdd - 1)]
                                             : emptyAny[rng.range (0, nEmptyAny - 1)];
-                lane.step (s).on       = true;
-                lane.step (s).velocity = 0.25f + rng.unit() * 0.12f;   // quiet ghost
+                placeGhost (lane.step (s), 0.25f + rng.unit() * 0.12f);   // clean quiet ghost
             }
             else if (pick < ghostP + dropP && nRemovable > 0)
             {
@@ -166,15 +176,13 @@ std::vector<Change> vary (Pattern& pattern,
             for (int s = 1; s < len; s += 2)             // off-beats first
                 if (! lane.step (s).on)
                 {
-                    lane.step (s).on = true;
-                    lane.step (s).velocity = 0.3f;
+                    placeGhost (lane.step (s), 0.3f);
                     return true;
                 }
             for (int s = 0; s < len; ++s)
                 if (! lane.step (s).on)
                 {
-                    lane.step (s).on = true;
-                    lane.step (s).velocity = 0.3f;
+                    placeGhost (lane.step (s), 0.3f);
                     return true;
                 }
             return false;

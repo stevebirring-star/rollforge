@@ -27,6 +27,15 @@ void NoteRepeat::setEnabled (bool shouldBeEnabled) noexcept
     }
 }
 
+void NoteRepeat::setRate (Rate r) noexcept
+{
+    rate = r;
+    // If a pad is being held right now, retime the repeat immediately so a mid-hold
+    // rate change takes effect at once rather than only on the next press.
+    if (enabled && activePad >= 0)
+        startTimer (intervalMs());
+}
+
 void NoteRepeat::noteOn (int pad, float velocity, double currentBpm)
 {
     if (! enabled || pad < 0)

@@ -70,8 +70,9 @@ public:
     bool perform() override { target = after;  if (onApplied) onApplied(); return true; }
     bool undo()    override { target = before; if (onApplied) onApplied(); return true; }
 
-    // Two Patterns held by value — report it so the UndoManager prunes correctly.
-    int getSizeInUnits() override { return (int) (sizeof (*this) + 2 * sizeof (Pattern)); }
+    // before/after are held BY VALUE, so sizeof(*this) already counts both Patterns.
+    // Adding them again would ~2x the reported size and prune undo history too soon.
+    int getSizeInUnits() override { return (int) sizeof (*this); }
 
 private:
     Pattern& target;

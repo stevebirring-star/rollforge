@@ -18,7 +18,12 @@ bool LibraryDb::openAt (const char* filename)
         close();
         return false;
     }
-    return createSchema();
+    if (! createSchema())
+    {
+        close();   // don't leave a half-open handle that isOpen() would report as ready
+        return false;
+    }
+    return true;
 }
 
 bool LibraryDb::open (const juce::File& dbFile)
