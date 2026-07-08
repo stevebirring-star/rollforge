@@ -7,6 +7,7 @@
 
 #include "engine/Sequencer.h"
 #include "model/FillEngine.h"
+#include "model/FeelPresets.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -30,9 +31,14 @@ public:
         pattern instead of regenerating it. */
     std::function<void (int, std::uint64_t)> onVary;
 
+    /** Fired when a Feel preset is picked: the new swing 0..1 (the owner reflects it
+        onto the transport's swing control). Humanise is applied directly. */
+    std::function<void (float)> onFeelSwing;
+
 private:
     void fire();
     void fireVary();
+    void applyFeel (FeelPresets::Feel feel);
 
     Sequencer& sequencer;
 
@@ -41,8 +47,8 @@ private:
     juce::TextButton fillButton   { "Make a Beat" };   // the flagship one-tap generate
     juce::TextButton rerollButton { "Reroll" };
     juce::TextButton varyButton   { "Vary" };          // mutate the current beat, don't regenerate
-    juce::Label      humaniseLabel;
-    juce::Slider     humaniseSlider;
+    juce::Label      feelLabel;
+    juce::ComboBox   feelBox;                          // named Humaniser+swing presets
 
     std::uint64_t seed = 1;
 

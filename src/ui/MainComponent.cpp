@@ -156,6 +156,10 @@ MainComponent::MainComponent()
 
         undoManager.beginNewTransaction();
         undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+
+        // Make the genre's curated swing audible: the Sequencer reads swing from a
+        // live control (not the pattern), so apply the generated feel to the transport.
+        transportBar.setSwing (after.swing);
     };
     // "Vary": mutate the CURRENT groove instead of regenerating it — a few hits on/
     // off, ghost notes, accents — as one undoable step, then flash what changed.
@@ -182,6 +186,9 @@ MainComponent::MainComponent()
             cells.push_back ({ c.lane, c.step });
         seqGrid.flashChanged (cells);
     };
+    // Feel presets apply the Humaniser inside FillBar and hand back the swing so the
+    // transport's swing control stays in sync.
+    fillBar.onFeelSwing = [this] (float swing) { transportBar.setSwing (swing); };
     addAndMakeVisible (fillBar);
 
     // Roll brush: toggle it on, then drag across a lane to paint an accelerating

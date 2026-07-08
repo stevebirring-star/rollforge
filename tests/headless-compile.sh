@@ -67,6 +67,7 @@ ENGINE_SOURCES=(
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
     src/model/Variator.cpp
+    src/model/FeelPresets.cpp
     src/model/Humaniser.cpp
     src/model/ProjectIO.cpp
     src/model/MidiExporter.cpp
@@ -97,6 +98,7 @@ TEST_SOURCES=(
     tests/RollPresetsTests.cpp
     tests/FillEngineTests.cpp
     tests/VariatorTests.cpp
+    tests/FeelPresetsTests.cpp
     tests/HumaniserTests.cpp
     tests/FxSmokeTests.cpp
     tests/CategoriserTests.cpp

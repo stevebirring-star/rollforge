@@ -31,6 +31,7 @@ target_sources(RollForgeTests PRIVATE
     RollPresetsTests.cpp
     FillEngineTests.cpp
     VariatorTests.cpp
+    FeelPresetsTests.cpp
     HumaniserTests.cpp
     FxSmokeTests.cpp
     CategoriserTests.cpp
@@ -73,6 +74,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/model/RollPresets.cpp
     ${CMAKE_SOURCE_DIR}/src/model/FillEngine.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Variator.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/FeelPresets.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Humaniser.cpp
     ${CMAKE_SOURCE_DIR}/src/model/ProjectIO.cpp
     ${CMAKE_SOURCE_DIR}/src/model/MidiExporter.cpp

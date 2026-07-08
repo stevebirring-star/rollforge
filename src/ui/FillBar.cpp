@@ -36,17 +36,30 @@ FillBar::FillBar (Sequencer& sequencerToUse) : sequencer (sequencerToUse)
     varyButton.setTooltip ("Tweak the current beat: nudge a few hits, add ghosts, vary accents");
     addAndMakeVisible (varyButton);
 
-    humaniseLabel.setText ("Humanise", juce::dontSendNotification);
-    humaniseLabel.setJustificationType (juce::Justification::centredRight);
-    addAndMakeVisible (humaniseLabel);
+    // Feel: the one-knob Humaniser exposed as named grooves. Each preset sets the
+    // Humaniser amount AND swing together, so a beat never sounds quantized-robotic.
+    feelLabel.setText ("Feel", juce::dontSendNotification);
+    feelLabel.setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (feelLabel);
 
-    humaniseSlider.setSliderStyle (juce::Slider::LinearHorizontal);
-    humaniseSlider.setRange (0.0, 1.0, 0.01);
-    humaniseSlider.setValue (0.0, juce::dontSendNotification);
-    humaniseSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 44, 20);
-    humaniseSlider.setTooltip ("Robot <-> Human feel");
-    humaniseSlider.onValueChange = [this] { sequencer.setHumanise ((float) humaniseSlider.getValue()); };
-    addAndMakeVisible (humaniseSlider);
+    for (int i = 0; i < FeelPresets::NumFeels; ++i)
+        feelBox.addItem (FeelPresets::name ((FeelPresets::Feel) i), i + 1);   // itemId is 1-based
+    feelBox.setSelectedId (FeelPresets::Straight + 1, juce::dontSendNotification);
+    feelBox.setTooltip ("Groove feel: sets humanise + swing together");
+    feelBox.onChange = [this]
+    {
+        applyFeel ((FeelPresets::Feel) juce::jlimit (0, FeelPresets::NumFeels - 1,
+                                                     feelBox.getSelectedId() - 1));
+    };
+    addAndMakeVisible (feelBox);
+}
+
+void FillBar::applyFeel (FeelPresets::Feel feel)
+{
+    const auto s = FeelPresets::settingsFor (feel);
+    sequencer.setHumanise (s.humanise);
+    if (onFeelSwing != nullptr)
+        onFeelSwing (s.swing);   // owner reflects it onto the transport's swing control
 }
 
 void FillBar::fire()
@@ -80,9 +93,9 @@ void FillBar::resized()
     r.removeFromLeft (6);
     intensitySlider.setBounds (r.removeFromLeft (108));
 
-    // Humanise group on the right.
-    humaniseSlider.setBounds (r.removeFromRight (160));
-    humaniseLabel.setBounds (r.removeFromRight (70));
+    // Feel group on the right.
+    feelBox.setBounds (r.removeFromRight (150));
+    feelLabel.setBounds (r.removeFromRight (42));
 }
 
 } // namespace rollforge

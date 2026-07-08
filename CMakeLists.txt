@@ -134,6 +134,7 @@ if(ROLLFORGE_BUILD_APP)
         src/model/RollPresets.cpp
         src/model/FillEngine.cpp
         src/model/Variator.cpp
+        src/model/FeelPresets.cpp
         src/model/Humaniser.cpp
         src/model/ProjectIO.cpp
         src/model/MidiExporter.cpp
