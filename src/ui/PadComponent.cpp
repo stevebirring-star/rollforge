@@ -13,6 +13,8 @@ namespace
         return ext == ".wav" || ext == ".aif" || ext == ".aiff"
             || ext == ".flac" || ext == ".ogg" || ext == ".mp3";
     }
+
+    constexpr int trimStripHeight = 12;   // bottom strip height for trim-handle drags
 }
 
 PadComponent::PadComponent (int padIndex)
@@ -30,12 +32,15 @@ PadComponent::PadComponent (int padIndex)
         b.setColour (juce::TextButton::textColourOnId,   juce::Colours::black);
         addAndMakeVisible (b);
     };
-    initToggle (muteButton, juce::Colour (0xffe0553f));   // red   = muted
-    initToggle (soloButton, juce::Colour (0xffe0c341));   // amber = soloed
+    initToggle (muteButton,    juce::Colour (0xffe0553f));   // red    = muted
+    initToggle (soloButton,    juce::Colour (0xffe0c341));   // amber  = soloed
+    initToggle (reverseButton, juce::Colour (0xff8a7dff));   // violet = reversed
     muteButton.setTooltip ("Mute this pad in the sequencer (click the pad to still audition it)");
     soloButton.setTooltip ("Solo: play only soloed pads");
-    muteButton.onClick = [this] { if (onMute) onMute (index, muteButton.getToggleState()); };
-    soloButton.onClick = [this] { if (onSolo) onSolo (index, soloButton.getToggleState()); };
+    reverseButton.setTooltip ("Play this pad's sample backwards");
+    muteButton.onClick    = [this] { if (onMute)    onMute    (index, muteButton.getToggleState()); };
+    soloButton.onClick    = [this] { if (onSolo)    onSolo    (index, soloButton.getToggleState()); };
+    reverseButton.onClick = [this] { if (onReverse) onReverse (index, reverseButton.getToggleState()); };
 }
 
 void PadComponent::setLabelText (const juce::String& text)
@@ -89,14 +94,41 @@ void PadComponent::setAudible (bool shouldBeAudible)
     }
 }
 
+void PadComponent::setReverse (bool reversed)
+{
+    reverseButton.setToggleState (reversed, juce::dontSendNotification);
+}
+
+void PadComponent::setTrim (float start, float end)
+{
+    trimStart = juce::jlimit (0.0f, 1.0f, start);
+    trimEnd   = juce::jlimit (0.0f, 1.0f, end);
+    repaint();
+}
+
+void PadComponent::updateTrimFromX (float x)
+{
+    constexpr float minGap = 0.03f;
+    const float w = (float) juce::jmax (1, getWidth());
+    const float f = juce::jlimit (0.0f, 1.0f, x / w);
+    if (draggingEnd) trimEnd   = juce::jmax (f, trimStart + minGap);
+    else             trimStart = juce::jmin (f, trimEnd   - minGap);
+    trimStart = juce::jlimit (0.0f, 1.0f - minGap, trimStart);
+    trimEnd   = juce::jlimit (minGap, 1.0f, trimEnd);
+    repaint();
+    if (onTrim)
+        onTrim (index, trimStart, trimEnd);
+}
+
 void PadComponent::resized()
 {
-    // Small M / S toggles in the top-left. They're child components, so they capture
+    // M / S toggles top-left, R top-right. They're child components, so they capture
     // their own clicks and never trigger the pad; the rest of the pad stays clickable.
     auto row = getLocalBounds().reduced (8, 7).removeFromTop (15);
     muteButton.setBounds (row.removeFromLeft (20));
     row.removeFromLeft (3);
     soloButton.setBounds (row.removeFromLeft (20));
+    reverseButton.setBounds (row.removeFromRight (20));
 }
 
 void PadComponent::paint (juce::Graphics& g)
@@ -134,6 +166,26 @@ void PadComponent::paint (juce::Graphics& g)
         }
     }
 
+    // Trim: dim the sample outside [trimStart, trimEnd] and draw grab tabs at the
+    // bottom edge (dragged to trim — see mouseDown/updateTrimFromX).
+    if (! waveform.empty())
+    {
+        const float w  = bounds.getWidth();
+        const float x0 = bounds.getX();
+
+        g.setColour (juce::Colours::black.withAlpha (0.5f));
+        if (trimStart > 0.001f)
+            g.fillRect (juce::Rectangle<float> (x0, bounds.getY(), trimStart * w, bounds.getHeight()));
+        if (trimEnd < 0.999f)
+            g.fillRect (juce::Rectangle<float> (x0 + trimEnd * w, bounds.getY(),
+                                                (1.0f - trimEnd) * w, bounds.getHeight()));
+
+        g.setColour (juce::Colour (0xff4cc2ff).withAlpha (0.85f));
+        const float ty = bounds.getBottom() - 8.0f;
+        g.fillRect (juce::Rectangle<float> (x0 + trimStart * w - 1.5f, ty, 3.0f, 8.0f));
+        g.fillRect (juce::Rectangle<float> (x0 + trimEnd   * w - 1.5f, ty, 3.0f, 8.0f));
+    }
+
     g.setColour (dragOver ? lit : juce::Colour (0xff3a3a44));
     g.drawRoundedRectangle (bounds, corner, 1.5f);
 
@@ -167,15 +219,39 @@ void PadComponent::paint (juce::Graphics& g)
 
 void PadComponent::mouseUp (const juce::MouseEvent&)
 {
+    if (trimming)
+    {
+        trimming = false;
+        return;
+    }
     if (onRelease)
         onRelease (index);   // ends a held note-repeat
 }
 
-void PadComponent::mouseDown (const juce::MouseEvent&)
+void PadComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // The thin bottom strip drags the sample-trim handles; the rest of the pad
+    // triggers as normal, so a click almost anywhere still auditions the pad.
+    if (! waveform.empty() && e.position.y >= (float) (getHeight() - trimStripHeight))
+    {
+        const float w      = (float) juce::jmax (1, getWidth());
+        const float startX = trimStart * w;
+        const float endX   = trimEnd   * w;
+        draggingEnd = std::abs (e.position.x - endX) <= std::abs (e.position.x - startX);
+        trimming    = true;
+        updateTrimFromX (e.position.x);
+        return;
+    }
+
     if (onTrigger)
         onTrigger (index, 1.0f);
     flash();
+}
+
+void PadComponent::mouseDrag (const juce::MouseEvent& e)
+{
+    if (trimming)
+        updateTrimFromX (e.position.x);
 }
 
 bool PadComponent::isInterestedInFileDrag (const juce::StringArray& files)

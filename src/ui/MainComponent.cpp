@@ -130,6 +130,23 @@ MainComponent::MainComponent()
         engine.getDrumEngine().setPadSoloed (index, soloed);
         refreshPadAudibility();
     };
+    padGrid.onPadReverse = [this] (int index, bool reversed)
+    {
+        if (Kit::isValidIndex (index))
+        {
+            starterKit.pad (index).reverse = reversed;
+            updatePadParamsInEngine (starterKit, engine.getDrumEngine(), index);
+        }
+    };
+    padGrid.onPadTrim = [this] (int index, float start, float end)
+    {
+        if (Kit::isValidIndex (index))
+        {
+            starterKit.pad (index).startFraction = start;
+            starterKit.pad (index).endFraction   = end;
+            updatePadParamsInEngine (starterKit, engine.getDrumEngine(), index);
+        }
+    };
     addAndMakeVisible (padGrid);
     addAndMakeVisible (transportBar);
 
@@ -497,6 +514,9 @@ Project MainComponent::captureProject()
         pad.chokeGroup = starterKit.pad (i).chokeGroup;
         pad.muted      = drum.isPadMuted (i);
         pad.soloed     = drum.isPadSoloed (i);
+        pad.reverse       = starterKit.pad (i).reverse;
+        pad.startFraction = starterKit.pad (i).startFraction;
+        pad.endFraction   = starterKit.pad (i).endFraction;
     }
     return p;
 }
@@ -532,10 +552,15 @@ void MainComponent::applyProject (const Project& p)
 
         if (sample != nullptr)
         {
-            starterKit.pad (i).chokeGroup = p.pads[(size_t) i].chokeGroup;
+            starterKit.pad (i).chokeGroup    = p.pads[(size_t) i].chokeGroup;
+            starterKit.pad (i).reverse       = p.pads[(size_t) i].reverse;
+            starterKit.pad (i).startFraction = p.pads[(size_t) i].startFraction;
+            starterKit.pad (i).endFraction   = p.pads[(size_t) i].endFraction;
             installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), i, sample);
             padGrid.setPadLabel (i, label);
             updatePadWaveform (i);
+            padGrid.setPadReverse (i, p.pads[(size_t) i].reverse);
+            padGrid.setPadTrim    (i, p.pads[(size_t) i].startFraction, p.pads[(size_t) i].endFraction);
         }
 
         drum.setPadMuted  (i, p.pads[(size_t) i].muted);

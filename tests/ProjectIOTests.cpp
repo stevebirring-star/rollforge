@@ -28,6 +28,7 @@ public:
             p.pads[0].pitchSemitones = -2.0f; p.pads[0].chokeGroup = 1;
             p.pads[3].samplePath = "/kit/hat.wav"; p.pads[3].reverse = true;
             p.pads[0].muted = true; p.pads[5].soloed = true;
+            p.pads[0].startFraction = 0.25f; p.pads[0].endFraction = 0.8f;
 
             p.pattern.numLanes = 2;
             p.pattern.lane (0).targetPad = 0; p.pattern.lane (0).length = 16;
@@ -62,6 +63,8 @@ public:
             expect (q.pads[0].muted);
             expect (q.pads[5].soloed);
             expect (! q.pads[1].muted);
+            expectWithinAbsoluteError (q.pads[0].startFraction, 0.25f, 1.0e-4f);
+            expectWithinAbsoluteError (q.pads[0].endFraction, 0.8f, 1.0e-4f);
             expectEquals (q.pattern.numLanes, 2);
             expect (q.pattern.lane (0).step (0).on);
             expectWithinAbsoluteError (q.pattern.lane (0).step (0).velocity, 0.7f, 1.0e-4f);

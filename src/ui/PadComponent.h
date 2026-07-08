@@ -37,16 +37,21 @@ public:
     void setMuted   (bool muted);     // reflect state into the M button (no callback)
     void setSoloed  (bool soloed);    // reflect state into the S button (no callback)
     void setAudible (bool audible);   // dim the pad when it won't sound (mute/solo)
+    void setReverse (bool reversed);  // reflect reverse state into the R button (no callback)
+    void setTrim (float start, float end);   // set the sample-trim region [0..1] (no callback)
 
     std::function<void (int padIndex, float velocity)>       onTrigger;
     std::function<void (int padIndex)>                       onRelease;   // for note-repeat hold
     std::function<void (int padIndex, const juce::File& file)> onFileDropped;
     std::function<void (int padIndex, bool muted)>             onMute;
     std::function<void (int padIndex, bool soloed)>            onSolo;
+    std::function<void (int padIndex, bool reversed)>          onReverse;
+    std::function<void (int padIndex, float start, float end)> onTrim;
 
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
+    void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp   (const juce::MouseEvent&) override;
 
     // juce::FileDragAndDropTarget
@@ -57,6 +62,7 @@ public:
 
 private:
     void timerCallback() override;
+    void updateTrimFromX (float x);   // maps a drag x-position onto the active trim handle
 
     const int          index;
     juce::String       label;
@@ -65,9 +71,14 @@ private:
     std::vector<float> waveform;             // downsampled |amp| peaks, 0..1
     bool               dragOver    = false;
     bool               audible     = true;   // false -> dimmed (muted, or excluded by a solo)
+    float              trimStart   = 0.0f;   // sample-trim region [0..1]
+    float              trimEnd     = 1.0f;
+    bool               trimming    = false;  // dragging a trim handle in the bottom strip
+    bool               draggingEnd = false;  // which handle (end vs start) is being dragged
 
-    juce::TextButton   muteButton { "M" };
-    juce::TextButton   soloButton { "S" };
+    juce::TextButton   muteButton    { "M" };
+    juce::TextButton   soloButton    { "S" };
+    juce::TextButton   reverseButton { "R" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PadComponent)
 };

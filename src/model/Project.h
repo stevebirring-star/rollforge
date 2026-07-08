@@ -26,6 +26,8 @@ struct ProjectPad
     bool         reverse        = false;
     bool         muted          = false;
     bool         soloed         = false;
+    float        startFraction  = 0.0f;   // sample trim start [0..1)
+    float        endFraction    = 1.0f;   // sample trim end
 };
 
 struct Project

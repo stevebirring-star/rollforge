@@ -17,6 +17,8 @@ struct VoiceParameters
     float attackMs       = 0.0f;   // >= 0
     float releaseMs      = 0.0f;   // >= 0
     bool  reverse        = false;
+    float startFraction  = 0.0f;   // trim: play from this fraction of the sample [0..1)
+    float endFraction    = 1.0f;   // trim: ...to this fraction (kept > startFraction)
 };
 
 } // namespace rollforge

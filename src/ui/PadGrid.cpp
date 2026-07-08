@@ -26,6 +26,8 @@ PadGrid::PadGrid()
         };
         pad->onMute = [this] (int index, bool muted)  { if (onPadMute) onPadMute (index, muted); };
         pad->onSolo = [this] (int index, bool soloed) { if (onPadSolo) onPadSolo (index, soloed); };
+        pad->onReverse = [this] (int index, bool rev) { if (onPadReverse) onPadReverse (index, rev); };
+        pad->onTrim = [this] (int index, float s, float e) { if (onPadTrim) onPadTrim (index, s, e); };
 
         addAndMakeVisible (pad);
     }
@@ -71,6 +73,18 @@ void PadGrid::setPadAudible (int index, bool audible)
 {
     if (auto* pad = pads[index])
         pad->setAudible (audible);
+}
+
+void PadGrid::setPadReverse (int index, bool reversed)
+{
+    if (auto* pad = pads[index])
+        pad->setReverse (reversed);
+}
+
+void PadGrid::setPadTrim (int index, float start, float end)
+{
+    if (auto* pad = pads[index])
+        pad->setTrim (start, end);
 }
 
 void PadGrid::resized()

@@ -36,4 +36,9 @@ void installSampleIntoPad (SampleRetirementPool& retirementPool,
                            int padIndex,
                            SampleBuffer::Ptr newSample);
 
+/** Re-pushes pad `padIndex`'s current params + choke to the engine WITHOUT changing
+    its sample — used for live per-pad edits (trim / reverse). No retirement, since
+    the sample buffer is unchanged. Message thread only. */
+void updatePadParamsInEngine (const Kit& kit, DrumEngine& engine, int padIndex);
+
 } // namespace rollforge

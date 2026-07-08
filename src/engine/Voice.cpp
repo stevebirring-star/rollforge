@@ -1,6 +1,7 @@
 #include "engine/Voice.h"
 
 #include <cmath>
+#include <utility>
 
 namespace rollforge
 {
@@ -36,19 +37,29 @@ void Voice::start (SampleBuffer::Ptr newSample, const Parameters& params, float 
     const double pitchRatio = std::pow (2.0, (double) params.pitchSemitones / 12.0);
     const double speed      = baseInc * pitchRatio;                          // magnitude of the step
 
+    // Trim: play only the [start, end] fraction of the sample.
+    const double span = (double) (length - 1);
+    float s0 = juce::jlimit (0.0f, 1.0f, params.startFraction);
+    float s1 = juce::jlimit (0.0f, 1.0f, params.endFraction);
+    if (s1 < s0) std::swap (s0, s1);
+    double startSrc = (double) s0 * span;
+    double endSrc   = (double) s1 * span;
+    if (endSrc - startSrc < 1.0)                       // keep at least one source sample
+        endSrc = juce::jmin (span, startSrc + 1.0);
+
     if (params.reverse)
     {
         increment = -speed;
-        sourcePos = (double) (length - 1);
+        sourcePos = endSrc;
     }
     else
     {
         increment = speed;
-        sourcePos = 0.0;
+        sourcePos = startSrc;
     }
 
-    const double span = (double) (length - 1);
-    framesTotal  = speed > 0.0 ? (int) std::floor (span / speed) + 1 : 1;
+    const double trimSpan = endSrc - startSrc;
+    framesTotal  = speed > 0.0 ? (int) std::floor (trimSpan / speed) + 1 : 1;
     framesPlayed = 0;
 
     attackFrames  = juce::jlimit (0, framesTotal, (int) (params.attackMs  * 0.001 * deviceSampleRate));

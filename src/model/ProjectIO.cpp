@@ -169,6 +169,8 @@ juce::String toJson (const Project& proj)
         po->setProperty ("reverse", pad.reverse);
         po->setProperty ("muted",   pad.muted);
         po->setProperty ("soloed",  pad.soloed);
+        po->setProperty ("trimStart", pad.startFraction);
+        po->setProperty ("trimEnd",   pad.endFraction);
         pads.add (var (po));
     }
     root->setProperty ("pads", pads);
@@ -210,6 +212,8 @@ bool fromJson (const juce::String& json, Project& out)
             pad.reverse        = (bool) pv.getProperty ("reverse", false);
             pad.muted          = (bool) pv.getProperty ("muted", false);
             pad.soloed         = (bool) pv.getProperty ("soloed", false);
+            pad.startFraction  = (float) (double) pv.getProperty ("trimStart", 0.0);
+            pad.endFraction    = (float) (double) pv.getProperty ("trimEnd", 1.0);
         }
     }
 

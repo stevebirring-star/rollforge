@@ -28,12 +28,16 @@ public:
     void setPadMuted   (int index, bool muted);     // reflect mute state into the pad
     void setPadSoloed  (int index, bool soloed);    // reflect solo state into the pad
     void setPadAudible (int index, bool audible);   // dim a pad that won't sound
+    void setPadReverse (int index, bool reversed);  // reflect reverse state into the pad
+    void setPadTrim    (int index, float start, float end);   // reflect the trim region
 
     std::function<void (int padIndex, float velocity)>        onPadTrigger;
     std::function<void (int padIndex)>                        onPadRelease;   // note-repeat hold end
     std::function<void (int padIndex, const juce::File& file)> onPadFileDropped;
     std::function<void (int padIndex, bool muted)>            onPadMute;
     std::function<void (int padIndex, bool soloed)>           onPadSolo;
+    std::function<void (int padIndex, bool reversed)>         onPadReverse;
+    std::function<void (int padIndex, float start, float end)> onPadTrim;
 
     void resized() override;
 

@@ -12,6 +12,8 @@ VoiceParameters toVoiceParameters (const Pad& pad)
     vp.attackMs       = pad.attackMs;
     vp.releaseMs      = pad.releaseMs;
     vp.reverse        = pad.reverse;
+    vp.startFraction  = pad.startFraction;
+    vp.endFraction    = pad.endFraction;
     return vp;
 }
 
@@ -41,6 +43,17 @@ void installSampleIntoPad (SampleRetirementPool& retirementPool,
 
     pad.alternates[0] = newSample;
     engine.pushSetPad (padIndex, newSample, toVoiceParameters (pad), pad.chokeGroup);
+}
+
+void updatePadParamsInEngine (const Kit& kit, DrumEngine& engine, int padIndex)
+{
+    if (! Kit::isValidIndex (padIndex))
+        return;
+    const Pad& pad = kit.pad (padIndex);
+    if (pad.primarySample() == nullptr)
+        return;
+    // Same sample, new params -> no retirement needed (the buffer is unchanged).
+    engine.pushSetPad (padIndex, pad.primarySample(), toVoiceParameters (pad), pad.chokeGroup);
 }
 
 } // namespace rollforge

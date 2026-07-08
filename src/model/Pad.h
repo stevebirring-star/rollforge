@@ -48,6 +48,8 @@ struct Pad
     float releaseMs  = 0.0f;              // amplitude release in ms (>= 0)
     int   chokeGroup = noChokeGroup;      // 0 = none, else a group id
     bool  reverse    = false;             // play the sample backwards
+    float startFraction = 0.0f;           // trim: play from this fraction of the sample [0..1)
+    float endFraction   = 1.0f;           // trim: ...to this fraction
 
     // --- Queries ------------------------------------------------------------
     /** The sample this pad plays by default (alternates[0]); null if empty. */
