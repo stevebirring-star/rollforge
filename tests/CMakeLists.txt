@@ -42,6 +42,7 @@ target_sources(RollForgeTests PRIVATE
     MidiExportTests.cpp
     OfflineRenderTests.cpp
     StemNullTests.cpp
+    WysiwygExportTests.cpp
     AutosaveTests.cpp
     AppSettingsTests.cpp
     FirstRunStateTests.cpp

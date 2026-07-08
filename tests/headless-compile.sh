@@ -109,6 +109,7 @@ TEST_SOURCES=(
     tests/MidiExportTests.cpp
     tests/OfflineRenderTests.cpp
     tests/StemNullTests.cpp
+    tests/WysiwygExportTests.cpp
     tests/AutosaveTests.cpp
     tests/AppSettingsTests.cpp
     tests/FirstRunStateTests.cpp
