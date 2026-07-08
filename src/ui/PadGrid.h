@@ -27,6 +27,7 @@ public:
     void flashPad (int index);
 
     std::function<void (int padIndex, float velocity)>        onPadTrigger;
+    std::function<void (int padIndex)>                        onPadRelease;   // note-repeat hold end
     std::function<void (int padIndex, const juce::File& file)> onPadFileDropped;
 
     void resized() override;

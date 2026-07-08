@@ -16,6 +16,7 @@
 #include "model/RollPresets.h"
 #include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
+#include "ui/NoteRepeat.h"
 #include "ui/TransportBar.h"
 #include "ui/SequencerGrid.h"
 #include "ui/FillBar.h"
@@ -86,6 +87,9 @@ private:
     juce::TextButton brushButton { "Roll Brush" };
     juce::TextButton clearRollsButton { "Clear Rolls" };
     juce::ComboBox   rollPresetBox;
+    NoteRepeat       noteRepeat;                        // hold a pad to retrigger
+    juce::TextButton repeatButton { "Repeat" };        // toggles note-repeat
+    juce::ComboBox   repeatRateBox;                     // rate: 1/8 .. 1/32, Build
     MacroKnobs       macroKnobs { engine.getMasterBus() };
     std::array<bool, (size_t) maxLanes> laneLocked {};   // per-lane "keep on reroll" locks
     std::vector<RollBrushOverlay::RollRect> paintedRolls;

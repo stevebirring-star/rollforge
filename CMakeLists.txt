@@ -96,6 +96,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/TransportBar.cpp
         src/ui/StepComponent.cpp
         src/ui/SequencerGrid.cpp
+        src/ui/NoteRepeat.cpp
         src/ui/LaneLockButton.cpp
         src/ui/AboutView.cpp
         src/ui/FillBar.cpp

@@ -77,6 +77,7 @@ public:
     bool         isPlaying()       const noexcept { return playing.load (std::memory_order_acquire); }
     float        getSwing()        const noexcept { return swing.load (std::memory_order_acquire); }
     float        getHumanise()     const noexcept { return humanise.load (std::memory_order_acquire); }
+    double       getTempo()        const noexcept { return pendingTempo.load (std::memory_order_acquire); }
     bool         isSwitchQueued()  const noexcept { return switchQueued.load (std::memory_order_acquire); }
     std::int64_t getCurrentStep()  const noexcept { return currentStep.load (std::memory_order_acquire); }
     std::int64_t getTriggerCount() const noexcept { return triggerCount.load (std::memory_order_acquire); }

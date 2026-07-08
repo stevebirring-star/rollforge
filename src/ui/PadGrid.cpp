@@ -14,6 +14,11 @@ PadGrid::PadGrid()
             if (onPadTrigger)
                 onPadTrigger (index, velocity);
         };
+        pad->onRelease = [this] (int index)
+        {
+            if (onPadRelease)
+                onPadRelease (index);
+        };
         pad->onFileDropped = [this] (int index, const juce::File& file)
         {
             if (onPadFileDropped)

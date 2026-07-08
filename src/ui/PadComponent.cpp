@@ -111,6 +111,12 @@ void PadComponent::paint (juce::Graphics& g)
     }
 }
 
+void PadComponent::mouseUp (const juce::MouseEvent&)
+{
+    if (onRelease)
+        onRelease (index);   // ends a held note-repeat
+}
+
 void PadComponent::mouseDown (const juce::MouseEvent&)
 {
     if (onTrigger)

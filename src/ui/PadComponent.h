@@ -35,10 +35,12 @@ public:
     void flash();
 
     std::function<void (int padIndex, float velocity)>       onTrigger;
+    std::function<void (int padIndex)>                       onRelease;   // for note-repeat hold
     std::function<void (int padIndex, const juce::File& file)> onFileDropped;
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
+    void mouseUp   (const juce::MouseEvent&) override;
 
     // juce::FileDragAndDropTarget
     bool isInterestedInFileDrag (const juce::StringArray& files) override;

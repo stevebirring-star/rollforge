@@ -99,7 +99,10 @@ MainComponent::MainComponent()
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
         engine.triggerPad (index, velocity);   // the pad flashes itself on click
+        // Note-repeat: this mouse-down is hit #1; if Repeat is on, start retriggering.
+        noteRepeat.noteOn (index, velocity, engine.getSequencer().getTempo());
     };
+    padGrid.onPadRelease = [this] (int index) { noteRepeat.noteOff (index); };
     padGrid.onPadFileDropped = [this] (int index, const juce::File& file)
     {
         loadFileIntoPad (index, file);
@@ -212,6 +215,31 @@ MainComponent::MainComponent()
         rollPresetBox.addItem (RollPresets::name ((RollPresets::Preset) i), i + 2);
     rollPresetBox.setSelectedId (1, juce::dontSendNotification);
     addAndMakeVisible (rollPresetBox);
+
+    // Live note-repeat: hold a pad to retrigger at the chosen rate (Build = an
+    // accelerating, crescendoing roll). Repeat hits reuse the pad-trigger path.
+    noteRepeat.onHit = [this] (int pad, float velocity)
+    {
+        engine.triggerPad (pad, velocity);
+        padGrid.flashPad (pad);
+    };
+    repeatButton.setClickingTogglesState (true);
+    repeatButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff4cc2ff));
+    repeatButton.setColour (juce::TextButton::textColourOnId, juce::Colours::black);
+    repeatButton.setTooltip ("Hold a pad to retrigger it at the chosen rate");
+    repeatButton.onClick = [this] { noteRepeat.setEnabled (repeatButton.getToggleState()); };
+    addAndMakeVisible (repeatButton);
+
+    for (int i = 0; i < NoteRepeat::NumRates; ++i)
+        repeatRateBox.addItem (NoteRepeat::rateName ((NoteRepeat::Rate) i), i + 1);
+    repeatRateBox.setSelectedId ((int) NoteRepeat::Sixteenth + 1, juce::dontSendNotification);
+    repeatRateBox.setTooltip ("Note-repeat rate");
+    repeatRateBox.onChange = [this]
+    {
+        noteRepeat.setRate ((NoteRepeat::Rate) juce::jlimit (0, NoteRepeat::NumRates - 1,
+                                                             repeatRateBox.getSelectedId() - 1));
+    };
+    addAndMakeVisible (repeatRateBox);
 
     rollOverlay.onRollPainted = [this] (int lane, int startStep, int length, float density)
     {
@@ -696,6 +724,10 @@ void MainComponent::resized()
     clearRollsButton.setBounds (rollRow.removeFromLeft (110));
     rollRow.removeFromLeft (10);
     rollPresetBox.setBounds (rollRow.removeFromLeft (160));
+    // Note-repeat controls on the right of the roll row.
+    repeatRateBox.setBounds (rollRow.removeFromRight (96));
+    rollRow.removeFromRight (6);
+    repeatButton.setBounds (rollRow.removeFromRight (84));
 
     area.removeFromTop (8);
     area.removeFromBottom (26);   // leave room for the hint text
