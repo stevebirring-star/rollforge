@@ -72,14 +72,14 @@ private:
     SampleLoader         loader;
     SampleRetirementPool retirementPool;
     Kit                  starterKit;
-    Pattern              editPattern;   // the pattern the grid edits (8 lanes -> pads 0..7)
+    Pattern              editPattern;   // the pattern the grid edits (16 lanes -> pads 0..15)
     juce::UndoManager    undoManager;   // undoable step edits (declared after editPattern)
 
     PadGrid          padGrid;
     TransportBar     transportBar { engine.getSequencer() };
-    SequencerGrid    seqGrid { 8, 16 };
+    SequencerGrid    seqGrid { 16, 16 };
     FillBar          fillBar { engine.getSequencer() };
-    RollBrushOverlay rollOverlay { 8, 16, SequencerGrid::labelColumnWidth };
+    RollBrushOverlay rollOverlay { 16, 16, SequencerGrid::labelColumnWidth };
     juce::TextButton brushButton { "Roll Brush" };
     juce::TextButton clearRollsButton { "Clear Rolls" };
     juce::ComboBox   rollPresetBox;

@@ -118,11 +118,22 @@ MainComponent::MainComponent()
     // straight to the sequencer inside FillBar.
     fillBar.onFill = [this] (FillEngine::Style style, int intensity, std::uint64_t seed)
     {
-        FillEngine::generateFill (editPattern, style, intensity, seed);
-        refreshGridFromPattern();
-        paintedRolls.clear();                 // a fill replaces the pattern's rolls
-        rollOverlay.setRolls (paintedRolls);
-        engine.getSequencer().setPattern (editPattern);
+        // "Make a Beat": generate a full groove into a copy, then swap it in as ONE
+        // undoable step so a single Cmd/Ctrl+Z reverts the whole generated beat.
+        Pattern before = editPattern;
+        Pattern after  = editPattern;
+        FillEngine::generateFill (after, style, intensity, seed);
+
+        auto refresh = [this]
+        {
+            refreshGridFromPattern();
+            paintedRolls.clear();             // generated rolls play but aren't drawn on the grid
+            rollOverlay.setRolls (paintedRolls);
+            engine.getSequencer().setPattern (editPattern);
+        };
+
+        undoManager.beginNewTransaction();
+        undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
     };
     addAndMakeVisible (fillBar);
 
@@ -181,9 +192,9 @@ MainComponent::MainComponent()
     installKitIntoEngine (starterKit, engine.getDrumEngine());
     updatePadLabels();
 
-    // Editable sequencer pattern: 8 lanes, each targeting pads 0..7, all off.
-    editPattern.numLanes = 8;
-    for (int lane = 0; lane < 8; ++lane)
+    // Editable sequencer pattern: 16 lanes, each targeting pads 0..15, all off.
+    editPattern.numLanes = 16;
+    for (int lane = 0; lane < 16; ++lane)
     {
         editPattern.lane (lane).targetPad = lane;
         editPattern.lane (lane).length = 16;

@@ -18,6 +18,12 @@ FillBar::FillBar (Sequencer& sequencerToUse) : sequencer (sequencerToUse)
     intensitySlider.setTooltip ("Fill intensity (1-5)");
     addAndMakeVisible (intensitySlider);
 
+    // "Make a Beat" is the flagship one-tap: generate a full genre groove (kick /
+    // snare / hats / toms + a roll) with the current style + intensity, a fresh
+    // variation each press. Styled as the primary accent action; Reroll just
+    // re-rolls the same settings.
+    fillButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4cc2ff));
+    fillButton.setColour (juce::TextButton::textColourOffId, juce::Colours::black);
     fillButton.onClick   = [this] { ++seed;      fire(); };
     rerollButton.onClick = [this] { seed += 7ull; fire(); };
     addAndMakeVisible (fillButton);
@@ -51,13 +57,13 @@ void FillBar::resized()
 {
     auto r = getLocalBounds();
 
-    styleBox.setBounds (r.removeFromLeft (110));
+    fillButton.setBounds (r.removeFromLeft (128));     // primary action, leads the row
+    r.removeFromLeft (8);
+    rerollButton.setBounds (r.removeFromLeft (66));
+    r.removeFromLeft (12);
+    styleBox.setBounds (r.removeFromLeft (104));
     r.removeFromLeft (6);
-    intensitySlider.setBounds (r.removeFromLeft (130));
-    r.removeFromLeft (6);
-    fillButton.setBounds (r.removeFromLeft (64));
-    r.removeFromLeft (6);
-    rerollButton.setBounds (r.removeFromLeft (68));
+    intensitySlider.setBounds (r.removeFromLeft (124));
 
     // Humanise group on the right.
     humaniseSlider.setBounds (r.removeFromRight (170));

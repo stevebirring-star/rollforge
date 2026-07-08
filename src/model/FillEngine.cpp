@@ -86,16 +86,16 @@ void generateFill (Pattern& pattern, Style style, int intensity, std::uint64_t s
     intensity = intensity < 1 ? 1 : (intensity > 5 ? 5 : intensity);
     SplitMix64 rng (seed);
 
-    // Lanes: kick, snare, closed hat, 3 toms. (Reset in place — no big temporary.)
-    const int laneKick = 0, laneSnare = 1, laneHat = 2, laneLow = 3, laneMid = 4, laneHigh = 5;
-    pattern.numLanes = 6;
+    // Full 16-lane layout, lane i -> pad i, matching the app + StarterKit so a
+    // generated beat drops straight onto the same rows the grid already shows:
+    // kick/snare/hat/toms get hits, the other pads stay empty but present.
+    // (Reset in place — no big temporary.)
+    const int laneKick = Kick, laneSnare = Snare, laneHat = CHat,
+              laneLow = LowTom, laneMid = MidTom, laneHigh = HighTom;
+    pattern.numLanes = maxLanes;
     pattern.numRolls = 0;
-    setupLane (pattern, laneKick,  Kick);
-    setupLane (pattern, laneSnare, Snare);
-    setupLane (pattern, laneHat,   CHat);
-    setupLane (pattern, laneLow,   LowTom);
-    setupLane (pattern, laneMid,   MidTom);
-    setupLane (pattern, laneHigh,  HighTom);
+    for (int lane = 0; lane < maxLanes; ++lane)
+        setupLane (pattern, lane, lane);
 
     // Hats: denser at higher intensity.
     const int hatEvery = 6 - intensity;                    // intensity 5 -> every 1; 1 -> every 5

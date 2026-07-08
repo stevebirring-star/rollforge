@@ -33,7 +33,7 @@ private:
 
     juce::ComboBox   styleBox;
     juce::Slider     intensitySlider;
-    juce::TextButton fillButton   { "FILL" };
+    juce::TextButton fillButton   { "Make a Beat" };   // the flagship one-tap generate
     juce::TextButton rerollButton { "Reroll" };
     juce::Label      humaniseLabel;
     juce::Slider     humaniseSlider;
