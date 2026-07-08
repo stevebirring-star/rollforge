@@ -82,7 +82,9 @@ public:
 
         beginTest ("anchor hits survive repeated varies");
         {
-            Pattern p; FillEngine::generateFill (p, FillEngine::Trap, 5, 3);
+            // Boom Bap uses a snare backbeat (Trap/House use a clap backbeat), so it
+            // exercises both the kick and snare anchor guards.
+            Pattern p; FillEngine::generateFill (p, FillEngine::BoomBap, 5, 3);
             expect (p.lane (0).step (0).on);    // kick downbeat
             expect (p.lane (1).step (4).on);    // snare backbeats
             expect (p.lane (1).step (12).on);

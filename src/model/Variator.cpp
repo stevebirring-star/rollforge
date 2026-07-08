@@ -28,7 +28,7 @@ namespace
     };
 
     // Pad indices (match the StarterKit / FillEngine layout).
-    constexpr int Kick = 0, Snare = 1;
+    constexpr int Kick = 0, Snare = 1, Clap = 4;
 
     int laneLength (const Lane& lane) noexcept
     {
@@ -43,12 +43,21 @@ std::vector<Change> vary (Pattern& pattern,
 {
     amount = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
     SplitMix64 rng (seed ^ 0xD1B54A32D192ED03ull);   // decorrelate from FillEngine's seed use
-    std::vector<Change> changes;
+
+    const int lanes = pattern.numLanes < maxLanes ? pattern.numLanes : maxLanes;
+
+    // Snapshot the on-states up front. Changes are reported as the NET diff against
+    // this snapshot, so a step toggled twice within one vary (added then dropped)
+    // correctly reports as no change, and the returned list is naturally deduped.
+    bool before[(std::size_t) maxLanes][(std::size_t) maxStepsPerLane];
+    for (int li = 0; li < lanes; ++li)
+        for (int s = 0; s < maxStepsPerLane; ++s)
+            before[(std::size_t) li][(std::size_t) s] = pattern.lane (li).step (s).on;
 
     const int attemptsPerLane = 1 + (int) (amount * 2.0f);   // amount 0->1, 0.5->2, 1->3
     int totalHits = 0;
 
-    for (int li = 0; li < pattern.numLanes && li < maxLanes; ++li)
+    for (int li = 0; li < lanes; ++li)
     {
         if (lockedLanes[(std::size_t) li])
             continue;
@@ -68,12 +77,12 @@ std::vector<Change> vary (Pattern& pattern,
         if (hits == 0)
             continue;
 
-        // Anchor hits keep the groove standing: the downbeat kick and the snare
+        // Anchor hits keep the groove standing: the downbeat kick and the snare/clap
         // backbeats are never dropped (accents may still touch their velocity).
         auto isAnchor = [pad] (int step) noexcept
         {
-            if (pad == Kick)  return step == 0;
-            if (pad == Snare) return step == 4 || step == 12;
+            if (pad == Kick)                  return step == 0;
+            if (pad == Snare || pad == Clap)  return step == 4 || step == 12;
             return false;
         };
 
@@ -109,19 +118,16 @@ std::vector<Change> vary (Pattern& pattern,
                                             : emptyAny[rng.range (0, nEmptyAny - 1)];
                 lane.step (s).on       = true;
                 lane.step (s).velocity = 0.25f + rng.unit() * 0.12f;   // quiet ghost
-                changes.push_back ({ li, s });
             }
             else if (pick < ghostP + dropP && nRemovable > 0)
             {
                 const int s = removable[rng.range (0, nRemovable - 1)];
                 lane.step (s).on = false;
-                changes.push_back ({ li, s });
             }
             else if (nOnAny > 0)
             {
-                // Accent: nudge an existing hit's velocity. This is a feel change, not
-                // a toggle, so it is NOT reported — the highlight stays about hits that
-                // actually appeared or vanished.
+                // Accent: nudge an existing hit's velocity. A feel change, not a toggle,
+                // so the diff below won't (and shouldn't) report it.
                 const int   s = onAny[rng.range (0, nOnAny - 1)];
                 const float v = lane.step (s).velocity + (rng.unit() * 0.4f - 0.2f);
                 lane.step (s).velocity = v < 0.2f ? 0.2f : (v > 1.0f ? 1.0f : v);
@@ -129,14 +135,30 @@ std::vector<Change> vary (Pattern& pattern,
         }
     }
 
+    auto collectChanges = [&]
+    {
+        std::vector<Change> out;
+        for (int li = 0; li < lanes; ++li)
+        {
+            if (lockedLanes[(std::size_t) li])
+                continue;
+            for (int s = 0; s < maxStepsPerLane; ++s)
+                if (pattern.lane (li).step (s).on != before[(std::size_t) li][(std::size_t) s])
+                    out.push_back ({ li, s });
+        }
+        return out;
+    };
+
+    std::vector<Change> changes = collectChanges();
+
     // Guarantee a visible result on a non-empty pattern: if every attempt happened
-    // to land on accents, drop one ghost (prefer the snare) so Vary never looks
-    // like it did nothing. A genuinely empty pattern is left silent.
+    // to land on accents (or cancel out), drop one ghost (prefer the snare) so Vary
+    // never looks like it did nothing. A genuinely empty pattern is left silent.
     if (totalHits > 0 && changes.empty())
     {
         auto tryGhost = [&] (int li) -> bool
         {
-            if (li < 0 || li >= pattern.numLanes || li >= maxLanes || lockedLanes[(std::size_t) li])
+            if (li < 0 || li >= lanes || lockedLanes[(std::size_t) li])
                 return false;
 
             Lane&     lane = pattern.lane (li);
@@ -146,7 +168,6 @@ std::vector<Change> vary (Pattern& pattern,
                 {
                     lane.step (s).on = true;
                     lane.step (s).velocity = 0.3f;
-                    changes.push_back ({ li, s });
                     return true;
                 }
             for (int s = 0; s < len; ++s)
@@ -154,16 +175,17 @@ std::vector<Change> vary (Pattern& pattern,
                 {
                     lane.step (s).on = true;
                     lane.step (s).velocity = 0.3f;
-                    changes.push_back ({ li, s });
                     return true;
                 }
             return false;
         };
 
         if (! tryGhost (Snare))
-            for (int li = 0; li < pattern.numLanes; ++li)
+            for (int li = 0; li < lanes; ++li)
                 if (tryGhost (li))
                     break;
+
+        changes = collectChanges();
     }
 
     return changes;
