@@ -51,6 +51,11 @@ TransportBar::TransportBar (Sequencer& seq)
     sequencer.setTempo (120.0);   // sync the engine to the initial slider value
 }
 
+void TransportBar::setTempo (double bpm)
+{
+    bpmSlider.setValue (juce::jlimit (40.0, 300.0, bpm), juce::sendNotification);
+}
+
 void TransportBar::setSwing (float amount)
 {
     swingSlider.setValue (juce::jlimit (0.0, 1.0, (double) amount), juce::sendNotification);

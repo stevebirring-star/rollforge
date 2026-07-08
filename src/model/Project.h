@@ -24,6 +24,8 @@ struct ProjectPad
     float        pan            = 0.0f;
     int          chokeGroup     = 0;
     bool         reverse        = false;
+    bool         muted          = false;
+    bool         soloed         = false;
 };
 
 struct Project

@@ -1,6 +1,7 @@
 #include "ui/MainComponent.h"
 
 #include "library/KitBuilder.h"
+#include "model/ProjectIO.h"
 #include "model/Variator.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
@@ -95,6 +96,18 @@ MainComponent::MainComponent()
     helpButton.setColour (juce::TextButton::textColourOffId, colours::text);
     helpButton.onClick = [this] { openHelp(); };
     addAndMakeVisible (helpButton);
+
+    saveButton.setColour (juce::TextButton::buttonColourId, colours::panel);
+    saveButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    saveButton.onClick = [this] { doSaveProject(); };
+    saveButton.setTooltip ("Save the project (kit, pattern, rolls, FX, mute/solo, tempo) to a .rollforge file");
+    addAndMakeVisible (saveButton);
+
+    openButton.setColour (juce::TextButton::buttonColourId, colours::panel);
+    openButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    openButton.onClick = [this] { doOpenProject(); };
+    openButton.setTooltip ("Open a .rollforge project");
+    addAndMakeVisible (openButton);
 
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
@@ -463,24 +476,83 @@ Project MainComponent::captureProject()
 {
     Project p;
     p.pattern = editPattern;
+
+    // Tempo + swing are live sequencer controls; capture them as the authoritative
+    // transport, mirrored into the pattern so the saved file is self-consistent.
+    auto& seq = engine.getSequencer();
+    p.bpm   = p.pattern.bpm   = seq.getTempo();
+    p.swing = p.pattern.swing = seq.getSwing();
+
     auto& bus = engine.getMasterBus();
     p.punch = bus.getPunch(); p.drive = bus.getDrive();
     p.crush = bus.getCrush(); p.space = bus.getSpace();
+
+    auto& drum = engine.getDrumEngine();
     for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
-        if (auto sample = starterKit.pad (i).primarySample())
-            p.pads[(size_t) i].samplePath = sample->getName();
+    {
+        ProjectPad& pad = p.pads[(size_t) i];
+        pad.samplePath = padSourcePath[(size_t) i];   // full path; "" = starter synth sound
+        pad.chokeGroup = starterKit.pad (i).chokeGroup;
+        pad.muted      = drum.isPadMuted (i);
+        pad.soloed     = drum.isPadSoloed (i);
+    }
     return p;
 }
 
 void MainComponent::applyProject (const Project& p)
 {
     editPattern = p.pattern;
+
+    // Rebuild the kit from the saved per-pad paths (RT-safe per-pad swap). An empty
+    // path — or a file that no longer exists — restores the built-in starter sound.
+    Kit fresh = StarterKit::build (44100.0);
+    auto& drum = engine.getDrumEngine();
+    for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
+    {
+        const juce::String path = p.pads[(size_t) i].samplePath;
+        SampleBuffer::Ptr  sample;
+        juce::String       label;
+
+        if (path.isNotEmpty())
+            if (auto loaded = loader.loadFile (juce::File (path)))
+            {
+                sample = loaded;
+                label  = juce::File (path).getFileNameWithoutExtension();
+                padSourcePath[(size_t) i] = path;
+            }
+
+        if (sample == nullptr)   // empty path, or the file is gone -> starter sound
+        {
+            sample = fresh.pad (i).primarySample();
+            label  = (sample != nullptr) ? sample->getName() : juce::String();
+            padSourcePath[(size_t) i] = juce::String();
+        }
+
+        if (sample != nullptr)
+        {
+            starterKit.pad (i).chokeGroup = p.pads[(size_t) i].chokeGroup;
+            installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), i, sample);
+            padGrid.setPadLabel (i, label);
+            updatePadWaveform (i);
+        }
+
+        drum.setPadMuted  (i, p.pads[(size_t) i].muted);
+        drum.setPadSoloed (i, p.pads[(size_t) i].soloed);
+        padGrid.setPadMuted  (i, p.pads[(size_t) i].muted);
+        padGrid.setPadSoloed (i, p.pads[(size_t) i].soloed);
+    }
+
     refreshGridFromPattern();
+    refreshPadAudibility();
     engine.getSequencer().setPattern (editPattern);
+
+    transportBar.setTempo (p.bpm);
+    transportBar.setSwing (p.swing);
+
     auto& bus = engine.getMasterBus();
     bus.setPunch (p.punch); bus.setDrive (p.drive);
     bus.setCrush (p.crush); bus.setSpace (p.space);
-    // Pads/kit are not restored yet (per-pad sample paths aren't tracked) -- pattern + FX only.
+    macroKnobs.syncFromBus();   // reflect the restored macro values into the knobs
 }
 
 void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
@@ -490,6 +562,8 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
     if (auto sample = loader.loadFile (file))
     {
         installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), padIndex, sample);
+        if (padIndex >= 0 && padIndex < (int) padSourcePath.size())
+            padSourcePath[(size_t) padIndex] = file.getFullPathName();
         padGrid.setPadLabel (padIndex, file.getFileNameWithoutExtension());
         updatePadWaveform (padIndex);
         updateLaneLabelForPad (padIndex);
@@ -593,6 +667,7 @@ void MainComponent::openLibrary()
                 // choke group is carried into the engine with the new sample.
                 starterKit.pad (p).chokeGroup = KitBuilder::chokeGroupForPad (p);
                 installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
+                padSourcePath[(size_t) p] = file.getFullPathName();
                 padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
                 updatePadWaveform (p);
                 updateLaneLabelForPad (p);
@@ -721,6 +796,39 @@ void MainComponent::doExportStems()
         });
 }
 
+void MainComponent::doSaveProject()
+{
+    projectChooser = std::make_unique<juce::FileChooser> ("Save Project", juce::File(), "*.rollforge");
+    projectChooser->launchAsync (juce::FileBrowserComponent::saveMode
+                                     | juce::FileBrowserComponent::canSelectFiles
+                                     | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this] (const juce::FileChooser& fc)
+        {
+            auto f = fc.getResult();
+            if (f == juce::File())
+                return;
+            if (! f.hasFileExtension ("rollforge"))
+                f = f.withFileExtension ("rollforge");
+            ProjectIO::save (captureProject(), f);
+        });
+}
+
+void MainComponent::doOpenProject()
+{
+    projectChooser = std::make_unique<juce::FileChooser> ("Open Project", juce::File(), "*.rollforge");
+    projectChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                     | juce::FileBrowserComponent::canSelectFiles,
+        [this] (const juce::FileChooser& fc)
+        {
+            const auto f = fc.getResult();
+            if (! f.existsAsFile())
+                return;
+            Project loaded;
+            if (ProjectIO::load (f, loaded))
+                applyProject (loaded);
+        });
+}
+
 void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (colours::background);
@@ -745,6 +853,10 @@ void MainComponent::resized()
     libraryButton.setBounds (statusRow.removeFromRight (80));
     statusRow.removeFromRight (8);
     exportButton.setBounds (statusRow.removeFromRight (72));
+    statusRow.removeFromRight (8);
+    saveButton.setBounds (statusRow.removeFromRight (58));
+    statusRow.removeFromRight (6);
+    openButton.setBounds (statusRow.removeFromRight (58));
     statusRow.removeFromRight (8);
     helpButton.setBounds (statusRow.removeFromRight (64));
     statusRow.removeFromRight (12);

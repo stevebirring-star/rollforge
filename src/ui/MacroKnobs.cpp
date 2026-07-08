@@ -30,6 +30,14 @@ MacroKnobs::MacroKnobs (MasterBus& busToUse) : bus (busToUse)
     driveKnob.onValueChange = [this] { bus.setDrive ((float) driveKnob.getValue()); };
 }
 
+void MacroKnobs::syncFromBus()
+{
+    punchKnob.setValue (bus.getPunch(), juce::dontSendNotification);
+    spaceKnob.setValue (bus.getSpace(), juce::dontSendNotification);
+    crushKnob.setValue (bus.getCrush(), juce::dontSendNotification);
+    driveKnob.setValue (bus.getDrive(), juce::dontSendNotification);
+}
+
 void MacroKnobs::resized()
 {
     auto r = getLocalBounds();

@@ -58,6 +58,8 @@ private:
     void doExportMidi();
     void doExportWav();
     void doExportStems();
+    void doSaveProject();
+    void doOpenProject();
     void refreshStatus();
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep
@@ -102,12 +104,19 @@ private:
     juce::TextButton libraryButton { "Library" };
     juce::TextButton exportButton { "Export" };
     juce::TextButton helpButton { "Help" };
+    juce::TextButton saveButton { "Save" };
+    juce::TextButton openButton { "Open" };
 
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
     juce::Component::SafePointer<juce::DialogWindow> libraryWindow;
     juce::Component::SafePointer<juce::DialogWindow> exportWindow;
     juce::Component::SafePointer<juce::DialogWindow> helpWindow;
     std::unique_ptr<juce::FileChooser>               exportChooser;
+    std::unique_ptr<juce::FileChooser>               projectChooser;
+
+    // Full file path of the sample loaded into each pad ("" = the built-in starter
+    // synth sound). Tracked so Save/Load can rebuild the kit from disk.
+    std::array<juce::String, (size_t) maxLanes>      padSourcePath {};
 
     juce::TooltipWindow tooltipWindow { this };   // enables tooltips app-wide (lane locks, sliders)
 

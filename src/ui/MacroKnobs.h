@@ -15,6 +15,10 @@ class MacroKnobs final : public juce::Component
 public:
     explicit MacroKnobs (MasterBus& bus);
 
+    /** Reflect the bus's current macro values back into the knobs (e.g. after a
+        project load restores them on the bus). Does not re-drive the bus. */
+    void syncFromBus();
+
     void resized() override;
 
 private:

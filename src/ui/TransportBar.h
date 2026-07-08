@@ -16,6 +16,10 @@ class TransportBar final : public juce::Component
 public:
     explicit TransportBar (Sequencer& sequencer);
 
+    /** Set the tempo control (BPM); drives the sequencer + updates the slider. Used
+        by project load. */
+    void setTempo (double bpm);
+
     /** Set the swing control (0..1); drives the sequencer + updates the slider. Used
         by Feel presets and by Make a Beat to apply a genre's swing. */
     void setSwing (float amount);
