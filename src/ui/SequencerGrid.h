@@ -12,11 +12,14 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
+#include <utility>
+#include <vector>
 
 namespace rollforge
 {
 
-class SequencerGrid final : public juce::Component
+class SequencerGrid final : public juce::Component,
+                            private juce::Timer
 {
 public:
     SequencerGrid (int numLanes, int numSteps);
@@ -25,6 +28,10 @@ public:
     void setLaneLocked (int lane, bool locked);                   // reflect lock state -> UI
     void setStep (int lane, int step, bool on, float velocity);   // reflect model -> UI
     void setPlayheadStep (int step);                              // -1 = none
+
+    /** Briefly ring the given (lane, step) cells in amber — the "here's what Vary
+        changed" teaching hook. Auto-clears after a short delay. */
+    void flashChanged (const std::vector<std::pair<int, int>>& changedCells);
 
     std::function<void (int lane, int step, bool on, float velocity)> onStepEdit;
     std::function<void (int lane)> onLaneLockToggled;   // fired when a lane's padlock is clicked
@@ -39,10 +46,13 @@ public:
 
 private:
     StepComponent* cell (int lane, int step) noexcept;
+    void timerCallback() override;   // clears the Vary flash
 
     const int numLanes;
     const int numSteps;
     int       playheadStep = -1;
+
+    std::vector<std::pair<int, int>> flashed;   // cells currently ringed by flashChanged
 
     juce::OwnedArray<juce::Label>         laneLabels;
     juce::OwnedArray<LaneLockButton>      lockButtons;   // one per lane, left of the label

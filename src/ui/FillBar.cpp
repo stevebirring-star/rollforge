@@ -24,10 +24,17 @@ FillBar::FillBar (Sequencer& sequencerToUse) : sequencer (sequencerToUse)
     // re-rolls the same settings.
     fillButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4cc2ff));
     fillButton.setColour (juce::TextButton::textColourOffId, juce::Colours::black);
-    fillButton.onClick   = [this] { ++seed;      fire(); };
-    rerollButton.onClick = [this] { seed += 7ull; fire(); };
+    fillButton.onClick   = [this] { ++seed;       fire(); };
+    rerollButton.onClick = [this] { seed += 7ull;  fire(); };
+    rerollButton.setTooltip ("Generate a fresh beat from the current style + intensity");
     addAndMakeVisible (fillButton);
     addAndMakeVisible (rerollButton);
+
+    // Vary evolves the CURRENT beat (a few hits on/off, ghost notes, accents) and
+    // highlights what changed — the verse/chorus/fill move, not a fresh generate.
+    varyButton.onClick = [this] { seed += 13ull; fireVary(); };
+    varyButton.setTooltip ("Tweak the current beat: nudge a few hits, add ghosts, vary accents");
+    addAndMakeVisible (varyButton);
 
     humaniseLabel.setText ("Humanise", juce::dontSendNotification);
     humaniseLabel.setJustificationType (juce::Justification::centredRight);
@@ -53,21 +60,29 @@ void FillBar::fire()
     }
 }
 
+void FillBar::fireVary()
+{
+    if (onVary != nullptr)
+        onVary ((int) intensitySlider.getValue(), seed);
+}
+
 void FillBar::resized()
 {
     auto r = getLocalBounds();
 
-    fillButton.setBounds (r.removeFromLeft (128));     // primary action, leads the row
+    fillButton.setBounds (r.removeFromLeft (120));     // primary action, leads the row
     r.removeFromLeft (8);
-    rerollButton.setBounds (r.removeFromLeft (66));
-    r.removeFromLeft (12);
-    styleBox.setBounds (r.removeFromLeft (104));
+    rerollButton.setBounds (r.removeFromLeft (58));
     r.removeFromLeft (6);
-    intensitySlider.setBounds (r.removeFromLeft (124));
+    varyButton.setBounds (r.removeFromLeft (58));
+    r.removeFromLeft (12);
+    styleBox.setBounds (r.removeFromLeft (96));
+    r.removeFromLeft (6);
+    intensitySlider.setBounds (r.removeFromLeft (108));
 
     // Humanise group on the right.
-    humaniseSlider.setBounds (r.removeFromRight (170));
-    humaniseLabel.setBounds (r.removeFromRight (74));
+    humaniseSlider.setBounds (r.removeFromRight (160));
+    humaniseLabel.setBounds (r.removeFromRight (70));
 }
 
 } // namespace rollforge

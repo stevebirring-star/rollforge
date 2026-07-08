@@ -19,6 +19,15 @@ void StepComponent::setPlayhead (bool isCurrent)
     }
 }
 
+void StepComponent::setChanged (bool wasJustChanged)
+{
+    if (changed != wasJustChanged)
+    {
+        changed = wasJustChanged;
+        repaint();
+    }
+}
+
 float StepComponent::velocityForY (float y) const noexcept
 {
     const float h = (float) juce::jmax (1, getHeight());
@@ -121,6 +130,14 @@ void StepComponent::paint (juce::Graphics& g)
     g.setColour (current ? juce::Colours::white
                          : juce::Colour (0xff3a3a44));
     g.drawRoundedRectangle (bounds, corner, current ? 2.0f : 1.0f);
+
+    // "Vary just touched this" marker: an amber ring over the normal border, shown
+    // on both added hits and cleared cells (so you can see what was removed too).
+    if (changed)
+    {
+        g.setColour (juce::Colour (0xffffb43a));
+        g.drawRoundedRectangle (bounds, corner, 2.0f);
+    }
 }
 
 } // namespace rollforge

@@ -22,6 +22,7 @@ public:
     /** Reflects model state into the cell (does not fire onEdit). */
     void setState (bool isOn, float vel);
     void setPlayhead (bool isCurrent);
+    void setChanged (bool wasJustChanged);   // brief "Vary changed this" highlight
 
     std::function<void (bool on, float velocity)> onEdit;
     std::function<void()> onGestureStart;   // fired at mouse-down (for undo transactions)
@@ -37,6 +38,7 @@ private:
     bool  on        = false;
     float velocity  = 0.8f;
     bool  current   = false;
+    bool  changed   = false;   // recently mutated by Vary -> amber ring, cleared by a timer
     bool  editing   = false;   // mouse held on this cell -> show a prominent % readout
     bool  downWasOn = false;    // step's on-state at mouse-down (click vs velocity-drag)
 

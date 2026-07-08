@@ -66,6 +66,36 @@ void SequencerGrid::setStep (int lane, int step, bool on, float velocity)
         c->setState (on, velocity);
 }
 
+void SequencerGrid::flashChanged (const std::vector<std::pair<int, int>>& changedCells)
+{
+    // Clear any previous flash first so a rapid re-vary doesn't leave stale rings.
+    for (const auto& [lane, step] : flashed)
+        if (auto* c = cell (lane, step))
+            c->setChanged (false);
+    flashed.clear();
+
+    for (const auto& [lane, step] : changedCells)
+        if (auto* c = cell (lane, step))
+        {
+            c->setChanged (true);
+            flashed.push_back ({ lane, step });
+        }
+
+    if (! flashed.empty())
+        startTimer (1100);   // one-shot: cleared in timerCallback
+    else
+        stopTimer();
+}
+
+void SequencerGrid::timerCallback()
+{
+    for (const auto& [lane, step] : flashed)
+        if (auto* c = cell (lane, step))
+            c->setChanged (false);
+    flashed.clear();
+    stopTimer();
+}
+
 void SequencerGrid::setPlayheadStep (int step)
 {
     if (step == playheadStep)

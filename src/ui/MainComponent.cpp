@@ -1,10 +1,13 @@
 #include "ui/MainComponent.h"
 
 #include "library/KitBuilder.h"
+#include "model/Variator.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include <cmath>
+#include <utility>
+#include <vector>
 
 namespace rollforge
 {
@@ -153,6 +156,31 @@ MainComponent::MainComponent()
 
         undoManager.beginNewTransaction();
         undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+    };
+    // "Vary": mutate the CURRENT groove instead of regenerating it — a few hits on/
+    // off, ghost notes, accents — as one undoable step, then flash what changed.
+    // Locked lanes are honoured (the Variator skips them).
+    fillBar.onVary = [this] (int intensity, std::uint64_t seed)
+    {
+        Pattern before = editPattern;
+        Pattern after  = editPattern;
+        const float amount   = juce::jlimit (0.0f, 1.0f, (float) intensity / 5.0f);
+        const auto  changes  = Variator::vary (after, amount, seed, laneLocked);
+
+        auto refresh = [this]
+        {
+            refreshGridFromPattern();
+            engine.getSequencer().setPattern (editPattern);
+        };
+
+        undoManager.beginNewTransaction();
+        undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+
+        std::vector<std::pair<int, int>> cells;
+        cells.reserve (changes.size());
+        for (const auto& c : changes)
+            cells.push_back ({ c.lane, c.step });
+        seqGrid.flashChanged (cells);
     };
     addAndMakeVisible (fillBar);
 
