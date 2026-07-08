@@ -51,9 +51,9 @@ private:
     void openSettings();
     void openLibrary();
     void openExport();
-    void doExportMidi();
-    void doExportWav();
-    void doExportStems();
+    void doExportMidi (int loops);
+    void doExportWav (int loops);
+    void doExportStems (int loops);
     void refreshStatus();
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep

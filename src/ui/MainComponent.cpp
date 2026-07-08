@@ -55,6 +55,13 @@ MainComponent::MainComponent()
         loadFileIntoPad (index, file);
     };
     addAndMakeVisible (padGrid);
+
+    // Keep the pattern model in step with the transport. The exporters read tempo
+    // and swing from the Pattern (pattern.bpm / pattern.swing), while live playback
+    // is driven straight into the Sequencer — so without this the export renders at
+    // the pattern's stale default tempo, not the tempo you hear.
+    transportBar.onTempoChanged = [this] (double bpm)    { editPattern.bpm   = bpm; };
+    transportBar.onSwingChanged = [this] (float amount)  { editPattern.swing = amount; };
     addAndMakeVisible (transportBar);
 
     seqGrid.onGestureStart = [this] { undoManager.beginNewTransaction(); };
@@ -278,6 +285,10 @@ Project MainComponent::captureProject()
 void MainComponent::applyProject (const Project& p)
 {
     editPattern = p.pattern;
+    // Reflect the loaded tempo/swing into the transport knobs + the live engine so
+    // playback (and the next export) matches the restored pattern.
+    transportBar.setDisplayedTempo (editPattern.bpm);
+    transportBar.setDisplayedSwing (editPattern.swing);
     refreshGridFromPattern();
     engine.getSequencer().setPattern (editPattern);
     auto& bus = engine.getMasterBus();
@@ -412,9 +423,9 @@ void MainComponent::openExport()
     }
 
     auto panel = std::make_unique<ExportPanel>();
-    panel->onExportMidi  = [this] { doExportMidi(); };
-    panel->onExportWav   = [this] { doExportWav(); };
-    panel->onExportStems = [this] { doExportStems(); };
+    panel->onExportMidi  = [this] (int loops) { doExportMidi  (loops); };
+    panel->onExportWav   = [this] (int loops) { doExportWav   (loops); };
+    panel->onExportStems = [this] (int loops) { doExportStems (loops); };
 
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (panel.release());
@@ -427,30 +438,32 @@ void MainComponent::openExport()
     exportWindow = options.launchAsync();
 }
 
-void MainComponent::doExportMidi()
+void MainComponent::doExportMidi (int loops)
 {
+    const int bars = patternBars (editPattern) * juce::jmax (1, loops);
     exportChooser = std::make_unique<juce::FileChooser> ("Export MIDI", juce::File(), "*.mid");
     exportChooser->launchAsync (juce::FileBrowserComponent::saveMode
                                     | juce::FileBrowserComponent::canSelectFiles
                                     | juce::FileBrowserComponent::warnAboutOverwriting,
-        [this] (const juce::FileChooser& fc)
+        [this, bars] (const juce::FileChooser& fc)
         {
             auto f = fc.getResult();
             if (f == juce::File())
                 return;
             if (! f.hasFileExtension ("mid"))
                 f = f.withFileExtension ("mid");
-            MidiExporter::save (editPattern, f, 1);
+            MidiExporter::save (editPattern, f, bars);
         });
 }
 
-void MainComponent::doExportWav()
+void MainComponent::doExportWav (int loops)
 {
+    const int bars = patternBars (editPattern) * juce::jmax (1, loops);
     exportChooser = std::make_unique<juce::FileChooser> ("Export WAV (mix)", juce::File(), "*.wav");
     exportChooser->launchAsync (juce::FileBrowserComponent::saveMode
                                     | juce::FileBrowserComponent::canSelectFiles
                                     | juce::FileBrowserComponent::warnAboutOverwriting,
-        [this] (const juce::FileChooser& fc)
+        [this, bars] (const juce::FileChooser& fc)
         {
             auto f = fc.getResult();
             if (f == juce::File())
@@ -465,7 +478,7 @@ void MainComponent::doExportWav()
 
             OfflineRenderer::Options opts;
             opts.sampleRate = 44100.0;
-            opts.bars = 1;
+            opts.bars = bars;
             auto& bus = engine.getMasterBus();
             opts.punch = bus.getPunch(); opts.drive = bus.getDrive();
             opts.crush = bus.getCrush(); opts.space = bus.getSpace();
@@ -473,12 +486,13 @@ void MainComponent::doExportWav()
         });
 }
 
-void MainComponent::doExportStems()
+void MainComponent::doExportStems (int loops)
 {
+    const int bars = patternBars (editPattern) * juce::jmax (1, loops);
     exportChooser = std::make_unique<juce::FileChooser> ("Choose a folder for the stems");
     exportChooser->launchAsync (juce::FileBrowserComponent::openMode
                                     | juce::FileBrowserComponent::canSelectDirectories,
-        [this] (const juce::FileChooser& fc)
+        [this, bars] (const juce::FileChooser& fc)
         {
             const auto dir = fc.getResult();
             if (! dir.isDirectory())
@@ -488,7 +502,7 @@ void MainComponent::doExportStems()
             installKitIntoEngine (starterKit, exportEngine);
 
             OfflineRenderer::Options opts;
-            opts.bars = 1;
+            opts.bars = bars;
             WavExporter::exportStems (exportEngine, editPattern, dir, opts);
         });
 }
