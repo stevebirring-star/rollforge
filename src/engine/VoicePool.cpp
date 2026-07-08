@@ -13,6 +13,7 @@ VoicePool::VoicePool (int requestedVoices)
     voices = std::make_unique<Voice[]> ((size_t) numVoices);
     chokeGroups.assign ((size_t) numVoices, kNoChokeGroup);
     ages.assign ((size_t) numVoices, (juce::int64) 0);
+    voicePads.assign ((size_t) numVoices, -1);
 }
 
 void VoicePool::prepare (double newSampleRate)
@@ -23,6 +24,7 @@ void VoicePool::prepare (double newSampleRate)
         voices[i].prepare (newSampleRate);
         chokeGroups[(size_t) i] = kNoChokeGroup;
         ages[(size_t) i] = 0;
+        voicePads[(size_t) i] = -1;
     }
     nextAge = 0;
 }
@@ -36,7 +38,8 @@ void VoicePool::reset() noexcept
 void VoicePool::trigger (SampleBuffer::Ptr sample,
                          const Voice::Parameters& params,
                          float velocity,
-                         int chokeGroup) noexcept
+                         int chokeGroup,
+                         int padIndex) noexcept
 {
     if (sample == nullptr)
         return;
@@ -54,6 +57,19 @@ void VoicePool::trigger (SampleBuffer::Ptr sample,
     voices[slot].start (sample, params, velocity);
     chokeGroups[(size_t) slot] = chokeGroup;
     ages[(size_t) slot] = nextAge++;
+    voicePads[(size_t) slot] = padIndex;
+}
+
+void VoicePool::addPadLevels (float* out, int numPads) const noexcept
+{
+    for (int i = 0; i < numVoices; ++i)
+    {
+        if (! voices[i].isActive())
+            continue;
+        const int pad = voicePads[(size_t) i];
+        if (pad >= 0 && pad < numPads)
+            out[pad] = juce::jmax (out[pad], voices[i].getLevel());
+    }
 }
 
 int VoicePool::selectVoice() const noexcept

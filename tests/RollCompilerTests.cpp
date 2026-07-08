@@ -115,6 +115,23 @@ public:
             expect (RollCompiler::compileRoll (zeroLength).empty());
             expectEquals (RollCompiler::compile (zeroLength).count, 0);
         }
+
+        beginTest ("denser roll compiles to more hits — the brush meter's 'Hits ~N' contract");
+        {
+            // Mirrors MainComponent::buildBrushRegion's Auto mapping: end speed =
+            // 2 + density*14, so density 0 -> 2 and density 1 -> 16 over one span.
+            RollRegion sparse;
+            sparse.lengthSteps = 4.0;
+            sparse.speed = { 2.0f, 2.0f, 0.3f };    // density 0
+
+            RollRegion dense = sparse;
+            dense.speed = { 2.0f, 16.0f, 0.3f };    // density 1
+
+            const int sparseHits = RollCompiler::compile (sparse).count;
+            const int denseHits  = RollCompiler::compile (dense).count;
+            expect (sparseHits > 0);
+            expect (denseHits > sparseHits);        // the meter's hit count must rise with density
+        }
     }
 };
 
