@@ -65,6 +65,7 @@ private:
     void updatePadLabels();
     void updatePadWaveform (int padIndex);   // recompute a pad's waveform thumbnail from its sample
     void updateLaneLabelForPad (int padIndex);   // refresh sequencer lane label(s) targeting this pad
+    void refreshPadAudibility();                 // reflect engine mute/solo into pad dimming
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
     void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
     RollRegion buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const; // roll under the brush (paint + live meter share this)

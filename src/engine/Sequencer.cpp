@@ -265,7 +265,10 @@ void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& 
             cursor = offset;
         }
 
-        engine.triggerPadNow (pending[best].pad, pending[best].velocity, pending[best].pitchOffset);
+        // Per-pad mute/solo gates SEQUENCED (+ roll) hits; a muted pad's steps stay
+        // silent. Manual auditions go through a different path and are never gated.
+        if (engine.isPadAudible (pending[best].pad))
+            engine.triggerPadNow (pending[best].pad, pending[best].velocity, pending[best].pitchOffset);
         triggerCount.fetch_add (1, std::memory_order_acq_rel);
 
         pending[best] = pending[--pendingCount];   // remove (swap with last)

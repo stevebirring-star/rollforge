@@ -107,6 +107,16 @@ MainComponent::MainComponent()
     {
         loadFileIntoPad (index, file);
     };
+    padGrid.onPadMute = [this] (int index, bool muted)
+    {
+        engine.getDrumEngine().setPadMuted (index, muted);
+        refreshPadAudibility();
+    };
+    padGrid.onPadSolo = [this] (int index, bool soloed)
+    {
+        engine.getDrumEngine().setPadSoloed (index, soloed);
+        refreshPadAudibility();
+    };
     addAndMakeVisible (padGrid);
     addAndMakeVisible (transportBar);
 
@@ -276,6 +286,7 @@ MainComponent::MainComponent()
     starterKit = StarterKit::build (44100.0);
     installKitIntoEngine (starterKit, engine.getDrumEngine());
     updatePadLabels();
+    refreshPadAudibility();
 
     // Editable sequencer pattern: 16 lanes, each targeting pads 0..15, all off.
     editPattern.numLanes = 16;
@@ -383,6 +394,13 @@ void MainComponent::updateLaneLabelForPad (int padIndex)
     for (int lane = 0; lane < editPattern.numLanes; ++lane)
         if (editPattern.lane (lane).targetPad == padIndex)
             seqGrid.setLaneLabel (lane, label);
+}
+
+void MainComponent::refreshPadAudibility()
+{
+    auto& drum = engine.getDrumEngine();
+    for (int p = 0; p < kitNumPads; ++p)
+        padGrid.setPadAudible (p, drum.isPadAudible (p));
 }
 
 void MainComponent::afterStepEdit (int lane, int step)

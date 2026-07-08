@@ -24,6 +24,8 @@ PadGrid::PadGrid()
             if (onPadFileDropped)
                 onPadFileDropped (index, file);
         };
+        pad->onMute = [this] (int index, bool muted)  { if (onPadMute) onPadMute (index, muted); };
+        pad->onSolo = [this] (int index, bool soloed) { if (onPadSolo) onPadSolo (index, soloed); };
 
         addAndMakeVisible (pad);
     }
@@ -51,6 +53,24 @@ void PadGrid::flashPad (int index)
 {
     if (auto* pad = pads[index])
         pad->flash();
+}
+
+void PadGrid::setPadMuted (int index, bool muted)
+{
+    if (auto* pad = pads[index])
+        pad->setMuted (muted);
+}
+
+void PadGrid::setPadSoloed (int index, bool soloed)
+{
+    if (auto* pad = pads[index])
+        pad->setSoloed (soloed);
+}
+
+void PadGrid::setPadAudible (int index, bool audible)
+{
+    if (auto* pad = pads[index])
+        pad->setAudible (audible);
 }
 
 void PadGrid::resized()

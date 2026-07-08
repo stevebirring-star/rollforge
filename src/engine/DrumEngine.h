@@ -114,6 +114,18 @@ public:
                    : 0.0f;
     }
 
+    //==============================================================================
+    // Per-pad mute / solo. Message thread sets; the audio thread (Sequencer) and the
+    // UI read. Gating applies to SEQUENCED triggers only — a manual pad audition
+    // always sounds, so you can still hear a muted pad when you click it.
+    void setPadMuted  (int padIndex, bool shouldBeMuted) noexcept;
+    void setPadSoloed (int padIndex, bool shouldBeSoloed) noexcept;
+    bool isPadMuted   (int padIndex) const noexcept;
+    bool isPadSoloed  (int padIndex) const noexcept;
+    /** True if the pad should sound under the current mute/solo state: if ANY pad is
+        soloed, only soloed pads are audible; otherwise every non-muted pad is. */
+    bool isPadAudible (int padIndex) const noexcept;
+
 private:
     static constexpr int maxMeterPads = 16;
 
@@ -140,6 +152,12 @@ private:
 
     // Per-pad output level for UI meters: audio thread publishes, UI timer reads.
     std::array<std::atomic<float>, maxMeterPads> padMeter {};
+
+    // Per-pad mute/solo: message thread writes, audio thread + UI read (relaxed).
+    // soloCount tracks how many pads are soloed so isPadAudible is a cheap read.
+    std::array<std::atomic<bool>, maxMeterPads> padMuted  {};
+    std::array<std::atomic<bool>, maxMeterPads> padSoloed {};
+    std::atomic<int>                            soloCount { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DrumEngine)
 };

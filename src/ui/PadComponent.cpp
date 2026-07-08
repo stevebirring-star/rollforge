@@ -19,6 +19,23 @@ PadComponent::PadComponent (int padIndex)
     : index (padIndex)
 {
     setWantsKeyboardFocus (false);
+
+    auto initToggle = [this] (juce::TextButton& b, juce::Colour onColour)
+    {
+        b.setClickingTogglesState (true);
+        b.setWantsKeyboardFocus (false);   // never steal focus from the app's key handler
+        b.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff26262c));
+        b.setColour (juce::TextButton::buttonOnColourId, onColour);
+        b.setColour (juce::TextButton::textColourOffId,  juce::Colour (0xff9a9aa4));
+        b.setColour (juce::TextButton::textColourOnId,   juce::Colours::black);
+        addAndMakeVisible (b);
+    };
+    initToggle (muteButton, juce::Colour (0xffe0553f));   // red   = muted
+    initToggle (soloButton, juce::Colour (0xffe0c341));   // amber = soloed
+    muteButton.setTooltip ("Mute this pad in the sequencer (click the pad to still audition it)");
+    soloButton.setTooltip ("Solo: play only soloed pads");
+    muteButton.onClick = [this] { if (onMute) onMute (index, muteButton.getToggleState()); };
+    soloButton.onClick = [this] { if (onSolo) onSolo (index, soloButton.getToggleState()); };
 }
 
 void PadComponent::setLabelText (const juce::String& text)
@@ -51,6 +68,35 @@ void PadComponent::flash()
     if (! isTimerRunning())
         startTimerHz (30);
     repaint();
+}
+
+void PadComponent::setMuted (bool muted)
+{
+    muteButton.setToggleState (muted, juce::dontSendNotification);
+}
+
+void PadComponent::setSoloed (bool soloed)
+{
+    soloButton.setToggleState (soloed, juce::dontSendNotification);
+}
+
+void PadComponent::setAudible (bool shouldBeAudible)
+{
+    if (audible != shouldBeAudible)
+    {
+        audible = shouldBeAudible;
+        repaint();
+    }
+}
+
+void PadComponent::resized()
+{
+    // Small M / S toggles in the top-left. They're child components, so they capture
+    // their own clicks and never trigger the pad; the rest of the pad stays clickable.
+    auto row = getLocalBounds().reduced (8, 7).removeFromTop (15);
+    muteButton.setBounds (row.removeFromLeft (20));
+    row.removeFromLeft (3);
+    soloButton.setBounds (row.removeFromLeft (20));
 }
 
 void PadComponent::paint (juce::Graphics& g)
@@ -108,6 +154,14 @@ void PadComponent::paint (juce::Graphics& g)
                                                : juce::Colour (0xffe0553f);
         g.setColour (barCol);
         g.fillRoundedRectangle (track.withWidth (track.getWidth() * lvl), 2.0f);
+    }
+
+    // Dim the pad when it won't sound under the current mute/solo state. Drawn last so
+    // it covers the waveform/label/meter; the M/S child buttons paint on top and stay lit.
+    if (! audible)
+    {
+        g.setColour (juce::Colours::black.withAlpha (0.5f));
+        g.fillRoundedRectangle (bounds, corner);
     }
 }
 

@@ -5,6 +5,7 @@
 // additive (does not clobber the caller's buffer), and velocity-scaled.
 
 #include "engine/DrumEngine.h"
+#include "engine/Sequencer.h"
 
 namespace rollforge::tests
 {
@@ -146,6 +147,79 @@ public:
 
             expect (engine.getPadLevel (3) > 0.0f);                            // hit pad lights up
             expectWithinAbsoluteError (engine.getPadLevel (7), 0.0f, 1.0e-6f);  // untouched pads stay dark
+        }
+
+        beginTest ("mute / solo audibility logic");
+        {
+            DrumEngine engine;
+            engine.prepare (sampleRate, blockSize);
+
+            for (int p = 0; p < 16; ++p) expect (engine.isPadAudible (p));   // default: all audible
+
+            engine.setPadMuted (2, true);
+            expect (engine.isPadMuted (2));
+            expect (! engine.isPadAudible (2));
+            expect (engine.isPadAudible (0));
+
+            // Any solo -> only soloed pads audible (solo overrides mute for the rest).
+            engine.setPadSoloed (5, true);
+            expect (engine.isPadSoloed (5));
+            expect (engine.isPadAudible (5));
+            expect (! engine.isPadAudible (0));   // not soloed
+            expect (! engine.isPadAudible (2));   // not soloed
+
+            // Redundant sets keep the solo count exact; one clear is enough.
+            engine.setPadSoloed (5, true);
+            engine.setPadSoloed (5, false);
+            expect (engine.isPadAudible (0));     // back to mute-only semantics
+            expect (! engine.isPadAudible (2));   // pad 2 still muted
+            expect (engine.isPadAudible (5));
+
+            expect (engine.isPadAudible (-1));    // out-of-range is never gated
+            expect (engine.isPadAudible (999));
+        }
+
+        beginTest ("a muted pad is silent under the sequencer but still auditions");
+        {
+            const int block = 512;
+
+            auto sequencedMag = [&] (bool mutePad0)
+            {
+                DrumEngine e; e.prepare (sampleRate, block);
+                if (mutePad0) e.setPadMuted (0, true);
+
+                Sequencer seq; seq.prepare (sampleRate);
+                seq.setTempo (120.0);
+
+                Pattern p; p.numLanes = 1;
+                p.lane (0).targetPad   = 0;
+                p.lane (0).length      = 16;
+                p.lane (0).step (0).on = true;
+                seq.setPattern (p);
+                seq.requestReset();
+                seq.setPlaying (true);
+
+                juce::AudioBuffer<float> buf (2, block);
+                float mag = 0.0f;
+                for (int b = 0; b < 4; ++b)
+                {
+                    buf.clear();
+                    seq.process (e, buf);
+                    mag = juce::jmax (mag, buf.getMagnitude (0, 0, block));
+                }
+                return mag;
+            };
+
+            expect (sequencedMag (false) > 0.0f);                            // unmuted step sounds
+            expectWithinAbsoluteError (sequencedMag (true), 0.0f, 1.0e-7f);   // muted step is silent
+
+            // A manual audition (command path) bypasses mute so the sound is checkable.
+            DrumEngine e; e.prepare (sampleRate, block);
+            e.setPadMuted (0, true);
+            e.pushTrigger (0, 1.0f);
+            juce::AudioBuffer<float> buf (2, block); buf.clear();
+            e.process (buf);
+            expect (buf.getMagnitude (0, 0, block) > 0.0f);
         }
     }
 };

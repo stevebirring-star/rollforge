@@ -105,6 +105,44 @@ void DrumEngine::publishPadMeters() noexcept
         padMeter[(size_t) p].store (levels[p], std::memory_order_relaxed);
 }
 
+void DrumEngine::setPadMuted (int padIndex, bool shouldBeMuted) noexcept
+{
+    if (padIndex >= 0 && padIndex < maxMeterPads)
+        padMuted[(size_t) padIndex].store (shouldBeMuted, std::memory_order_relaxed);
+}
+
+void DrumEngine::setPadSoloed (int padIndex, bool shouldBeSoloed) noexcept
+{
+    if (padIndex < 0 || padIndex >= maxMeterPads)
+        return;
+    // exchange keeps soloCount exact even on redundant sets. Only the message thread
+    // calls this, so the load/store of soloCount need no stronger ordering.
+    const bool was = padSoloed[(size_t) padIndex].exchange (shouldBeSoloed, std::memory_order_relaxed);
+    if (was != shouldBeSoloed)
+        soloCount.fetch_add (shouldBeSoloed ? 1 : -1, std::memory_order_relaxed);
+}
+
+bool DrumEngine::isPadMuted (int padIndex) const noexcept
+{
+    return padIndex >= 0 && padIndex < maxMeterPads
+        && padMuted[(size_t) padIndex].load (std::memory_order_relaxed);
+}
+
+bool DrumEngine::isPadSoloed (int padIndex) const noexcept
+{
+    return padIndex >= 0 && padIndex < maxMeterPads
+        && padSoloed[(size_t) padIndex].load (std::memory_order_relaxed);
+}
+
+bool DrumEngine::isPadAudible (int padIndex) const noexcept
+{
+    if (padIndex < 0 || padIndex >= maxMeterPads)
+        return true;   // out-of-range: never gate (matches the fallback-blip trigger path)
+    if (soloCount.load (std::memory_order_relaxed) > 0)
+        return padSoloed[(size_t) padIndex].load (std::memory_order_relaxed);
+    return ! padMuted[(size_t) padIndex].load (std::memory_order_relaxed);
+}
+
 void DrumEngine::triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones) noexcept
 {
     if (padIndex >= 0 && padIndex < (int) pads.size() && pads[(size_t) padIndex].sample != nullptr)

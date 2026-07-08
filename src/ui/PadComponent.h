@@ -34,11 +34,18 @@ public:
     /** Brief visual flash (also used for keyboard / MIDI triggers). */
     void flash();
 
+    void setMuted   (bool muted);     // reflect state into the M button (no callback)
+    void setSoloed  (bool soloed);    // reflect state into the S button (no callback)
+    void setAudible (bool audible);   // dim the pad when it won't sound (mute/solo)
+
     std::function<void (int padIndex, float velocity)>       onTrigger;
     std::function<void (int padIndex)>                       onRelease;   // for note-repeat hold
     std::function<void (int padIndex, const juce::File& file)> onFileDropped;
+    std::function<void (int padIndex, bool muted)>             onMute;
+    std::function<void (int padIndex, bool soloed)>            onSolo;
 
     void paint (juce::Graphics&) override;
+    void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp   (const juce::MouseEvent&) override;
 
@@ -57,6 +64,10 @@ private:
     float              meterLevel  = 0.0f;   // smoothed 0..1 for the level meter
     std::vector<float> waveform;             // downsampled |amp| peaks, 0..1
     bool               dragOver    = false;
+    bool               audible     = true;   // false -> dimmed (muted, or excluded by a solo)
+
+    juce::TextButton   muteButton { "M" };
+    juce::TextButton   soloButton { "S" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PadComponent)
 };
