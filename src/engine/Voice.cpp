@@ -66,6 +66,10 @@ void Voice::start (SampleBuffer::Ptr newSample, const Parameters& params, float 
     releaseFrames = juce::jlimit (0, framesTotal, (int) (params.releaseMs * 0.001 * deviceSampleRate));
 
     levelGain = params.gain * juce::jlimit (0.0f, 1.0f, velocity);
+    sendGain  = juce::jlimit (0.0f, 1.0f, params.reverbSend);
+
+    // A Voice is a one-shot, so the tilt starts from clean state on every note.
+    toneFilter.setTone (deviceSampleRate, params.tone);
 
     // Equal-power pan: pan[-1,+1] -> angle[0, pi/2].
     const double angle = ((double) juce::jlimit (-1.0f, 1.0f, params.pan) + 1.0)
@@ -120,12 +124,14 @@ float Voice::readMono (double pos) const noexcept
     return (1.0f - frac) * monoAt (i0) + frac * monoAt (i0 + 1);
 }
 
-void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
+void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                           float* sendOut) noexcept
 {
     if (! active || sample == nullptr)
         return;
 
-    const int outChannels = buffer.getNumChannels();
+    const int  outChannels = buffer.getNumChannels();
+    const bool feedsSend   = sendOut != nullptr && sendGain > 0.0f;
 
     for (int n = 0; n < numSamples; ++n)
     {
@@ -136,9 +142,19 @@ void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, i
         }
 
         lastEnv = envelopeAt (framesPlayed);
-        const float mono = readMono (sourcePos) * lastEnv * levelGain;
+
+        float src = readMono (sourcePos);
+        if (toneFilter.isActive())
+            src = toneFilter.processSample (src);   // tone shapes the dry AND the send
+        const float mono = src * lastEnv * levelGain;
 
         const int dest = startSample + n;
+
+        // Post-envelope, pre-pan: the send is mono, and the reverb hears the voice at
+        // the level you hear it at.
+        if (feedsSend)
+            sendOut[dest] += mono * sendGain;
+
         if (outChannels >= 2)
         {
             buffer.addSample (0, dest, mono * leftGain);

@@ -31,6 +31,22 @@ void Space::reset() noexcept
     preLpState = 0.0f;
 }
 
+float Space::reverbSample (float in) noexcept
+{
+    constexpr float inGain = 0.015f;   // tames the ~4/(1-feedback) comb gain
+
+    preLpState += preLpCoeff * (in - preLpState);
+    const float src = preLpState * inGain;
+
+    float wet = 0.0f;
+    for (int k = 0; k < numCombs; ++k)
+        wet += combs[k].process (src, feedback, damp);
+    for (int k = 0; k < numAllpass; ++k)
+        wet = allpasses[k].process (wet, 0.5f);
+
+    return wet;
+}
+
 void Space::process (juce::AudioBuffer<float>& buffer) noexcept
 {
     float a = target.load (std::memory_order_acquire);
@@ -43,8 +59,7 @@ void Space::process (juce::AudioBuffer<float>& buffer) noexcept
     if (numCh <= 0 || n <= 0)
         return;
 
-    const float inGain    = 0.015f;
-    const float invNumCh  = 1.0f / (float) numCh;
+    const float invNumCh = 1.0f / (float) numCh;
 
     for (int i = 0; i < n; ++i)
     {
@@ -53,17 +68,26 @@ void Space::process (juce::AudioBuffer<float>& buffer) noexcept
             in += buffer.getSample (c, i);
         in *= invNumCh;
 
-        preLpState += preLpCoeff * (in - preLpState);
-        const float src = preLpState * inGain;
-
-        float wet = 0.0f;
-        for (int k = 0; k < numCombs; ++k)
-            wet += combs[k].process (src, feedback, damp);
-        for (int k = 0; k < numAllpass; ++k)
-            wet = allpasses[k].process (wet, 0.5f);
+        const float wet = reverbSample (in);
 
         for (int c = 0; c < numCh; ++c)
             buffer.setSample (c, i, buffer.getSample (c, i) + a * wet);   // send blend
+    }
+}
+
+void Space::processSend (const float* sendIn, juce::AudioBuffer<float>& out, int numSamples) noexcept
+{
+    const int numCh = out.getNumChannels();
+    if (sendIn == nullptr || numCh <= 0 || numSamples <= 0)
+        return;
+
+    // No amount, no bypass: the per-pad send levels already scaled sendIn, and a silent
+    // input must still be pushed through so the tail from earlier hits keeps decaying.
+    for (int i = 0; i < numSamples; ++i)
+    {
+        const float wet = reverbSample (sendIn[i]);
+        for (int c = 0; c < numCh; ++c)
+            out.addSample (c, i, wet);
     }
 }
 

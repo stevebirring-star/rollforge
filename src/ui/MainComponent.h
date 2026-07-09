@@ -26,6 +26,7 @@
 #include "ui/MacroKnobs.h"
 #include "ui/BrowserPanel.h"
 #include "ui/ExportPanel.h"
+#include "ui/PadInspector.h"
 #include "ui/AboutView.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -68,6 +69,7 @@ private:
     void loadFileIntoPad (int padIndex, const juce::File& file);
     void sliceLoopIntoPads (const juce::File& loop);   // chop a break across the pads at its onsets
     void auditionSample (const juce::File& file);      // play a browser sample on the preview pad
+    void openPadInspector (int padIndex);              // right-click a pad: TONE + SEND
     void updatePadLabels();
     void updatePadWaveform (int padIndex);   // recompute a pad's waveform thumbnail from its sample
     void updateLaneLabelForPad (int padIndex);   // refresh sequencer lane label(s) targeting this pad

@@ -108,8 +108,10 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
 
     if (! nowPlaying)
     {
-        // Transport paused: just render decaying voices; don't advance events.
+        // Transport paused: just render decaying voices; don't advance events. The send
+        // return still runs, or a reverb tail would stop dead the moment you hit stop.
         engine.renderInto (buffer, 0, numSamples);
+        engine.applySendReturn (buffer, numSamples);
         engine.publishPadMeters();   // once per block (renderInto no longer self-publishes)
         return;
     }
@@ -133,7 +135,10 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     // 2. Fire pending events landing in this block, in order, splitting segments.
     renderWithEvents (engine, buffer, blockStart, numSamples);
 
-    // 3. Publish the per-pad meters ONCE for the whole block. renderWithEvents calls
+    // 3. Reverberate the per-pad sends every segment fed, ONCE for the whole block.
+    engine.applySendReturn (buffer, numSamples);
+
+    // 4. Publish the per-pad meters ONCE for the whole block. renderWithEvents calls
     //    engine.renderInto per segment; publishing inside it would be wasted work.
     engine.publishPadMeters();
 }

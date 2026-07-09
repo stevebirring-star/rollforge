@@ -6,8 +6,16 @@
 // macros. Hand-rolled (no juce::dsp) -> headless-testable. RT-safe (delay lines
 // are sized in prepare(), never in process()).
 //
-// NOTE: this is a global master send. Per-pad SPACE sends are deferred (they need
-// a send level on Pad + routing through the DrumEngine).
+// Two entry points, two roles:
+//   * process()     — the master SPACE macro: reads the mix, blends its own wet back in.
+//   * processSend() — a real send bus: reads a separate mono send buffer (already scaled
+//                     by each pad's send level) and ADDS the wet to the output. It never
+//                     early-outs on a silent input, because the tail has to keep ringing
+//                     after the last hit that fed it.
+//
+// Both are strictly linear (combs + allpasses are LTI, no saturation), which is what
+// keeps per-pad stems summing to the mix: reverb(a + b) == reverb(a) + reverb(b). Adding
+// any nonlinearity here would silently break that guarantee — see StemNullTests.
 //
 // ENGINE LAYER RULE: no JUCE GUI includes.
 
@@ -30,7 +38,15 @@ public:
 
     void process (juce::AudioBuffer<float>& buffer) noexcept;
 
+    /** Send-bus form: reverberates `numSamples` of the mono `sendIn` and ADDS the wet
+        signal to every channel of `out`. Ignores getAmount() — the per-pad send levels
+        already scaled the input. Runs unconditionally so a decaying tail survives the
+        silence after the last hit. */
+    void processSend (const float* sendIn, juce::AudioBuffer<float>& out, int numSamples) noexcept;
+
 private:
+    float reverbSample (float in) noexcept;
+
     struct Comb
     {
         std::vector<float> buf;

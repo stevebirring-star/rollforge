@@ -14,6 +14,8 @@ VoiceParameters toVoiceParameters (const Pad& pad)
     vp.reverse        = pad.reverse;
     vp.startFraction  = pad.startFraction;
     vp.endFraction    = pad.endFraction;
+    vp.tone           = pad.tone;
+    vp.reverbSend     = pad.reverbSend;
     return vp;
 }
 

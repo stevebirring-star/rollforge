@@ -50,6 +50,8 @@ struct Pad
     bool  reverse    = false;             // play the sample backwards
     float startFraction = 0.0f;           // trim: play from this fraction of the sample [0..1)
     float endFraction   = 1.0f;           // trim: ...to this fraction
+    float tone          = 0.0f;           // bipolar tilt EQ: -1 dark .. 0 flat .. +1 bright
+    float reverbSend    = 0.0f;           // 0..1 into the reverb send bus (0 = fully dry)
 
     // --- Queries ------------------------------------------------------------
     /** The sample this pad plays by default (alternates[0]); null if empty. */

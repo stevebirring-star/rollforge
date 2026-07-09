@@ -51,6 +51,7 @@ ENGINE_SOURCES=(
     src/engine/fx/MasterLimiter.cpp
     src/engine/fx/Punch.cpp
     src/engine/fx/Space.cpp
+    src/engine/fx/ToneFilter.cpp
     src/engine/PadMapping.cpp
     src/engine/Sequencer.cpp
     src/engine/Voice.cpp

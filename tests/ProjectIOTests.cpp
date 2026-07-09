@@ -29,6 +29,7 @@ public:
             p.pads[3].samplePath = "/kit/hat.wav"; p.pads[3].reverse = true;
             p.pads[0].muted = true; p.pads[5].soloed = true;
             p.pads[0].startFraction = 0.25f; p.pads[0].endFraction = 0.8f;
+            p.pads[0].tone = -0.4f; p.pads[0].reverbSend = 0.65f;
 
             p.pattern.numLanes = 2;
             p.pattern.lane (0).targetPad = 0; p.pattern.lane (0).length = 16;
@@ -65,6 +66,11 @@ public:
             expect (! q.pads[1].muted);
             expectWithinAbsoluteError (q.pads[0].startFraction, 0.25f, 1.0e-4f);
             expectWithinAbsoluteError (q.pads[0].endFraction, 0.8f, 1.0e-4f);
+            expectWithinAbsoluteError (q.pads[0].tone, -0.4f, 1.0e-4f);
+            expectWithinAbsoluteError (q.pads[0].reverbSend, 0.65f, 1.0e-4f);
+            // A project written before tone/send existed must load flat + dry.
+            expectWithinAbsoluteError (q.pads[1].tone, 0.0f, 1.0e-6f);
+            expectWithinAbsoluteError (q.pads[1].reverbSend, 0.0f, 1.0e-6f);
             expectEquals (q.pattern.numLanes, 2);
             expect (q.pattern.lane (0).step (0).on);
             expectWithinAbsoluteError (q.pattern.lane (0).step (0).velocity, 0.7f, 1.0e-4f);

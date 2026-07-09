@@ -28,6 +28,7 @@ PadGrid::PadGrid()
         pad->onSolo = [this] (int index, bool soloed) { if (onPadSolo) onPadSolo (index, soloed); };
         pad->onReverse = [this] (int index, bool rev) { if (onPadReverse) onPadReverse (index, rev); };
         pad->onTrim = [this] (int index, float s, float e) { if (onPadTrim) onPadTrim (index, s, e); };
+        pad->onInspect = [this] (int index) { if (onPadInspect) onPadInspect (index); };
 
         addAndMakeVisible (pad);
     }
@@ -96,6 +97,23 @@ void PadGrid::resized()
     for (int i = 0; i < numPads; ++i)
         if (auto* pad = pads[i])
             pad->setBounds ((i % numColumns) * cellW, (i / numColumns) * cellH, cellW, cellH);
+}
+
+juce::String PadGrid::getPadLabel (int index) const
+{
+    if (index >= 0 && index < numPads)
+        if (auto* pad = pads[index])
+            return pad->getLabelText();
+    return {};
+}
+
+juce::Rectangle<int> PadGrid::getPadScreenBounds (int index) const
+{
+    if (index < 0 || index >= numPads)
+        return {};
+    if (auto* pad = pads[index])
+        return pad->getScreenBounds();
+    return {};
 }
 
 } // namespace rollforge

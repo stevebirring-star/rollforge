@@ -11,10 +11,12 @@
 #include "engine/fx/MasterLimiter.h"
 #include "engine/fx/Punch.h"
 #include "engine/fx/Space.h"
+#include "engine/fx/ToneFilter.h"
 
 #include <juce_core/juce_core.h>
 
 #include <cmath>
+#include <vector>
 
 namespace rollforge::tests
 {
@@ -369,6 +371,93 @@ public:
             bus.process (b);
             expect (! anyNaN (b));
             expect (maxMag (b) <= bus.getLimiter().getCeiling() + 1.0e-4f);
+        }
+
+        beginTest ("ToneFilter: tone 0 is an exact bypass; the tilt has the right sign");
+        {
+            // A two-tone probe: energy well below the 700 Hz pivot, and well above it.
+            auto probe = [sr] (double freq, int n)
+            {
+                std::vector<float> x ((std::size_t) n);
+                for (int i = 0; i < n; ++i)
+                    x[(std::size_t) i] = (float) std::sin (2.0 * juce::MathConstants<double>::pi * freq * (double) i / sr);
+                return x;
+            };
+            auto rms = [] (const std::vector<float>& x)
+            {
+                double s = 0.0;
+                for (float v : x) s += (double) v * v;
+                return std::sqrt (s / (double) x.size());
+            };
+            auto run = [&] (float tone, double freq)
+            {
+                auto x = probe (freq, 8192);
+                ToneFilter f;
+                f.setTone (sr, tone);
+                if (! f.isActive())
+                    return rms (x);
+                std::vector<float> y = x;
+                for (auto& v : y) v = f.processSample (v);
+                // Skip the transient: measure the settled second half.
+                return rms (std::vector<float> (y.begin() + 4096, y.end()));
+            };
+
+            ToneFilter flat;
+            flat.setTone (sr, 0.0f);
+            expect (! flat.isActive(), "tone 0 must bypass, not run unity coefficients");
+
+            const double lowRef  = run (0.0f, 100.0);
+            const double highRef = run (0.0f, 8000.0);
+
+            // Bright: lows cut, highs boosted. Dark: the reverse.
+            expect (run (+1.0f, 100.0)  < lowRef  * 0.9, "bright cuts the lows");
+            expect (run (+1.0f, 8000.0) > highRef * 1.1, "bright boosts the highs");
+            expect (run (-1.0f, 100.0)  > lowRef  * 1.1, "dark boosts the lows");
+            expect (run (-1.0f, 8000.0) < highRef * 0.9, "dark cuts the highs");
+
+            // No blow-ups at the extremes.
+            for (float t : { -1.0f, -0.5f, 0.5f, 1.0f })
+            {
+                ToneFilter f; f.setTone (sr, t);
+                for (int i = 0; i < 4096; ++i)
+                    expect (! std::isnan (f.processSample (i % 2 ? 0.9f : -0.9f)));
+            }
+        }
+
+        beginTest ("Space::processSend rings on after its input stops, and is linear");
+        {
+            // Longer than the shortest comb (1116 samples), or the first echo hasn't
+            // even emerged by the end of block 1 and "the tail" measures nothing.
+            const int n = 2048;
+            auto tailAfterImpulse = [&] (float amplitude)
+            {
+                Space s; s.prepare (sr); s.reset();
+                std::vector<float> in ((std::size_t) n, 0.0f);
+                in[0] = amplitude;
+
+                juce::AudioBuffer<float> out (2, n);
+                out.clear();
+                s.processSend (in.data(), out, n);      // block 1: the impulse
+
+                juce::AudioBuffer<float> tail (2, n);
+                tail.clear();
+                std::vector<float> silence ((std::size_t) n, 0.0f);
+                s.processSend (silence.data(), tail, n); // block 2: silence in
+                return tail;
+            };
+
+            auto tail = tailAfterImpulse (1.0f);
+            expect (maxMag (tail) > 0.0f, "the tail keeps decaying after the input stops");
+            expect (! anyNaN (tail));
+
+            // Linearity is what keeps per-pad stems summing to the mix (StemNullTests).
+            auto one   = tailAfterImpulse (1.0f);
+            auto two   = tailAfterImpulse (2.0f);
+            float err = 0.0f;
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < n; ++i)
+                    err = juce::jmax (err, std::abs (2.0f * one.getSample (c, i) - two.getSample (c, i)));
+            expect (err < 1.0e-5f, "reverb(2x) == 2*reverb(x)");
         }
     }
 };

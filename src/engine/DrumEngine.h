@@ -27,6 +27,7 @@
 #include "engine/SampleBuffer.h"
 #include "engine/VoicePool.h"
 #include "engine/VoiceParameters.h"
+#include "engine/fx/Space.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -91,8 +92,19 @@ public:
         `pitchOffsetSemitones` is added to the pad's pitch (used by rolls). */
     void triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones = 0.0f) noexcept;
 
-    /** Renders the voice pool ADDITIVELY into `buffer[startSample, startSample+numSamples)`. */
+    /** Renders the voice pool ADDITIVELY into `buffer[startSample, startSample+numSamples)`,
+        accumulating each voice's reverb send into the engine's send buffer. */
     void renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
+
+    /** Reverberates this block's accumulated per-pad sends and ADDS the wet to `buffer`,
+        then clears the send buffer. Call ONCE per block, after the block's renderInto()
+        segment(s) — the Sequencer renders a block in many segments, all feeding one send.
+
+        The send reverb lives here rather than on the MasterBus because only the engine
+        can see individual pads. It is therefore part of the instrument, applied before
+        the master strip and included in per-pad stems — which is exactly what keeps the
+        stems summing to the mix (Space is linear). */
+    void applySendReturn (juce::AudioBuffer<float>& buffer, int numSamples) noexcept;
 
     /** Snapshots current pad output levels into the meter atomics for the UI. Call
         ONCE per audio block, after the block's renderInto() segment(s): the Sequencer
@@ -149,6 +161,15 @@ private:
 
     // Fallback sound for a pad with no sample yet (played until a Kit is installed).
     SampleBuffer::Ptr interimSound;
+
+    // Reverb send bus. Voices accumulate into sendBuffer during renderInto(); one
+    // applySendReturn() per block reverberates it into the output and clears it.
+    // `anySendActive` is recomputed on setPad (audio thread) and gates the reverb, with
+    // a tail so the last hit's decay isn't cut off when the sends go to zero.
+    Space                    sendReverb;
+    juce::AudioBuffer<float> sendBuffer;
+    bool                     anySendActive   = false;
+    int                      sendTailSamples = 0;
 
     // Per-pad output level for UI meters: audio thread publishes, UI timer reads.
     std::array<std::atomic<float>, maxMeterPads> padMeter {};

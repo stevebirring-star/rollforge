@@ -28,6 +28,8 @@ struct ProjectPad
     bool         soloed         = false;
     float        startFraction  = 0.0f;   // sample trim start [0..1)
     float        endFraction    = 1.0f;   // sample trim end
+    float        tone           = 0.0f;   // bipolar tilt EQ (-1 dark .. +1 bright)
+    float        reverbSend     = 0.0f;   // 0..1 into the reverb send bus
 };
 
 struct Project

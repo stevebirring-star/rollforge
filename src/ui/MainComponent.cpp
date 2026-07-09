@@ -169,6 +169,7 @@ MainComponent::MainComponent()
             updatePadParamsInEngine (starterKit, engine.getDrumEngine(), index);
         }
     };
+    padGrid.onPadInspect = [this] (int index) { openPadInspector (index); };
     addAndMakeVisible (padGrid);
 
     // Keep the pattern model in step with the transport. The exporters read tempo
@@ -546,6 +547,8 @@ Project MainComponent::captureProject()
         pad.reverse       = starterKit.pad (i).reverse;
         pad.startFraction = starterKit.pad (i).startFraction;
         pad.endFraction   = starterKit.pad (i).endFraction;
+        pad.tone          = starterKit.pad (i).tone;
+        pad.reverbSend    = starterKit.pad (i).reverbSend;
     }
     return p;
 }
@@ -585,6 +588,8 @@ void MainComponent::applyProject (const Project& p)
             starterKit.pad (i).reverse       = p.pads[(size_t) i].reverse;
             starterKit.pad (i).startFraction = p.pads[(size_t) i].startFraction;
             starterKit.pad (i).endFraction   = p.pads[(size_t) i].endFraction;
+            starterKit.pad (i).tone          = p.pads[(size_t) i].tone;
+            starterKit.pad (i).reverbSend    = p.pads[(size_t) i].reverbSend;
             installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), i, sample);
             padGrid.setPadLabel (i, label);
             updatePadWaveform (i);
@@ -626,13 +631,16 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
     {
         // A trim region belongs to the sample it was cut from. Without this, dropping a
         // kick onto a slice pad would play only the first 12% of it, and a reversed pad
-        // would silently reverse whatever landed there next.
+        // would silently reverse whatever landed there next. Tone and send are dialled
+        // in for a particular sound, so they reset with it.
         if (Kit::isValidIndex (padIndex))
         {
             Pad& pad = starterKit.pad (padIndex);
             pad.startFraction = 0.0f;
             pad.endFraction   = 1.0f;
             pad.reverse       = false;
+            pad.tone          = 0.0f;
+            pad.reverbSend    = 0.0f;
             pad.chokeGroup    = KitBuilder::chokeGroupForPad (padIndex);   // closed hat cuts open
         }
 
@@ -646,6 +654,33 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
         updateLaneLabelForPad (padIndex);
         padGrid.flashPad (padIndex);
     }
+}
+
+void MainComponent::openPadInspector (int padIndex)
+{
+    if (! Kit::isValidIndex (padIndex))
+        return;
+
+    const Pad& pad = starterKit.pad (padIndex);
+    auto inspector = std::make_unique<PadInspector> (
+        padGrid.getPadLabel (padIndex), pad.tone, pad.reverbSend);
+
+    // Live edits: re-push the pad's params WITHOUT retiring its sample (same buffer),
+    // so a note already sounding keeps playing while you turn the knob.
+    inspector->onToneChanged = [this, padIndex] (float tone)
+    {
+        starterKit.pad (padIndex).tone = tone;
+        updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+    };
+    inspector->onSendChanged = [this, padIndex] (float send)
+    {
+        starterKit.pad (padIndex).reverbSend = send;
+        updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+    };
+
+    juce::CallOutBox::launchAsynchronously (std::move (inspector),
+                                            padGrid.getPadScreenBounds (padIndex),
+                                            nullptr);
 }
 
 void MainComponent::auditionSample (const juce::File& file)

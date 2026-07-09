@@ -22,6 +22,7 @@ public:
     PadGrid();
 
     void setPadLabel (int index, const juce::String& text);
+    juce::String getPadLabel (int index) const;
     void setPadLevel (int index, float level);                       // live meter (UI timer)
     void setPadWaveform (int index, const std::vector<float>& peaks); // sample thumbnail
     void flashPad (int index);
@@ -38,6 +39,10 @@ public:
     std::function<void (int padIndex, bool soloed)>           onPadSolo;
     std::function<void (int padIndex, bool reversed)>         onPadReverse;
     std::function<void (int padIndex, float start, float end)> onPadTrim;
+    std::function<void (int padIndex)>                        onPadInspect;   // right-click a pad
+
+    /** The pad's on-screen bounds, so the owner can anchor a CallOutBox to it. */
+    juce::Rectangle<int> getPadScreenBounds (int index) const;
 
     void resized() override;
 

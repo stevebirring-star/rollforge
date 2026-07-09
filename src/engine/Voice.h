@@ -19,6 +19,7 @@
 
 #include "engine/SampleBuffer.h"
 #include "engine/VoiceParameters.h"
+#include "engine/fx/ToneFilter.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -52,8 +53,14 @@ public:
     float getLevel() const noexcept { return active ? lastEnv * levelGain : 0.0f; }
 
     /** Renders `numSamples` frames ADDITIVELY into `buffer` starting at
-        `startSample`. The caller owns clearing the buffer. */
-    void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
+        `startSample`. The caller owns clearing the buffer.
+
+        When `sendOut` is non-null and this voice has a reverb send, its post-envelope,
+        pre-pan mono signal is also accumulated into sendOut[startSample .. +numSamples),
+        which the DrumEngine feeds to its reverb send bus. Optional and defaulted so the
+        existing call sites (and every Voice/VoicePool test) are unchanged. */
+    void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                         float* sendOut = nullptr) noexcept;
 
 private:
     float envelopeAt (int frame) const noexcept;
@@ -75,6 +82,9 @@ private:
     float  levelGain = 1.0f;                 // gain * velocity
     float  leftGain = 1.0f, rightGain = 1.0f, monoGain = 1.0f;
     float  lastEnv = 0.0f;
+
+    ToneFilter toneFilter;                   // per-note tilt; inactive (skipped) at tone 0
+    float      sendGain = 0.0f;              // how much of this voice feeds the reverb send
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Voice)
 };

@@ -22,6 +22,7 @@ public:
     explicit PadComponent (int padIndex);
 
     void setLabelText (const juce::String& text);
+    const juce::String& getLabelText() const noexcept { return label; }
 
     /** Live output level 0..1 for the pad's meter. Call regularly (the UI timer):
         applies fast-attack / slow-release smoothing for a VU feel. */
@@ -47,6 +48,7 @@ public:
     std::function<void (int padIndex, bool soloed)>            onSolo;
     std::function<void (int padIndex, bool reversed)>          onReverse;
     std::function<void (int padIndex, float start, float end)> onTrim;
+    std::function<void (int padIndex)>                         onInspect;   // right-click
 
     void paint (juce::Graphics&) override;
     void resized() override;

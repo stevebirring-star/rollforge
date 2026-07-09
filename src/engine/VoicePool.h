@@ -50,7 +50,10 @@ public:
                   int padIndex   = -1) noexcept;
 
     /** Sums every active voice ADDITIVELY into `buffer`. AUDIO THREAD. */
-    void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
+    /** `sendOut`, if given, collects every voice's reverb-send contribution (see
+        Voice::renderAdditive). Optional so existing call sites are unchanged. */
+    void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                         float* sendOut = nullptr) noexcept;
 
     /** Peak-combines each active voice's level into out[voicePad] for per-pad
         meters (does NOT zero `out` first). out must hold >= numPads entries.

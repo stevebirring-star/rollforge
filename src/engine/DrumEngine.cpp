@@ -69,19 +69,32 @@ bool DrumEngine::pushMidiTrigger (int padIndex, float velocity) noexcept
     return midiCommands.push (EngineCommand::makeTrigger (padIndex, velocity));
 }
 
-void DrumEngine::prepare (double newSampleRate, int /*maxBlockSize*/)
+void DrumEngine::prepare (double newSampleRate, int maxBlockSize)
 {
     sampleRate   = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     interimSound = makeInterimBlip (sampleRate);
     pool.prepare (sampleRate);
     for (auto& m : padMeter)
         m.store (0.0f, std::memory_order_relaxed);
+
+    // Allocation is permitted here (stream start), never in process(). Generous slack:
+    // a host must never hand process() a block larger than it prepared us for, but the
+    // send write is bounds-checked in renderInto() regardless.
+    sendReverb.prepare (sampleRate);
+    sendReverb.reset();
+    sendBuffer.setSize (1, juce::jmax (maxBlockSize, 8192), false, true, false);
+    sendBuffer.clear();
+    sendTailSamples = 0;
+
+    // Reset every render, so an offline render (which prepares first) is reproducible
+    // and a per-pad stem starts from the same reverb state as the mix.
 }
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
 {
     drainCommands();
     renderInto (buffer, 0, buffer.getNumSamples());
+    applySendReturn (buffer, buffer.getNumSamples());
     publishPadMeters();   // once per block (renderInto no longer self-publishes)
 }
 
@@ -94,7 +107,36 @@ void DrumEngine::drainCommands() noexcept
 
 void DrumEngine::renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
 {
-    pool.renderAdditive (buffer, startSample, numSamples);
+    // Voices accumulate their sends at the same block-relative offsets they write dry
+    // audio to, so many render segments in one block all land in the right places.
+    float* sendOut = nullptr;
+    if (startSample >= 0 && numSamples >= 0 && startSample + numSamples <= sendBuffer.getNumSamples())
+        sendOut = sendBuffer.getWritePointer (0);
+
+    pool.renderAdditive (buffer, startSample, numSamples, sendOut);
+}
+
+void DrumEngine::applySendReturn (juce::AudioBuffer<float>& buffer, int numSamples) noexcept
+{
+    if (numSamples <= 0 || numSamples > sendBuffer.getNumSamples())
+        return;
+
+    // Keep reverberating for a while after the last send is turned down, or the tail of
+    // the hit that fed it would be chopped off mid-decay.
+    if (anySendActive)
+        sendTailSamples = (int) (sampleRate * 3.0);
+    else
+        sendTailSamples = juce::jmax (0, sendTailSamples - numSamples);
+
+    if (! anySendActive && sendTailSamples == 0)
+    {
+        sendReverb.reset();                        // silence the (already inaudible) lines
+        sendBuffer.clear (0, 0, numSamples);
+        return;
+    }
+
+    sendReverb.processSend (sendBuffer.getReadPointer (0), buffer, numSamples);
+    sendBuffer.clear (0, 0, numSamples);           // the reverb's own delay lines persist
 }
 
 void DrumEngine::publishPadMeters() noexcept
@@ -177,6 +219,16 @@ void DrumEngine::handleCommand (const EngineCommand& command) noexcept
                 pads[(size_t) padIndex].sample     = command.sample;
                 pads[(size_t) padIndex].params     = command.params;
                 pads[(size_t) padIndex].chokeGroup = command.chokeGroup;
+
+                // Gate the send reverb on whether any pad actually uses it. Audio-thread
+                // state derived from audio-thread state, so no atomic is needed.
+                anySendActive = false;
+                for (const auto& p : pads)
+                    if (p.params.reverbSend > 0.0f)
+                    {
+                        anySendActive = true;
+                        break;
+                    }
             }
             break;
 

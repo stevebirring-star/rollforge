@@ -230,6 +230,15 @@ void PadComponent::mouseUp (const juce::MouseEvent&)
 
 void PadComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // Right-click opens the pad's TONE / SEND controls; it never auditions, so the
+    // gesture that opens a bubble doesn't also make a noise.
+    if (e.mods.isPopupMenu())
+    {
+        if (onInspect)
+            onInspect (index);
+        return;
+    }
+
     // The thin bottom strip drags the sample-trim handles; the rest of the pad
     // triggers as normal, so a click almost anywhere still auditions the pad.
     if (! waveform.empty() && e.position.y >= (float) (getHeight() - trimStripHeight))

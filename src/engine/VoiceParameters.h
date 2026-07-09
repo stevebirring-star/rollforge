@@ -19,6 +19,8 @@ struct VoiceParameters
     bool  reverse        = false;
     float startFraction  = 0.0f;   // trim: play from this fraction of the sample [0..1)
     float endFraction    = 1.0f;   // trim: ...to this fraction (kept > startFraction)
+    float tone           = 0.0f;   // bipolar tilt: -1 dark .. 0 flat (bypass) .. +1 bright
+    float reverbSend     = 0.0f;   // 0..1 into the engine's reverb send bus (0 = dry)
 };
 
 } // namespace rollforge

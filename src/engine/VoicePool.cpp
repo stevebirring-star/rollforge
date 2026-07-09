@@ -93,10 +93,11 @@ int VoicePool::selectVoice() const noexcept
     return best;
 }
 
-void VoicePool::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
+void VoicePool::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                               float* sendOut) noexcept
 {
     for (int i = 0; i < numVoices; ++i)
-        voices[i].renderAdditive (buffer, startSample, numSamples);
+        voices[i].renderAdditive (buffer, startSample, numSamples, sendOut);
 }
 
 int VoicePool::getNumActive() const noexcept

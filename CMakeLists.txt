@@ -104,6 +104,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
         src/ui/ExportPanel.cpp
+        src/ui/PadInspector.cpp
         src/ui/DragExportButton.cpp
         src/ui/SettingsView.cpp
         src/engine/AudioEngine.cpp
@@ -119,6 +120,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/fx/MasterLimiter.cpp
         src/engine/fx/Punch.cpp
         src/engine/fx/Space.cpp
+        src/engine/fx/ToneFilter.cpp
         src/engine/PadMapping.cpp
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp
