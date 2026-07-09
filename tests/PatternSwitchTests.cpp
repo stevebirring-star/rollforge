@@ -117,6 +117,74 @@ public:
             expect (seq.getTriggerCount() >= 1);
         }
 
+        beginTest ("getSwitchCount only counts queued patterns that actually became active");
+        {
+            DrumEngine engine;
+            engine.prepare (sr, 512);
+            Sequencer seq;
+            seq.prepare (sr);
+            seq.setTempo (120.0);
+            seq.setPattern (Pattern {});
+            seq.setPlaying (true);
+
+            int samplePos = 0;
+            auto processTo = [&] (int target)
+            {
+                while (samplePos < target)
+                {
+                    const int n = juce::jmin (512, target - samplePos);
+                    juce::AudioBuffer<float> buf (1, n);
+                    buf.clear();
+                    seq.process (engine, buf);
+                    samplePos += n;
+                }
+            };
+
+            processTo (1024);
+            const auto before = seq.getSwitchCount();
+
+            // The UI reads the counter, THEN queues. Between those two lines and the next
+            // audio block, isSwitchQueued() is still false — a caller watching that flag
+            // would conclude the switch had already landed. The counter cannot lie that way.
+            seq.queuePattern (firesAtBarStart());
+            expect (! seq.isSwitchQueued(), "the audio thread has not seen the queue yet");
+            expectEquals (seq.getSwitchCount(), before, "nothing has landed yet");
+
+            processTo (88000);                 // mid-bar: queued, not yet swapped
+            expect (seq.isSwitchQueued());
+            expectEquals (seq.getSwitchCount(), before, "it landed before the bar line");
+
+            processTo (90000);                 // past the bar line at 88200
+            expectEquals (seq.getSwitchCount(), before + 1, "the switch did not register");
+
+            // An immediate setPattern is not a queued switch and must not bump the counter,
+            // or every step edit the user makes would look like a slot change.
+            seq.setPattern (Pattern {});
+            processTo (95000);
+            expectEquals (seq.getSwitchCount(), before + 1, "setPattern counted as a switch");
+        }
+
+        beginTest ("a switch queued while stopped counts the moment it is applied");
+        {
+            DrumEngine engine;
+            engine.prepare (sr, 512);
+            Sequencer seq;
+            seq.prepare (sr);
+            seq.setPattern (Pattern {});
+            seq.setPlaying (false);
+
+            const auto before = seq.getSwitchCount();
+            seq.queuePattern (firesAtBarStart());
+
+            juce::AudioBuffer<float> buf (1, 512);
+            buf.clear();
+            seq.process (engine, buf);
+
+            expect (! seq.isSwitchQueued());
+            expectEquals (seq.getSwitchCount(), before + 1,
+                          "a stopped transport applies at once, and that still counts");
+        }
+
         beginTest ("setPattern replaces immediately (no bar wait)");
         {
             DrumEngine engine;

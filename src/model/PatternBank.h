@@ -10,6 +10,7 @@
 #include "model/Pattern.h"
 
 #include <array>
+#include <cstddef>
 
 namespace rollforge
 {
@@ -22,8 +23,8 @@ struct PatternBank
     int currentSlot = 0;
     int queuedSlot  = -1;   // -1 = nothing queued
 
-    Pattern&       pattern (int slot)       noexcept { return slots[(size_t) slot]; }
-    const Pattern& pattern (int slot) const noexcept { return slots[(size_t) slot]; }
+    Pattern&       pattern (int slot)       noexcept { return slots[(std::size_t) slot]; }
+    const Pattern& pattern (int slot) const noexcept { return slots[(std::size_t) slot]; }
 
     static constexpr bool isValidSlot (int slot) noexcept { return slot >= 0 && slot < numPatternSlots; }
 };

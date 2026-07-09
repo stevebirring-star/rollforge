@@ -188,6 +188,12 @@ juce::String toJson (const Project& proj)
     root->setProperty ("pads", pads);
     root->setProperty ("pattern", patternToVar (proj.pattern));
 
+    juce::Array<var> slots;
+    for (const auto& slot : proj.slots)
+        slots.add (patternToVar (slot));
+    root->setProperty ("slots",       slots);
+    root->setProperty ("currentSlot", proj.currentSlot);
+
     return juce::JSON::toString (var (root));
 }
 
@@ -239,6 +245,23 @@ bool fromJson (const juce::String& json, Project& out)
     }
 
     patternFromVar (root.getProperty ("pattern", var()), out.pattern);
+
+    // A file written before the A..H bank existed has no "slots": its single pattern is
+    // slot A, and the other seven are empty. Loading it must not silently blank the groove.
+    if (auto* slots = root.getProperty ("slots", var()).getArray())
+    {
+        for (int i = 0; i < slots->size() && i < numPatternSlots; ++i)
+            patternFromVar ((*slots)[i], out.slots[(std::size_t) i]);
+
+        out.currentSlot = (int) root.getProperty ("currentSlot", 0);
+        if (! PatternBank::isValidSlot (out.currentSlot))
+            out.currentSlot = 0;
+    }
+    else
+    {
+        out.slots[0]    = out.pattern;
+        out.currentSlot = 0;
+    }
     return true;
 }
 

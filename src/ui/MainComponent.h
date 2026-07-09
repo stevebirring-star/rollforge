@@ -18,12 +18,14 @@
 #include "library/SimilarSearch.h"
 #include "model/RollCompiler.h"
 #include "model/RollPresets.h"
+#include "model/PatternBank.h"
 #include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
 #include "ui/NoteRepeat.h"
 #include "ui/TransportBar.h"
 #include "ui/SequencerGrid.h"
 #include "ui/FillBar.h"
+#include "ui/PatternSlots.h"
 #include "ui/RollBrushOverlay.h"
 #include "ui/MacroKnobs.h"
 #include "ui/BrowserPanel.h"
@@ -37,6 +39,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -74,6 +77,15 @@ private:
     void loadFileIntoPad (int padIndex, const juce::File& file);
     void installKitSelection (const std::array<juce::String, kitNumPads>& paths);  // NEW KIT + New Sounds
     void rerollSounds (std::uint64_t seed);      // swap the kit's samples, keep the groove
+    void selectSlot (int slot);                 // A..H: switch, quantised to the bar when playing
+    void commitSlot (int slot);                 // the switch has landed: bring the UI across
+    void refreshSlotStates();                   // which of A..H have anything in them
+
+    /** Tempo and swing belong to the transport, not to a pattern slot; a Pattern only
+        carries them so an export is self-contained. Stamping the live transport onto a
+        pattern before it goes anywhere is what stops slot B exporting at the tempo it
+        happened to be saved with. */
+    void stampTransportOnto (Pattern& pattern);
     juce::String similarForPad (int padIndex);   // step this pad to its next-nearest library sound
     void rebuildSimilarSearch();                 // after a scan or a re-tag
     void loadLayersIntoPad (int padIndex, const juce::StringArray& files);   // round-robin layers
@@ -115,6 +127,13 @@ private:
     Pattern              editPattern;   // the pattern the grid edits (16 lanes -> pads 0..15)
     juce::UndoManager    undoManager;   // undoable step edits (declared after editPattern)
 
+    // The A..H bank. `editPattern` IS the current slot's pattern while you work on it; the
+    // bank's own copy is only refreshed when you leave the slot (or save). `pendingSlot` is
+    // a switch the engine has accepted but has not reached the bar line for yet.
+    PatternBank          bank;
+    int                  pendingSlot = -1;
+    std::int64_t         switchCountAtQueue = 0;   // see Sequencer::getSwitchCount()
+
     PadGrid          padGrid;
     TransportBar     transportBar { engine.getSequencer() };
     SequencerGrid    seqGrid { 16, 16 };
@@ -127,6 +146,7 @@ private:
     juce::TextButton repeatButton { "Repeat" };        // toggles note-repeat
     juce::ComboBox   repeatRateBox;                     // rate: 1/8 .. 1/32, Build
     MacroKnobs       macroKnobs { engine.getMasterBus() };
+    PatternSlots     patternSlots;
     std::array<bool, (size_t) maxLanes> laneLocked {};   // per-lane "keep on reroll" locks
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     int              autosaveCounter = 0;   // ticks since the last recovery save

@@ -79,6 +79,13 @@ public:
     float        getHumanise()     const noexcept { return humanise.load (std::memory_order_acquire); }
     double       getTempo()        const noexcept { return pendingTempo.load (std::memory_order_acquire); }
     bool         isSwitchQueued()  const noexcept { return switchQueued.load (std::memory_order_acquire); }
+
+    /** Counts the queued patterns that have actually BECOME the active one. A caller that
+        wants to know "has my queued switch landed yet?" must compare this against the value
+        it read when it queued, not watch isSwitchQueued() fall: that flag is still false in
+        the gap between queuePattern() and the next audio block, and it can be raised and
+        lowered inside a single block when the switch is queued right on a bar line. */
+    std::int64_t getSwitchCount() const noexcept { return switchCount.load (std::memory_order_acquire); }
     std::int64_t getCurrentStep()  const noexcept { return currentStep.load (std::memory_order_acquire); }
     std::int64_t getTriggerCount() const noexcept { return triggerCount.load (std::memory_order_acquire); }
 
@@ -131,6 +138,7 @@ private:
     std::atomic<bool>   resetRequested { false };
     std::atomic<bool>   switchQueued   { false };
 
+    std::atomic<std::int64_t> switchCount  { 0 };
     std::atomic<std::int64_t> currentStep  { -1 };
     std::atomic<std::int64_t> triggerCount { 0 };
 };

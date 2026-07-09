@@ -313,6 +313,37 @@ MainComponent::MainComponent()
     fillBar.onFeelSwing = [this] (float swing) { transportBar.setSwing (swing); };
     addAndMakeVisible (fillBar);
 
+    // A..H. Eight patterns, one kit.
+    patternSlots.onSelect = [this] (int slot) { selectSlot (slot); };
+    patternSlots.onCopyTo = [this] (int slot)
+    {
+        if (! PatternBank::isValidSlot (slot) || slot == bank.currentSlot)
+            return;
+        bank.pattern (slot) = editPattern;
+        refreshSlotStates();
+        statusLabel.setText ("Copied to pattern "
+                                 + juce::String::charToString ((juce::juce_wchar) ('A' + slot)),
+                             juce::dontSendNotification);
+    };
+    patternSlots.onClear = [this] (int slot)
+    {
+        if (! PatternBank::isValidSlot (slot))
+            return;
+
+        bank.pattern (slot) = blankPattern();
+        if (slot == bank.currentSlot)
+        {
+            // Clearing what you are standing on has to reach the grid and the engine too,
+            // and it must not leave an undo step that would re-apply to a different slot.
+            editPattern = bank.pattern (slot);
+            undoManager.clearUndoHistory();
+            refreshGridFromPattern();
+            engine.getSequencer().setPattern (editPattern);
+        }
+        refreshSlotStates();
+    };
+    addAndMakeVisible (patternSlots);
+
     // Roll brush: toggle it on, then drag across a lane to paint an accelerating
     // roll (drag up = denser). Clear Rolls removes them.
     brushButton.setClickingTogglesState (true);
@@ -403,19 +434,22 @@ MainComponent::MainComponent()
     updatePadLabels();
     refreshPadAudibility();
 
-    // Editable sequencer pattern: 16 lanes, each targeting pads 0..15, all off.
-    editPattern.numLanes = 16;
+    // Editable sequencer pattern: 16 lanes, each targeting pads 0..15, all off. Every slot
+    // of the bank starts the same way, so switching to an untouched letter gives you a grid
+    // you can click on rather than sixteen rows that light up and stay silent.
+    editPattern = blankPattern();
+    for (auto& slot : bank.slots)
+        slot = blankPattern();
+
     for (int lane = 0; lane < 16; ++lane)
     {
-        editPattern.lane (lane).targetPad = lane;
-        editPattern.lane (lane).length  = straightStepsPerBar;
-        editPattern.lane (lane).triplet = false;
         if (auto sample = starterKit.pad (lane).primarySample())
             seqGrid.setLaneLabel (lane, sample->getName());
         for (int step = 0; step < 16; ++step)
             seqGrid.setStep (lane, step, false, 0.8f);
     }
     engine.getSequencer().setPattern (editPattern);
+    refreshSlotStates();
 
     engine.getDeviceManager().addChangeListener (this);
     refreshStatus();
@@ -543,6 +577,7 @@ void MainComponent::afterStepEdit (int lane, int step)
     const Step& s = editPattern.lane (lane).step (step);
     seqGrid.setStep (lane, step, s.on, s.velocity);
     engine.getSequencer().setPattern (editPattern);
+    refreshSlotStates();   // the first lit step turns this slot's letter solid
 }
 
 void MainComponent::refreshGridFromPattern()
@@ -577,6 +612,8 @@ void MainComponent::refreshGridFromPattern()
                 seqGrid.setStep (lane, step, false, 0.8f);
         }
     }
+
+    refreshSlotStates();
 }
 
 RollRegion MainComponent::buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const
@@ -604,11 +641,21 @@ Project MainComponent::captureProject()
     Project p;
     p.pattern = editPattern;
 
+    // The bank's copy of the slot you are standing in is only refreshed when you leave it,
+    // so park the working pattern before the whole bank is written out.
+    bank.pattern (bank.currentSlot) = editPattern;
+    p.slots       = bank.slots;
+    p.currentSlot = bank.currentSlot;
+
     // Tempo + swing are live sequencer controls; capture them as the authoritative
-    // transport, mirrored into the pattern so the saved file is self-consistent.
+    // transport, mirrored into every pattern so the saved file is self-consistent whichever
+    // slot is loaded out of it.
     auto& seq = engine.getSequencer();
-    p.bpm   = p.pattern.bpm   = seq.getTempo();
-    p.swing = p.pattern.swing = seq.getSwing();
+    p.bpm   = seq.getTempo();
+    p.swing = seq.getSwing();
+    stampTransportOnto (p.pattern);
+    for (auto& slot : p.slots)
+        stampTransportOnto (slot);
 
     auto& bus = engine.getMasterBus();
     p.punch = bus.getPunch(); p.drive = bus.getDrive();
@@ -640,7 +687,25 @@ Project MainComponent::captureProject()
 
 void MainComponent::applyProject (const Project& p)
 {
-    editPattern = p.pattern;
+    // A pre-bank file arrives with slots[0] == pattern and currentSlot == 0, so this is the
+    // right read for old and new files alike.
+    bank.slots       = p.slots;
+    bank.currentSlot = PatternBank::isValidSlot (p.currentSlot) ? p.currentSlot : 0;
+    for (auto& slot : bank.slots)
+    {
+        // A slot a pre-bank file never had comes back with no lanes at all. Give it the
+        // sixteen every other slot has, or clicking its grid would light silent steps.
+        if (slot.numLanes == 0)
+            slot = blankPattern();
+
+        slot.bpm   = p.bpm;      // the file's transport wins over whatever a slot carried
+        slot.swing = p.swing;
+    }
+    pendingSlot      = -1;
+    patternSlots.setQueued (-1);
+    patternSlots.setCurrent (bank.currentSlot);
+
+    editPattern = bank.pattern (bank.currentSlot);
 
     // Rebuild the kit from the saved per-pad paths (RT-safe per-pad swap). An empty
     // path — or a file that no longer exists — restores the built-in starter sound.
@@ -825,6 +890,72 @@ void MainComponent::loadLayersIntoPad (int padIndex, const juce::StringArray& fi
     statusLabel.setText (juce::String ((int) layers.size()) + " round-robin layers on pad "
                              + juce::String (padIndex + 1),
                          juce::dontSendNotification);
+}
+
+void MainComponent::stampTransportOnto (Pattern& pattern)
+{
+    auto& seq = engine.getSequencer();
+    pattern.bpm   = seq.getTempo();
+    pattern.swing = seq.getSwing();
+}
+
+void MainComponent::selectSlot (int slot)
+{
+    if (! PatternBank::isValidSlot (slot) || slot == bank.currentSlot)
+        return;
+
+    // Park the working copy before leaving, or an edit made since the last switch is lost.
+    bank.pattern (bank.currentSlot) = editPattern;
+
+    // The slot we are going to may have been written at a different tempo. It does not get
+    // to change the transport: the transport tells it what tempo it is now.
+    stampTransportOnto (bank.pattern (slot));
+
+    if (engine.getSequencer().isPlaying())
+    {
+        // Land it on the bar line, not under the user's finger: a verse becomes a chorus in
+        // time. The engine owns the moment; the timer notices when it has passed and brings
+        // the grid across (see timerCallback).
+        switchCountAtQueue = engine.getSequencer().getSwitchCount();
+        engine.getSequencer().queuePattern (bank.pattern (slot));
+        pendingSlot = slot;
+        patternSlots.setQueued (slot);
+        statusLabel.setText (juce::String ("Pattern ")
+                                 + juce::String::charToString ((juce::juce_wchar) ('A' + slot))
+                                 + " queued for the next bar",
+                             juce::dontSendNotification);
+        return;
+    }
+
+    engine.getSequencer().setPattern (bank.pattern (slot));
+    commitSlot (slot);
+}
+
+void MainComponent::commitSlot (int slot)
+{
+    bank.currentSlot = slot;
+    editPattern      = bank.pattern (slot);
+
+    // Every undoable step edit holds a before/after for a pattern that is no longer on
+    // screen. Undoing across a switch would stamp one slot's history onto another.
+    undoManager.clearUndoHistory();
+
+    pendingSlot = -1;
+    patternSlots.setQueued (-1);
+    patternSlots.setCurrent (slot);
+    refreshGridFromPattern();
+    refreshSlotStates();
+    statusLabel.setText (juce::String ("Pattern ")
+                             + juce::String::charToString ((juce::juce_wchar) ('A' + slot)),
+                         juce::dontSendNotification);
+}
+
+void MainComponent::refreshSlotStates()
+{
+    // The current slot's truth lives in editPattern, not in the bank's stale copy.
+    for (int i = 0; i < numPatternSlots; ++i)
+        patternSlots.setSlotWritten (i, ! patternIsEmpty (i == bank.currentSlot ? editPattern
+                                                                                : bank.pattern (i)));
 }
 
 void MainComponent::rebuildSimilarSearch()
@@ -1179,6 +1310,23 @@ void MainComponent::timerCallback()
         }
     }
 
+    // A queued A..H switch: the engine swapped the pattern in at the bar line, so bring the
+    // grid across. When the transport is stopped the bar line never arrives, so a switch
+    // queued and then stopped is applied at once rather than hanging until the next Play.
+    if (pendingSlot >= 0)
+    {
+        if (! seq.isPlaying())
+        {
+            // Stopped before the bar line ever came: the wait would never end, so apply it.
+            seq.setPattern (bank.pattern (pendingSlot));
+            commitSlot (pendingSlot);
+        }
+        else if (seq.getSwitchCount() != switchCountAtQueue)
+        {
+            commitSlot (pendingSlot);
+        }
+    }
+
     // Drive the per-pad level meters (called every tick so silent pads decay too).
     auto& drum = engine.getDrumEngine();
     for (int p = 0; p < kitNumPads; ++p)
@@ -1507,6 +1655,9 @@ void MainComponent::resized()
     transportBar.setBounds (transportPanel);
     area.removeFromTop (10);
     fillBar.setBounds (area.removeFromTop (32));
+    area.removeFromTop (8);
+
+    patternSlots.setBounds (area.removeFromTop (26));
     area.removeFromTop (8);
 
     auto rollRow = area.removeFromTop (28);

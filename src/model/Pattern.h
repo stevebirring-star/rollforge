@@ -32,6 +32,43 @@ struct Pattern
     const Lane& lane (int index) const noexcept { return lanes[(std::size_t) index]; }
 };
 
+/** An empty but PLAYABLE pattern: sixteen lanes, lane i firing pad i, one bar of straight
+    1/16ths, nothing lit. A default-constructed Pattern has no lanes at all, so its steps
+    would light in the grid and never sound — which is exactly what a freshly cleared slot
+    must not do. Pure. */
+inline Pattern blankPattern() noexcept
+{
+    Pattern p;
+    p.numLanes = maxLanes;
+    for (int i = 0; i < maxLanes; ++i)
+    {
+        p.lane (i).targetPad = i;
+        p.lane (i).length    = straightStepsPerBar;
+        p.lane (i).triplet   = false;
+    }
+    return p;
+}
+
+/** True when nothing would sound: no lit step in any active lane, and no roll. The slot
+    strip uses this to tell an empty pattern slot from a written one, so "A" and "E" look
+    different before you've heard either. Pure. */
+inline bool patternIsEmpty (const Pattern& p) noexcept
+{
+    if (p.numRolls > 0)
+        return false;
+
+    const int lanes = p.numLanes < 0 ? 0 : (p.numLanes > maxLanes ? maxLanes : p.numLanes);
+    for (int i = 0; i < lanes; ++i)
+    {
+        const Lane& lane = p.lane (i);
+        const int len = lane.length < 0 ? 0 : (lane.length > maxStepsPerLane ? maxStepsPerLane : lane.length);
+        for (int s = 0; s < len; ++s)
+            if (lane.step (s).on)
+                return false;
+    }
+    return true;
+}
+
 /** The pattern's natural length in whole bars (1 bar = 16 global 1/16 steps), taken from
     the longest active lane and always >= 1. Exports use this to size the render so a
     multi-bar pattern isn't truncated. Pure — no JUCE, headless-testable.

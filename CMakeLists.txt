@@ -100,6 +100,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/LaneLockButton.cpp
         src/ui/AboutView.cpp
         src/ui/FillBar.cpp
+        src/ui/PatternSlots.cpp
         src/ui/RollBrushOverlay.cpp
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp

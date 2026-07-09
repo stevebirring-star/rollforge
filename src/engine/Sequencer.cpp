@@ -83,6 +83,7 @@ void Sequencer::applyIncomingPattern (bool nowPlaying) noexcept
         *active = *queued;
         hasQueued = false;
         switchQueued.store (false, std::memory_order_release);
+        switchCount.fetch_add (1, std::memory_order_release);
     }
 }
 
@@ -126,6 +127,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
             *active = *queued;
             hasQueued = false;
             switchQueued.store (false, std::memory_order_release);
+            switchCount.fetch_add (1, std::memory_order_release);
         }
 
         generateStepEvents (stepIndex, blockStart + (std::int64_t) offset);

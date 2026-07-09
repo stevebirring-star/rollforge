@@ -10,6 +10,20 @@
 namespace rollforge::tests
 {
 
+namespace
+{
+    /** The same JSON with `keys` removed — how a file written by an older build looks. */
+    juce::var stripKeys (const juce::var& root, const juce::StringArray& keys)
+    {
+        auto* object = new juce::DynamicObject();
+        if (auto* src = root.getDynamicObject())
+            for (const auto& prop : src->getProperties())
+                if (! keys.contains (prop.name.toString()))
+                    object->setProperty (prop.name, prop.value);
+        return juce::var (object);
+    }
+}
+
 static constexpr const char* testCategory = "rollforge";
 
 class ProjectIOTest final : public juce::UnitTest
@@ -81,6 +95,90 @@ public:
             expectEquals (q.pattern.rolls[0].count, 2);
             expectWithinAbsoluteError (q.pattern.rolls[0].startStep, 8.0f, 1.0e-4f);
             expectWithinAbsoluteError (q.pattern.rolls[0].events[1].stepOffset, 0.25f, 1.0e-4f);
+        }
+
+        beginTest ("the A..H bank round-trips, and the live pattern is slot 0's twin");
+        {
+            Project p;
+            p.pattern.numLanes = 1;
+            p.pattern.lane (0).step (0).on = true;
+
+            for (int i = 0; i < numPatternSlots; ++i)
+            {
+                p.slots[(std::size_t) i].numLanes = 1;
+                p.slots[(std::size_t) i].lane (0).length = 8 + i;      // each slot distinguishable
+                p.slots[(std::size_t) i].lane (0).step (i).on = true;
+            }
+            p.currentSlot = 5;
+
+            Project loaded;
+            expect (ProjectIO::fromJson (ProjectIO::toJson (p), loaded));
+            expectEquals (loaded.currentSlot, 5);
+            for (int i = 0; i < numPatternSlots; ++i)
+            {
+                expectEquals (loaded.slots[(std::size_t) i].lane (0).length, 8 + i,
+                              "slot " + juce::String (i) + " did not round-trip");
+                expect (loaded.slots[(std::size_t) i].lane (0).step (i).on);
+            }
+        }
+
+        beginTest ("a project saved before the bank existed still loads its groove into slot A");
+        {
+            // The exact shape of an old file: a "pattern", no "slots", no "currentSlot".
+            Project old;
+            old.pattern.numLanes = 1;
+            old.pattern.lane (0).length = 12;
+            old.pattern.lane (0).step (3).on = true;
+
+            auto json = ProjectIO::toJson (old);
+            json = juce::JSON::toString (stripKeys (juce::JSON::parse (json), { "slots", "currentSlot" }));
+
+            Project loaded;
+            expect (ProjectIO::fromJson (json, loaded));
+            expectEquals (loaded.currentSlot, 0);
+            expectEquals (loaded.slots[0].lane (0).length, 12, "the old groove was lost");
+            expect (loaded.slots[0].lane (0).step (3).on);
+            expect (patternIsEmpty (loaded.slots[1]), "the other seven slots must start empty");
+        }
+
+        beginTest ("blankPattern is empty but playable");
+        {
+            const auto blank = blankPattern();
+            expect (patternIsEmpty (blank), "a blank slot must look empty");
+            expectEquals (blank.numLanes, maxLanes,
+                          "a default Pattern has no lanes: its grid would light silent steps");
+            for (int i = 0; i < maxLanes; ++i)
+            {
+                expectEquals (blank.lane (i).targetPad, i, "lane i must fire pad i");
+                expectEquals (blank.lane (i).length, straightStepsPerBar);
+                expect (! blank.lane (i).triplet);
+            }
+            expectEquals (patternBars (blank), 1);
+        }
+
+        beginTest ("patternIsEmpty tells a written slot from a blank one");
+        {
+            Pattern blank;
+            expect (patternIsEmpty (blank), "a default-constructed pattern has nothing in it");
+
+            Pattern lanesButNoSteps;
+            lanesButNoSteps.numLanes = 4;
+            expect (patternIsEmpty (lanesButNoSteps), "lanes with no lit step are still silence");
+
+            Pattern written = lanesButNoSteps;
+            written.lane (2).step (7).on = true;
+            expect (! patternIsEmpty (written));
+
+            // A step past the lane's length never sounds, so it does not count.
+            Pattern beyondEnd = lanesButNoSteps;
+            beyondEnd.lane (0).length = 4;
+            beyondEnd.lane (0).step (9).on = true;
+            expect (patternIsEmpty (beyondEnd), "a step beyond the lane end is inaudible");
+
+            // A roll on its own is enough to make a slot non-empty.
+            Pattern rollOnly;
+            rollOnly.numRolls = 1;
+            expect (! patternIsEmpty (rollOnly));
         }
 
         beginTest ("malformed JSON fails gracefully");

@@ -6,6 +6,7 @@
 // `.rollforge` JSON file. Pure model (juce_core only).
 
 #include "model/Pattern.h"
+#include "model/PatternBank.h"
 
 #include <juce_core/juce_core.h>
 
@@ -44,7 +45,13 @@ struct Project
     int    version = 1;
 
     std::array<ProjectPad, projectNumPads> pads {};
+
+    // `pattern` is the live one. It is also slots[currentSlot], and is written to the file
+    // separately so that a build predating the A..H bank still loads the right groove out
+    // of a newer file rather than an empty one.
     Pattern pattern;
+    std::array<Pattern, numPatternSlots> slots {};
+    int     currentSlot = 0;
 
     float  punch = 0.0f, space = 0.0f, crush = 0.0f, drive = 0.0f;  // master-FX macros
     float  lowEq = 0.0f, midEq = 0.0f, highEq = 0.0f;              // master EQ (dB per band)

@@ -55,7 +55,7 @@ public:
     {
     public:
         static constexpr int minWidth  = 780;
-        static constexpr int minHeight = 840;
+        static constexpr int minHeight = 874;   // + the A..H pattern row
 
         RootView()
         {
