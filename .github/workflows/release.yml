@@ -44,7 +44,12 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+            # Not a tag: take the version the source actually declares, rather than inventing
+            # 0.0.0-dev. A dispatch build is a real, distributable package -- it just has not
+            # been tagged -- and shipping it under a fake version misnames the installer, the
+            # entry in Add/Remove Programs, and every file on the download page.
+            V=$(sed -n 's/^project(RollForge VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+            echo "version=${V:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure (Release, app only)
@@ -87,7 +92,12 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+            # Not a tag: take the version the source actually declares, rather than inventing
+            # 0.0.0-dev. A dispatch build is a real, distributable package -- it just has not
+            # been tagged -- and shipping it under a fake version misnames the installer, the
+            # entry in Add/Remove Programs, and every file on the download page.
+            V=$(sed -n 's/^project(RollForge VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+            echo "version=${V:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Configure (Release, app only)
