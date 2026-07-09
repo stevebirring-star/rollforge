@@ -18,6 +18,7 @@ class ExportPanel final : public juce::Component
 public:
     ExportPanel();
 
+    void paint (juce::Graphics&) override;
     void resized() override;
 
     // The int is the loop count: how many times to repeat the whole pattern in the

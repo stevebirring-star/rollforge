@@ -34,16 +34,56 @@ PadComponent::PadComponent (int padIndex)
         b.setColour (juce::TextButton::textColourOnId,   juce::Colours::black);
         addAndMakeVisible (b);
     };
-    initToggle (muteButton,    juce::Colour (0xffe0553f));   // red    = muted
-    initToggle (soloButton,    juce::Colour (0xffe0c341));   // amber  = soloed
-    initToggle (reverseButton, juce::Colour (0xff8a7dff));   // violet = reversed
+    initToggle (muteButton,    theme().textFaint);      // grey  = silenced
+    initToggle (soloButton,    theme().accentCool);     // blue  = the machine is listening
+    initToggle (reverseButton, theme().accentHot);      // hot   = you changed something
     muteButton.setTooltip ("Mute this pad in the sequencer (click the pad to still audition it)");
     soloButton.setTooltip ("Solo: play only soloed pads");
     reverseButton.setTooltip ("Play this pad's sample backwards");
-    muteButton.onClick    = [this] { if (onMute)    onMute    (index, muteButton.getToggleState()); };
-    soloButton.onClick    = [this] { if (onSolo)    onSolo    (index, soloButton.getToggleState()); };
-    reverseButton.onClick = [this] { if (onReverse) onReverse (index, reverseButton.getToggleState()); };
+    muteButton.onClick    = [this] { if (onMute)    onMute    (index, muteButton.getToggleState()); updateControlVisibility(); };
+    soloButton.onClick    = [this] { if (onSolo)    onSolo    (index, soloButton.getToggleState()); updateControlVisibility(); };
+    reverseButton.onClick = [this] { if (onReverse) onReverse (index, reverseButton.getToggleState()); updateControlVisibility(); };
+
+    // The pad must count "the mouse is over one of my toggles" as being hovered, or the
+    // toggles would vanish the instant you reached for one.
+    for (auto* b : { &muteButton, &soloButton, &reverseButton })
+        b->addMouseListener (this, false);
+
+    updateControlVisibility();
 }
+
+void PadComponent::refreshHover()
+{
+    const bool now = isMouseOver (true);
+    if (now != hovered)
+    {
+        hovered = now;
+        updateControlVisibility();
+        repaint();
+    }
+}
+
+void PadComponent::updateControlVisibility()
+{
+    // Visible when you are reaching for it, or when it is currently doing something.
+    muteButton.setVisible    (hovered || muteButton.getToggleState());
+    soloButton.setVisible    (hovered || soloButton.getToggleState());
+    reverseButton.setVisible (hovered || reverseButton.getToggleState());
+}
+
+bool PadComponent::isTrimmed() const noexcept
+{
+    return trimStart > 0.001f || trimEnd < 0.999f;
+}
+
+float PadComponent::trimHandleX (bool end) const noexcept
+{
+    const auto bounds = getLocalBounds().toFloat().reduced (3.0f);
+    return bounds.getX() + (end ? trimEnd : trimStart) * bounds.getWidth();
+}
+
+void PadComponent::mouseEnter (const juce::MouseEvent&) { refreshHover(); }
+void PadComponent::mouseExit  (const juce::MouseEvent&) { refreshHover(); }
 
 void PadComponent::setLabelText (const juce::String& text)
 {
@@ -80,11 +120,13 @@ void PadComponent::flash()
 void PadComponent::setMuted (bool muted)
 {
     muteButton.setToggleState (muted, juce::dontSendNotification);
+    updateControlVisibility();
 }
 
 void PadComponent::setSoloed (bool soloed)
 {
     soloButton.setToggleState (soloed, juce::dontSendNotification);
+    updateControlVisibility();
 }
 
 void PadComponent::setAudible (bool shouldBeAudible)
@@ -99,6 +141,7 @@ void PadComponent::setAudible (bool shouldBeAudible)
 void PadComponent::setReverse (bool reversed)
 {
     reverseButton.setToggleState (reversed, juce::dontSendNotification);
+    updateControlVisibility();
 }
 
 void PadComponent::setAccent (juce::Colour colour)
@@ -162,70 +205,88 @@ void PadComponent::paint (juce::Graphics& g)
                                              fill.darker (0.10f),   bounds.getCentreX(), bounds.getBottom(), false));
     g.fillRoundedRectangle (bounds, corner);
 
-    // Waveform thumbnail: mirrored around the vertical centre, behind the label.
+    // The waveform is a calm silhouette, not a comb of 48 bars. It is the pad's texture,
+    // not its content; the label has to be able to sit on top of it.
     if (! waveform.empty())
     {
-        juce::Graphics::ScopedSaveState save (g);
-        g.reduceClipRegion (bounds.getSmallestIntegerContainer());
-
         const float midY = bounds.getCentreY();
-        const float maxH = bounds.getHeight() * 0.32f;
+        const float maxH = bounds.getHeight() * 0.26f;
         const int   n    = (int) waveform.size();
-        const float step = bounds.getWidth() / (float) n;
 
-        g.setColour (accent.withAlpha (0.34f));
+        juce::Path silhouette;
+        silhouette.startNewSubPath (bounds.getX(), midY);
         for (int i = 0; i < n; ++i)
         {
-            const float h = juce::jlimit (0.0f, 1.0f, waveform[(size_t) i]) * maxH;
-            const float x = bounds.getX() + (float) i * step;
-            g.fillRect (juce::Rectangle<float> (x, midY - h, juce::jmax (1.0f, step - 1.0f), 2.0f * h));
+            const float x = bounds.getX() + bounds.getWidth() * ((float) i / (float) (n - 1));
+            silhouette.lineTo (x, midY - juce::jlimit (0.0f, 1.0f, waveform[(size_t) i]) * maxH);
         }
+        for (int i = n - 1; i >= 0; --i)
+        {
+            const float x = bounds.getX() + bounds.getWidth() * ((float) i / (float) (n - 1));
+            silhouette.lineTo (x, midY + juce::jlimit (0.0f, 1.0f, waveform[(size_t) i]) * maxH);
+        }
+        silhouette.closeSubPath();
+
+        juce::Graphics::ScopedSaveState save (g);
+        g.reduceClipRegion (bounds.getSmallestIntegerContainer());
+        g.setColour (accent.withAlpha (hovered ? 0.26f : 0.15f));
+        g.fillPath (silhouette);
     }
 
-    // Trim: dim the sample outside [trimStart, trimEnd] and draw grab tabs at the
-    // bottom edge (dragged to trim — see mouseDown/updateTrimFromX).
-    if (! waveform.empty())
+    // Trim: the region outside the play range is dimmed whenever it is trimmed, because
+    // that is information. The grab handles only appear when you reach for them.
+    if (! waveform.empty() && (isTrimmed() || hovered))
     {
         const float w  = bounds.getWidth();
         const float x0 = bounds.getX();
 
-        g.setColour (juce::Colours::black.withAlpha (0.5f));
-        if (trimStart > 0.001f)
-            g.fillRect (juce::Rectangle<float> (x0, bounds.getY(), trimStart * w, bounds.getHeight()));
-        if (trimEnd < 0.999f)
-            g.fillRect (juce::Rectangle<float> (x0 + trimEnd * w, bounds.getY(),
-                                                (1.0f - trimEnd) * w, bounds.getHeight()));
+        if (isTrimmed())
+        {
+            g.setColour (t.background.withAlpha (0.62f));
+            if (trimStart > 0.001f)
+                g.fillRect (juce::Rectangle<float> (x0, bounds.getY(), trimStart * w, bounds.getHeight()));
+            if (trimEnd < 0.999f)
+                g.fillRect (juce::Rectangle<float> (x0 + trimEnd * w, bounds.getY(),
+                                                    (1.0f - trimEnd) * w, bounds.getHeight()));
+        }
 
-        g.setColour (accent.withAlpha (0.9f));
-        const float ty = bounds.getBottom() - 8.0f;
-        g.fillRect (juce::Rectangle<float> (x0 + trimStart * w - 1.5f, ty, 3.0f, 8.0f));
-        g.fillRect (juce::Rectangle<float> (x0 + trimEnd   * w - 1.5f, ty, 3.0f, 8.0f));
+        if (hovered || isTrimmed())
+        {
+            g.setColour (accent.withAlpha (hovered ? 0.95f : 0.6f));
+            const float ty = bounds.getBottom() - 7.0f;
+            g.fillRoundedRectangle (trimHandleX (false) - 1.5f, ty, 3.0f, 7.0f, 1.5f);
+            g.fillRoundedRectangle (trimHandleX (true)  - 1.5f, ty, 3.0f, 7.0f, 1.5f);
+        }
     }
 
     // The pad's identity ring. Bright while it sounds, quiet at rest — but always its
     // own colour, so the kit is legible in a glance.
     g.setColour (dragOver ? juce::Colours::white
-                          : accent.withAlpha (0.35f + 0.6f * juce::jlimit (0.0f, 1.0f, flashLevel)));
+                          : accent.withAlpha (0.32f + 0.62f * juce::jlimit (0.0f, 1.0f, flashLevel)));
     g.drawRoundedRectangle (bounds, corner, 1.5f);
     g.setColour (t.panelHighlight.withAlpha (0.5f));
     g.drawLine (bounds.getX() + corner, bounds.getY() + 0.7f,
                 bounds.getRight() - corner, bounds.getY() + 0.7f, 1.0f);
 
-    g.setColour (t.text);
-    g.setFont (juce::FontOptions (13.0f));
-    g.drawText (label, bounds.reduced (6.0f), juce::Justification::centred, true);
-
-    // Level meter: a bar along the bottom edge, width ∝ output level, green→red.
-    if (meterLevel > 0.01f)
+    // The level meter IS the bottom edge of the ring, lit from the left. One fewer object
+    // on the tile than a floating track-and-bar, and it reads at a glance across sixteen.
+    if (meterLevel > 0.02f)
     {
-        auto track = bounds.reduced (8.0f).removeFromBottom (4.0f);
-        g.setColour (t.panelShadow);
-        g.fillRoundedRectangle (track, 2.0f);
-
         const float lvl = juce::jlimit (0.0f, 1.0f, meterLevel);
-        const juce::Colour barCol = lvl < 0.9f ? accent : t.meterRedZone;
-        g.setColour (barCol);
-        g.fillRoundedRectangle (track.withWidth (track.getWidth() * lvl), 2.0f);
+        const float x0  = bounds.getX() + corner * 0.5f;
+        const float x1  = x0 + (bounds.getWidth() - corner) * lvl;
+        g.setColour (lvl < 0.9f ? accent : t.meterRedZone);
+        g.drawLine (x0, bounds.getBottom() - 1.0f, x1, bounds.getBottom() - 1.0f, 2.4f);
+    }
+
+    // The name, given a shadow so it never has to fight the waveform behind it.
+    {
+        auto text = bounds.reduced (6.0f);
+        g.setFont (juce::FontOptions (13.0f));
+        g.setColour (t.panelShadow.withAlpha (0.8f));
+        g.drawText (label, text.translated (0.0f, 1.0f), juce::Justification::centred, true);
+        g.setColour (t.text);
+        g.drawText (label, text, juce::Justification::centred, true);
     }
 
     // Dim the pad when it won't sound under the current mute/solo state. Drawn last so
@@ -237,8 +298,10 @@ void PadComponent::paint (juce::Graphics& g)
     }
 }
 
-void PadComponent::mouseUp (const juce::MouseEvent&)
+void PadComponent::mouseUp (const juce::MouseEvent& e)
 {
+    if (e.eventComponent != this)
+        return;
     if (trimming)
     {
         trimming = false;
@@ -250,6 +313,11 @@ void PadComponent::mouseUp (const juce::MouseEvent&)
 
 void PadComponent::mouseDown (const juce::MouseEvent& e)
 {
+    // The M/S/R toggles forward their events here so the pad knows it is hovered. They
+    // handle their own clicks; the pad must not also fire.
+    if (e.eventComponent != this)
+        return;
+
     // Right-click opens the pad's TONE / SEND controls; it never auditions, so the
     // gesture that opens a bubble doesn't also make a noise.
     if (e.mods.isPopupMenu())
@@ -259,17 +327,22 @@ void PadComponent::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    // The thin bottom strip drags the sample-trim handles; the rest of the pad
-    // triggers as normal, so a click almost anywhere still auditions the pad.
+    // A trim drag starts only NEAR a handle. The old rule — anywhere in the bottom strip —
+    // meant that clicking the lower third of a pad silently re-trimmed the sample instead
+    // of playing it, which is the last thing a pad should do.
     if (! waveform.empty() && e.position.y >= (float) (getHeight() - trimStripHeight))
     {
-        const float w      = (float) juce::jmax (1, getWidth());
-        const float startX = trimStart * w;
-        const float endX   = trimEnd   * w;
-        draggingEnd = std::abs (e.position.x - endX) <= std::abs (e.position.x - startX);
-        trimming    = true;
-        updateTrimFromX (e.position.x);
-        return;
+        constexpr float grabRadius = 9.0f;
+        const float dStart = std::abs (e.position.x - trimHandleX (false));
+        const float dEnd   = std::abs (e.position.x - trimHandleX (true));
+
+        if (juce::jmin (dStart, dEnd) <= grabRadius)
+        {
+            draggingEnd = dEnd <= dStart;
+            trimming    = true;
+            updateTrimFromX (e.position.x);
+            return;
+        }
     }
 
     if (onTrigger)
@@ -279,6 +352,8 @@ void PadComponent::mouseDown (const juce::MouseEvent& e)
 
 void PadComponent::mouseDrag (const juce::MouseEvent& e)
 {
+    if (e.eventComponent != this)
+        return;
     if (trimming)
         updateTrimFromX (e.position.x);
 }

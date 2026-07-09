@@ -1,17 +1,20 @@
 #include "ui/ExportPanel.h"
 
+#include "ui/Theme.h"
+
 namespace rollforge
 {
 
 ExportPanel::ExportPanel()
 {
-    title.setText ("Export the current pattern", juce::dontSendNotification);
-    title.setColour (juce::Label::textColourId, juce::Colour (0xffe8e8ec));
+    title.setText ("EXPORT THE CURRENT PATTERN", juce::dontSendNotification);
+    title.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    title.setColour (juce::Label::textColourId, theme().textDim);
     title.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (title);
 
     loopsCaption.setText ("Length", juce::dontSendNotification);
-    loopsCaption.setColour (juce::Label::textColourId, juce::Colour (0xff9a9aa4));
+    loopsCaption.setColour (juce::Label::textColourId, theme().textDim);
     loopsCaption.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (loopsCaption);
 
@@ -30,8 +33,9 @@ ExportPanel::ExportPanel()
     addAndMakeVisible (exportWavButton);
     addAndMakeVisible (exportStemsButton);
 
-    dragCaption.setText ("...or drag straight into your DAW", juce::dontSendNotification);
-    dragCaption.setColour (juce::Label::textColourId, juce::Colour (0xff9a9aa4));
+    dragCaption.setText ("OR DRAG STRAIGHT INTO YOUR DAW", juce::dontSendNotification);
+    dragCaption.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    dragCaption.setColour (juce::Label::textColourId, theme().textDim);
     dragCaption.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (dragCaption);
 
@@ -47,6 +51,17 @@ int ExportPanel::selectedLoops() const
 {
     const int id = loopsBox.getSelectedId();
     return id > 0 ? id : 1;
+}
+
+void ExportPanel::paint (juce::Graphics& g)
+{
+    const auto& t = theme();
+    g.fillAll (t.background);
+
+    // A rule between "save it somewhere" and "drag it into your DAW": two different jobs.
+    const float y = (float) dragCaption.getY() - 7.0f;
+    g.setColour (t.hairline);
+    g.drawLine (12.0f, y, (float) getWidth() - 12.0f, y, 1.0f);
 }
 
 void ExportPanel::resized()

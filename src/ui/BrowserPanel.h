@@ -35,6 +35,7 @@ public:
     BrowserPanel();
     ~BrowserPanel() override;
 
+    void paint (juce::Graphics&) override;
     void resized() override;
 
     /** Fired by NEW KIT with the chosen sample path per pad ("" = leave pad). */

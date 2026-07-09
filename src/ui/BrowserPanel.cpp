@@ -1,6 +1,8 @@
 #include "ui/BrowserPanel.h"
 
 #include "library/Scanner.h"
+#include "ui/RollForgeLookAndFeel.h"
+#include "ui/Theme.h"
 
 namespace rollforge
 {
@@ -26,12 +28,19 @@ BrowserPanel::BrowserPanel()
     categoryFilter.onChange = [this] { refresh(); };
     addAndMakeVisible (categoryFilter);
 
-    statusLabel.setColour (juce::Label::textColourId, juce::Colour (0xff9a9aa4));
+    // NEW KIT makes something, so it wears the hot accent, like Make a Beat.
+    newKitButton.setColour (juce::TextButton::buttonColourId, theme().accentHot);
+    newKitButton.setColour (juce::TextButton::textColourOffId, theme().background);
+
+    statusLabel.setColour (juce::Label::textColourId, theme().textDim);
+    statusLabel.setFont (juce::FontOptions (12.0f));
     statusLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (statusLabel);
 
     list.setModel (this);
-    list.setRowHeight (22);
+    list.setRowHeight (24);
+    list.setColour (juce::ListBox::backgroundColourId, juce::Colours::transparentBlack);
+    list.setOutlineThickness (0);
     addAndMakeVisible (list);
 
     refresh();
@@ -104,16 +113,52 @@ void BrowserPanel::paintListBoxItem (int row, juce::Graphics& g, int width, int 
     if (row < 0 || row >= (int) entries.size())
         return;
 
-    if (selected)
-        g.fillAll (juce::Colour (0xff2a7a74));
-
+    const auto& t = theme();
     const auto& e = entries[(size_t) row];
-    g.setColour (juce::Colour (0xffe8e8ec));
-    g.setFont (juce::FontOptions (13.0f));
-    g.drawText (e.name, 8, 0, width - 96, height, juce::Justification::centredLeft, true);
+    const auto  b = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height);
 
-    g.setColour (juce::Colour (0xff9a9aa4));
-    g.drawText (categoryName (e.category), width - 90, 0, 84, height, juce::Justification::centredRight, true);
+    // A quiet zebra so a long list stays scannable, then the selection over it.
+    if (row % 2 == 1)
+    {
+        g.setColour (t.panelRaised.withAlpha (0.35f));
+        g.fillRect (b);
+    }
+    if (selected)
+    {
+        g.setColour (t.accentCool.withAlpha (0.22f));
+        g.fillRoundedRectangle (b.reduced (2.0f, 1.0f), 3.0f);
+        g.setColour (t.accentCool.withAlpha (0.55f));
+        g.drawRoundedRectangle (b.reduced (2.0f, 1.0f), 3.0f, 1.0f);
+    }
+
+    // The category's colour, here and on the pad it will land on. Same sound, same hue.
+    const auto colour = t.colourFor (e.category);
+    g.setColour (colour);
+    g.fillEllipse (10.0f, b.getCentreY() - 3.0f, 6.0f, 6.0f);
+
+    g.setColour (t.text);
+    g.setFont (juce::FontOptions (13.0f));
+    g.drawText (e.name, 24, 0, width - 116, height, juce::Justification::centredLeft, true);
+
+    g.setColour (colour.withMultipliedSaturation (0.6f).withMultipliedBrightness (0.95f));
+    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    g.drawText (categoryName (e.category), width - 96, 0, 86, height, juce::Justification::centredRight, true);
+}
+
+void BrowserPanel::paint (juce::Graphics& g)
+{
+    const auto& t = theme();
+    g.fillAll (t.background);
+
+    auto r = getLocalBounds().reduced (8);
+    r.removeFromTop (28 + 6);
+
+    // The list sits in a well, the way the sequencer does.
+    RollForgeLookAndFeel::drawRecessedWell (g, r.withTrimmedBottom (24).toFloat(), 5.0f);
+    juce::ignoreUnused (t);
+
+    g.setColour (t.hairline);
+    g.drawLine ((float) r.getX(), (float) r.getY() - 4.0f, (float) r.getRight(), (float) r.getY() - 4.0f, 1.0f);
 }
 
 void BrowserPanel::listBoxItemClicked (int row, const juce::MouseEvent& e)
@@ -200,7 +245,7 @@ void BrowserPanel::resized()
     r.removeFromTop (6);
     statusLabel.setBounds (r.removeFromBottom (20));
     r.removeFromBottom (4);
-    list.setBounds (r);
+    list.setBounds (r.reduced (3));   // sits inside the well painted in paint()
 }
 
 } // namespace rollforge

@@ -20,6 +20,7 @@ class SettingsView final : public juce::Component
 public:
     explicit SettingsView (juce::AudioDeviceManager& deviceManager);
 
+    void paint (juce::Graphics&) override;
     void resized() override;
 
     /** Fired when the UI-scale changes (already persisted). */

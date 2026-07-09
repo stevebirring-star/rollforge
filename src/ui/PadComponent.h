@@ -6,6 +6,15 @@
 // onFilesDropped — one file is a sample, several are round-robin layers). Right-click
 // for the pad's TONE/SEND. Flashes briefly when triggered. UI only — it talks to the
 // engine through the std::function callbacks the PadGrid wires up.
+//
+// An 80-pixel tile cannot hold seven things at once, so it holds two kinds of thing:
+//
+//   IDENTITY, always visible — the sound's colour, its waveform, its name, its level, and
+//   any state that is currently TRUE (a muted pad shows M; a reversed pad shows R).
+//   CONTROLS, revealed on hover — the M/S/R toggles that are off, and the trim handles.
+//
+// A toggle that is off is not information. Showing all three on all sixteen pads is 48
+// pieces of furniture telling you nothing, and it is what made the grid unreadable.
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -62,6 +71,8 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp   (const juce::MouseEvent&) override;
+    void mouseEnter (const juce::MouseEvent&) override;
+    void mouseExit  (const juce::MouseEvent&) override;
 
     // juce::FileDragAndDropTarget
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
@@ -72,6 +83,10 @@ public:
 private:
     void timerCallback() override;
     void updateTrimFromX (float x);   // maps a drag x-position onto the active trim handle
+    void refreshHover();              // hover includes the child toggles, or they'd flicker
+    void updateControlVisibility();   // an OFF toggle is furniture; hide it until you hover
+    bool isTrimmed() const noexcept;
+    float trimHandleX (bool end) const noexcept;
 
     const int          index;
     juce::String       label;
@@ -84,6 +99,7 @@ private:
     float              trimEnd     = 1.0f;
     bool               trimming    = false;  // dragging a trim handle in the bottom strip
     bool               draggingEnd = false;  // which handle (end vs start) is being dragged
+    bool               hovered     = false;  // reveals the controls
 
     juce::Colour       accent { 0xff4cc2ff };   // this pad's sound colour
 

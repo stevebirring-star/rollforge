@@ -1,5 +1,7 @@
 #include "ui/SettingsView.h"
 
+#include "ui/Theme.h"
+
 namespace rollforge
 {
 
@@ -18,7 +20,7 @@ SettingsView::SettingsView (juce::AudioDeviceManager& dm) : deviceManager (dm)
     addAndMakeVisible (*deviceSelector);
 
     scaleLabel.setText ("UI scale", juce::dontSendNotification);
-    scaleLabel.setColour (juce::Label::textColourId, juce::Colour (0xffbcbcc4));
+    scaleLabel.setColour (juce::Label::textColourId, theme().textDim);
     addAndMakeVisible (scaleLabel);
 
     scaleBox.addItem ("100%", 1);
@@ -37,7 +39,8 @@ SettingsView::SettingsView (juce::AudioDeviceManager& dm) : deviceManager (dm)
     };
     addAndMakeVisible (scaleBox);
 
-    foldersLabel.setColour (juce::Label::textColourId, juce::Colour (0xffbcbcc4));
+    foldersLabel.setColour (juce::Label::textColourId, theme().textDim);
+    foldersLabel.setFont (juce::FontOptions (12.0f));
     updateFoldersLabel();
     addAndMakeVisible (foldersLabel);
 
@@ -66,6 +69,17 @@ void SettingsView::updateFoldersLabel()
 {
     foldersLabel.setText (juce::String (settings.sampleFolders.size()) + " sample folder(s) saved",
                           juce::dontSendNotification);
+}
+
+void SettingsView::paint (juce::Graphics& g)
+{
+    const auto& t = theme();
+    g.fillAll (t.background);
+
+    // Separate the device (what the app talks to) from the app's own preferences.
+    const float y = (float) scaleLabel.getY() - 8.0f;
+    g.setColour (t.hairline);
+    g.drawLine (8.0f, y, (float) getWidth() - 8.0f, y, 1.0f);
 }
 
 void SettingsView::resized()
