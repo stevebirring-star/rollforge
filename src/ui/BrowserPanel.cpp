@@ -1,6 +1,7 @@
 #include "ui/BrowserPanel.h"
 
 #include "library/Scanner.h"
+#include "library/Similarity.h"
 #include "ui/RollForgeLookAndFeel.h"
 #include "ui/Theme.h"
 
@@ -21,6 +22,23 @@ BrowserPanel::BrowserPanel (LibraryDb& dbToUse) : db (dbToUse)
     categoryFilter.setSelectedId (1, juce::dontSendNotification);
     categoryFilter.onChange = [this] { refresh(); };
     addAndMakeVisible (categoryFilter);
+
+    // Two readings of one library. The button names the view you'd switch TO.
+    viewButton.onClick = [this] { setMapView (! map.isVisible()); };
+    viewButton.setTooltip ("See the library laid out by sound: near dots are near sounds");
+    addAndMakeVisible (viewButton);
+
+    map.onAudition = [this] (int index)
+    {
+        if (onAudition != nullptr && index >= 0 && index < (int) allEntries.size())
+            onAudition (allEntries[(size_t) index].path);
+    };
+    map.onContextMenu = [this] (int index)
+    {
+        if (index >= 0 && index < (int) allEntries.size())
+            showMenuFor (allEntries[(size_t) index], &map);
+    };
+    addChildComponent (map);   // starts hidden; the list leads
 
     // NEW KIT makes something, so it wears the hot accent, like Make a Beat.
     newKitButton.setColour (juce::TextButton::buttonColourId, theme().accentHot);
@@ -75,20 +93,56 @@ void BrowserPanel::refresh()
     if (! db.isOpen())
     {
         entries.clear();
+        allEntries.clear();
         list.updateContent();
         list.repaint();
+        map.setCorpus ({}, {});
         statusLabel.setText ("Library unavailable (could not open library.db)", juce::dontSendNotification);
         return;
     }
 
+    // The map is always built from the WHOLE library, never from the filtered subset:
+    // re-fitting the projection to a filter would scatter the survivors across the view and
+    // read as the library rearranging itself. The filter only decides what is drawn solid.
+    allEntries = db.all();
+
     const int sel = categoryFilter.getSelectedId();
-    entries = (sel <= 1) ? db.all()
+    entries = (sel <= 1) ? allEntries
                          : db.byCategory ((SoundCategory) (sel - 2));
+
     list.updateContent();
     list.repaint();
 
+    map.setCorpus (allEntries, Similarity::project (Similarity::build (allEntries)));
+    map.setCategoryFilter (selectedCategory());
+
+    statusLabel.setText (sel <= 1 ? juce::String (allEntries.size()) + " samples"
+                                  : juce::String (entries.size()) + " of "
+                                        + juce::String (allEntries.size()) + " samples",
+                         juce::dontSendNotification);
+}
+
+std::optional<SoundCategory> BrowserPanel::selectedCategory() const
+{
+    const int sel = categoryFilter.getSelectedId();
     if (sel <= 1)
-        statusLabel.setText (juce::String (db.count()) + " samples", juce::dontSendNotification);
+        return std::nullopt;
+    return (SoundCategory) (sel - 2);
+}
+
+const LibraryEntry* BrowserPanel::filteredEntry (int row) const
+{
+    if (row < 0 || row >= (int) entries.size())
+        return nullptr;
+    return &entries[(size_t) row];
+}
+
+void BrowserPanel::setMapView (bool showMap)
+{
+    map.setVisible (showMap);
+    list.setVisible (! showMap);
+    viewButton.setButtonText (showMap ? "List" : "Map");
+    repaint();
 }
 
 void BrowserPanel::rebuildKit()
@@ -150,9 +204,9 @@ void BrowserPanel::paint (juce::Graphics& g)
     auto r = getLocalBounds().reduced (8);
     r.removeFromTop (28 + 6);
 
-    // The list sits in a well, the way the sequencer does.
-    RollForgeLookAndFeel::drawRecessedWell (g, r.withTrimmedBottom (24).toFloat(), 5.0f);
-    juce::ignoreUnused (t);
+    // The list sits in a well, the way the sequencer does. The map draws its own.
+    if (! map.isVisible())
+        RollForgeLookAndFeel::drawRecessedWell (g, r.withTrimmedBottom (24).toFloat(), 5.0f);
 
     g.setColour (t.hairline);
     g.drawLine ((float) r.getX(), (float) r.getY() - 4.0f, (float) r.getRight(), (float) r.getY() - 4.0f, 1.0f);
@@ -160,26 +214,27 @@ void BrowserPanel::paint (juce::Graphics& g)
 
 void BrowserPanel::listBoxItemClicked (int row, const juce::MouseEvent& e)
 {
-    if (row < 0 || row >= (int) entries.size())
+    const auto* entry = filteredEntry (row);
+    if (entry == nullptr)
         return;
 
     if (e.mods.isPopupMenu())
     {
-        showRowMenu (row);
+        showMenuFor (*entry, &list);
         return;
     }
 
     // A plain click auditions the sample through the engine's preview pad, so you can
     // hear what you're browsing without disturbing the kit.
     if (onAudition != nullptr)
-        onAudition (entries[(size_t) row].path);
+        onAudition (entry->path);
 }
 
-void BrowserPanel::showRowMenu (int row)
+void BrowserPanel::showMenuFor (const LibraryEntry& entry, juce::Component* target)
 {
-    const juce::String  path    = entries[(size_t) row].path;
-    const juce::String  name    = entries[(size_t) row].name;
-    const SoundCategory current = entries[(size_t) row].category;
+    const juce::String  path    = entry.path;
+    const juce::String  name    = entry.name;
+    const SoundCategory current = entry.category;
 
     // Menu ids: 1..16 = send to that pad; 100 = slice; 200+ = re-tag as that category.
     constexpr int sendBase  = 1;
@@ -205,7 +260,7 @@ void BrowserPanel::showRowMenu (int row)
     menu.addSubMenu ("Re-tag as", retagMenu);
 
     juce::Component::SafePointer<BrowserPanel> safe (this);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&list),
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (target),
         [safe, path] (int choice)
         {
             if (safe == nullptr || choice <= 0)
@@ -242,12 +297,15 @@ void BrowserPanel::resized()
     top.removeFromLeft (6);
     newKitButton.setBounds (top.removeFromLeft (90));
     top.removeFromLeft (6);
-    categoryFilter.setBounds (top.removeFromLeft (130));
+    viewButton.setBounds (top.removeFromRight (64));
+    top.removeFromRight (6);
+    categoryFilter.setBounds (top.removeFromLeft (juce::jmin (130, top.getWidth())));
 
     r.removeFromTop (6);
     statusLabel.setBounds (r.removeFromBottom (20));
     r.removeFromBottom (4);
     list.setBounds (r.reduced (3));   // sits inside the well painted in paint()
+    map.setBounds (r);                // the map paints its own well, edge to edge
 }
 
 } // namespace rollforge

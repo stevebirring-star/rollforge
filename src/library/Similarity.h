@@ -45,6 +45,9 @@ namespace Similarity
         numFeatures
     };
 
+    /** A word for a feature, for labelling the map's axes. */
+    const char* featureName (Feature feature) noexcept;
+
     struct Vector
     {
         float v[numFeatures] {};

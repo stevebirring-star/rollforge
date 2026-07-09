@@ -103,6 +103,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/RollBrushOverlay.cpp
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
+        src/ui/SimilarityMap.cpp
         src/ui/ExportPanel.cpp
         src/ui/PadInspector.cpp
         src/ui/Theme.cpp

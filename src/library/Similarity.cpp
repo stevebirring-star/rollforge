@@ -75,6 +75,20 @@ namespace
 }
 
 //==============================================================================
+const char* featureName (Feature feature) noexcept
+{
+    switch (feature)
+    {
+        case logDuration: return "length";
+        case loudness:    return "level";
+        case brightness:  return "brightness";
+        case sustain:     return "sustain";
+        case density:     return "density";
+        case numFeatures: break;
+    }
+    return "?";
+}
+
 Vector featuresOf (const LibraryEntry& e) noexcept
 {
     Vector v;

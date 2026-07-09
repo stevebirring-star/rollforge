@@ -15,12 +15,18 @@
 // Click a row to audition it. Right-click for the per-sample actions: send it to a
 // pad, slice it across the pads, or re-tag its category.
 //
+// MAP flips the same library into a constellation (SimilarityMap): every sample a dot,
+// placed by how it sounds. Both views audition on a click and share the same right-click
+// menu, so they are two readings of one library rather than two browsers. (They keep
+// separate selections: the list indexes the filtered rows, the map the whole corpus.)
+//
 // "Send to pad" rather than drag-to-pad: this panel lives in a DialogWindow, which
 // launchAsync() puts into a modal state, and a JUCE internal drag cannot reach a
 // component outside the modal window. A menu is deterministic and does the same job.
 
 #include "library/KitBuilder.h"
 #include "library/LibraryDb.h"
+#include "ui/SimilarityMap.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -28,6 +34,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace rollforge
@@ -63,7 +70,15 @@ private:
     void chooseFolderAndScan();
     void refresh();
     void rebuildKit();
-    void showRowMenu (int row);
+    void setMapView (bool showMap);
+
+    /** The per-sample actions, shared by both views. `target` anchors the popup. */
+    void showMenuFor (const LibraryEntry& entry, juce::Component* target);
+
+    /** Whichever entry the list's row `row` is showing, or nullptr. */
+    const LibraryEntry* filteredEntry (int row) const;
+
+    std::optional<SoundCategory> selectedCategory() const;
 
     // juce::ListBoxModel
     int  getNumRows() override;
@@ -71,12 +86,15 @@ private:
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // click = audition, right = menu
 
     LibraryDb&                db;
-    std::vector<LibraryEntry> entries;
+    std::vector<LibraryEntry> allEntries;   // the whole library: what the map plots
+    std::vector<LibraryEntry> entries;      // filtered by category: what the list shows
 
     juce::TextButton scanButton   { "Scan Folder..." };
     juce::TextButton newKitButton { "NEW KIT" };
     juce::ComboBox   categoryFilter;
     juce::ListBox    list;
+    SimilarityMap    map;
+    juce::TextButton viewButton { "Map" };   // toggles list <-> constellation
     juce::Label      statusLabel;
 
     std::unique_ptr<juce::FileChooser> chooser;
