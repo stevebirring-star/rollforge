@@ -942,7 +942,11 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     const auto mods = key.getModifiers();
     if (mods.isCommandDown())
     {
-        const int code = key.getKeyCode();
+        // Case-fold the key code. JUCE hands us an UPPERCASE code on Windows/macOS, but
+        // on Linux XLookupString maps Ctrl+Z to the control character 0x1A, so JUCE falls
+        // back to xkbKeycodeToKeysym() with shift=0 and yields LOWERCASE 'z'. Comparing
+        // against 'Z' alone therefore made undo/redo dead on Linux, silently.
+        const auto code = juce::CharacterFunctions::toUpperCase ((juce::juce_wchar) key.getKeyCode());
         if (code == 'Z') { mods.isShiftDown() ? undoManager.redo() : undoManager.undo(); return true; }
         if (code == 'Y') { undoManager.redo(); return true; }
         return false;
