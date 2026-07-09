@@ -50,6 +50,7 @@ namespace
             auto* lo = new DynamicObject();
             lo->setProperty ("pad", lane.targetPad);
             lo->setProperty ("len", lane.length);
+            lo->setProperty ("trip", lane.triplet);
 
             juce::Array<var> steps;
             int len = lane.length;
@@ -106,6 +107,7 @@ namespace
                 Lane& lane = p.lane (li);
                 lane.targetPad = (int) lv.getProperty ("pad", 0);
                 lane.length    = (int) lv.getProperty ("len", 16);
+                lane.triplet   = (bool) lv.getProperty ("trip", false);   // absent -> straight
 
                 if (auto* steps = lv.getProperty ("steps", var()).getArray())
                     for (int s = 0; s < steps->size() && s < maxStepsPerLane; ++s)

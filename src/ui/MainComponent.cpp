@@ -197,6 +197,31 @@ MainComponent::MainComponent()
                                                     [this] (int l, int s) { afterStepEdit (l, s); }));
         }
     };
+    seqGrid.onLaneTripletToggled = [this] (int lane, bool triplet)
+    {
+        if (lane < 0 || lane >= editPattern.numLanes)
+            return;
+
+        Pattern before = editPattern;
+        before.swing   = engine.getSequencer().getSwing();
+        Pattern after  = before;
+
+        Lane& l = after.lane (lane);
+        l.triplet = triplet;
+        // A lane holds one bar of its OWN steps: 16 straight, 12 triplet. Steps past the
+        // new length stay in the array; they simply stop sounding, so toggling back and
+        // forth doesn't destroy what you drew.
+        l.length = defaultLaneLength (triplet);
+
+        auto refresh = [this]
+        {
+            refreshGridFromPattern();
+            engine.getSequencer().setPattern (editPattern);
+        };
+
+        undoManager.beginNewTransaction();
+        undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+    };
     seqGrid.onLaneLockToggled = [this] (int lane)
     {
         if (lane >= 0 && lane < maxLanes)
@@ -320,6 +345,15 @@ MainComponent::MainComponent()
 
     rollOverlay.onRollPainted = [this] (int lane, int startStep, int length, float density)
     {
+        // The overlay maps x onto the uniform 16-column grid, and the RollCompiler emits
+        // 1/16-step offsets. Neither is true of a triplet lane, so it doesn't take paint.
+        if (lane >= 0 && lane < editPattern.numLanes && editPattern.lane (lane).triplet)
+        {
+            statusLabel.setText ("Roll brush doesn't apply to a triplet lane",
+                                 juce::dontSendNotification);
+            return;
+        }
+
         if (lane < 0 || lane >= editPattern.numLanes || editPattern.numRolls >= maxRolls)
             return;
 
@@ -357,7 +391,8 @@ MainComponent::MainComponent()
     for (int lane = 0; lane < 16; ++lane)
     {
         editPattern.lane (lane).targetPad = lane;
-        editPattern.lane (lane).length = 16;
+        editPattern.lane (lane).length  = straightStepsPerBar;
+        editPattern.lane (lane).triplet = false;
         if (auto sample = starterKit.pad (lane).primarySample())
             seqGrid.setLaneLabel (lane, sample->getName());
         for (int step = 0; step < 16; ++step)
@@ -481,23 +516,28 @@ void MainComponent::refreshGridFromPattern()
     {
         if (lane < editPattern.numLanes)
         {
-            const int pad = editPattern.lane (lane).targetPad;
+            const Lane& l = editPattern.lane (lane);
+            const int pad = l.targetPad;
             juce::String label;
             if (pad >= 0 && pad < kitNumPads)
                 if (auto sample = starterKit.pad (pad).primarySample())
                     label = sample->getName();
             seqGrid.setLaneLabel (lane, label);
+            seqGrid.setLaneTriplet (lane, l.triplet);
+            seqGrid.setLaneLength  (lane, l.length);
 
-            for (int step = 0; step < 16; ++step)
+            for (int step = 0; step < seqGrid.getNumSteps(); ++step)
             {
-                const Step& s = editPattern.lane (lane).step (step);
+                const Step& s = l.step (step);
                 seqGrid.setStep (lane, step, s.on, s.velocity);
             }
         }
         else
         {
             seqGrid.setLaneLabel (lane, {});
-            for (int step = 0; step < 16; ++step)
+            seqGrid.setLaneTriplet (lane, false);
+            seqGrid.setLaneLength  (lane, seqGrid.getNumSteps());
+            for (int step = 0; step < seqGrid.getNumSteps(); ++step)
                 seqGrid.setStep (lane, step, false, 0.8f);
         }
     }
@@ -910,13 +950,23 @@ void MainComponent::timerCallback()
     // Reclaim retired sample buffers that no voice references any more.
     retirementPool.sweep();
 
-    // Drive the sequencer playhead highlight.
+    // Drive the sequencer playhead highlight. Each lane runs at its own rate, so the
+    // playhead is per lane: a triplet lane is on its own step, not the grid's column.
     auto& seq = engine.getSequencer();
-    const int nSteps = seqGrid.getNumSteps();
-    const int step = (seq.isPlaying() && seq.getCurrentStep() >= 0)
-                       ? (int) (seq.getCurrentStep() % nSteps)
-                       : -1;
-    seqGrid.setPlayheadStep (step);
+    if (! seq.isPlaying() || seq.getCurrentStep() < 0)
+    {
+        seqGrid.clearPlayheads();
+    }
+    else
+    {
+        const std::int64_t globalStep = seq.getCurrentStep();
+        for (int lane = 0; lane < seqGrid.getNumLanes() && lane < editPattern.numLanes; ++lane)
+        {
+            const Lane& l = editPattern.lane (lane);
+            const int len = juce::jlimit (1, maxStepsPerLane, l.length);
+            seqGrid.setLanePlayhead (lane, (int) (laneStepAtGlobalStep (l, globalStep) % len));
+        }
+    }
 
     // Drive the per-pad level meters (called every tick so silent pads decay too).
     auto& drum = engine.getDrumEngine();

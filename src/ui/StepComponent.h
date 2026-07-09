@@ -24,6 +24,10 @@ public:
     void setPlayhead (bool isCurrent);
     void setChanged (bool wasJustChanged);   // brief "Vary changed this" highlight
 
+    /** False for a cell past the lane's length (a triplet lane uses 12 of 16). It is
+        drawn faint and ignores the mouse — the step doesn't exist. */
+    void setActive (bool isActive);
+
     std::function<void (bool on, float velocity)> onEdit;
     std::function<void()> onGestureStart;   // fired at mouse-down (for undo transactions)
 
@@ -41,6 +45,7 @@ private:
     bool  changed   = false;   // recently mutated by Vary -> amber ring, cleared by a timer
     bool  editing   = false;   // mouse held on this cell -> show a prominent % readout
     bool  downWasOn = false;    // step's on-state at mouse-down (click vs velocity-drag)
+    bool  active    = true;     // false -> beyond the lane's length: faint, unclickable
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepComponent)
 };

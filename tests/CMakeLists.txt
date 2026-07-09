@@ -26,6 +26,7 @@ target_sources(RollForgeTests PRIVATE
     PatternModelTests.cpp
     ClockTimingTests.cpp
     SequencerTests.cpp
+    TripletTests.cpp
     PatternSwitchTests.cpp
     RollCompilerTests.cpp
     RollSequencingTests.cpp

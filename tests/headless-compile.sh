@@ -95,6 +95,7 @@ TEST_SOURCES=(
     tests/PatternModelTests.cpp
     tests/ClockTimingTests.cpp
     tests/SequencerTests.cpp
+    tests/TripletTests.cpp
     tests/PatternSwitchTests.cpp
     tests/RollCompilerTests.cpp
     tests/RollSequencingTests.cpp

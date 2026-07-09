@@ -56,26 +56,43 @@ juce::MidiMessageSequence toSequence (const Pattern& pattern, int bars, int tick
         {
             const Lane& lane = pattern.lane (li);
             const int len = clampi (lane.length, 1, maxStepsPerLane);
-            const Step& st = lane.step (g % len);
-            if (! st.on)
-                continue;
 
-            const int   note = gmNoteForPad (lane.targetPad);
-            const double fwd  = st.microShift < 0.0f ? 0.0 : (st.microShift > 0.5f ? 0.5 : (double) st.microShift);
-            const int   r    = clampi (st.ratchets, 1, 8);
+            // The same per-lane rate the Sequencer uses (model/Lane.h). Keeping the two
+            // in step is the whole point of the shared helper: the exported MIDI has to
+            // be the image of what you heard, and a triplet lane placed on the 1/16 grid
+            // would silently straighten every export.
+            const auto   rate  = laneStepRate (lane);
+            const double ratio = (double) rate.num / (double) rate.den;
 
-            for (int j = 0; j < r; ++j)
+            std::int64_t firstLaneStep = 0, endLaneStep = 0;
+            laneStepsInGlobalStep (lane, g, firstLaneStep, endLaneStep);
+
+            for (std::int64_t p = firstLaneStep; p < endLaneStep; ++p)
             {
-                const double subPos = (double) g + fwd + (double) j / (double) r;
-                const int    tick   = (int) std::llround (subPos * stepTicks);
+                const Step& st = lane.step ((int) (p % (std::int64_t) len));
+                if (! st.on)
+                    continue;
 
-                float vel = st.velocity;
-                if (r > 1)
+                const int   note = gmNoteForPad (lane.targetPad);
+                const double fwd  = st.microShift < 0.0f ? 0.0 : (st.microShift > 0.5f ? 0.5 : (double) st.microShift);
+                const int   r    = clampi (st.ratchets, 1, 8);
+
+                for (int j = 0; j < r; ++j)
                 {
-                    const float t = (float) j / (float) (r - 1);
-                    vel *= 1.0f + st.ratchetRamp * (t - 0.5f);
+                    // In 1/16-step units: the lane step's own position, plus micro-shift
+                    // and the ratchet spread scaled to the lane's step length.
+                    const double subPos = (double) g + laneStepOffset (lane, p, g)
+                                            + (fwd + (double) j / (double) r) * ratio;
+                    const int    tick   = (int) std::llround (subPos * stepTicks);
+
+                    float vel = st.velocity;
+                    if (r > 1)
+                    {
+                        const float t = (float) j / (float) (r - 1);
+                        vel *= 1.0f + st.ratchetRamp * (t - 0.5f);
+                    }
+                    addNote (seq, note, vel, tick, stepTicks / 2);
                 }
-                addNote (seq, note, vel, tick, stepTicks / 2);
             }
         }
 

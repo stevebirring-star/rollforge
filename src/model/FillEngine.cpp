@@ -135,7 +135,8 @@ namespace
     void setupLane (Pattern& p, int laneIndex, int targetPad)
     {
         p.lane (laneIndex).targetPad = targetPad;
-        p.lane (laneIndex).length    = 16;
+        p.lane (laneIndex).length    = straightStepsPerBar;
+        p.lane (laneIndex).triplet   = false;   // a generated beat is straight; locked lanes keep theirs
         for (int s = 0; s < maxStepsPerLane; ++s)
             p.lane (laneIndex).step (s) = Step {};   // clear
     }

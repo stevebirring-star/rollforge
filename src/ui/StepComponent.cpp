@@ -19,6 +19,16 @@ void StepComponent::setState (bool isOn, float vel)
     repaint();
 }
 
+void StepComponent::setActive (bool isActive)
+{
+    if (active != isActive)
+    {
+        active = isActive;
+        setInterceptsMouseClicks (active, false);
+        repaint();
+    }
+}
+
 void StepComponent::setPlayhead (bool isCurrent)
 {
     if (current != isCurrent)
@@ -95,6 +105,15 @@ void StepComponent::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat().reduced (1.5f);
     constexpr float corner = 3.0f;
+
+    // Past the lane's length: a hollow outline, so a triplet lane's four unused columns
+    // read as "not part of this row" rather than "an empty step you could turn on".
+    if (! active)
+    {
+        g.setColour (juce::Colour (0xff1e1e24));
+        g.fillRoundedRectangle (bounds, corner);
+        return;
+    }
 
     const juce::Colour off    { 0xff23232a };
     const juce::Colour onLow  { 0xff2f5d73 };
