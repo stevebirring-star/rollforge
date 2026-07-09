@@ -75,6 +75,25 @@ public:
             Pattern fourBars = oneBar;
             fourBars.lane (0).length = 64;                    // max lane length -> 4 bars
             expectEquals (patternBars (fourBars), 4);
+
+            // A triplet lane's length counts ITS steps, each 4/3 of a 1/16. Twelve of them
+            // are a whole bar, not three quarters of one — measure the lane in GLOBAL steps
+            // or a multi-bar triplet lane exports with its last bar silently truncated.
+            Pattern triplet;
+            triplet.numLanes = 1;
+            triplet.lane (0).triplet = true;
+
+            triplet.lane (0).length = 12;                     // 12 * 4/3 = 16 global -> 1 bar
+            expectEquals (patternBars (triplet), 1);
+
+            triplet.lane (0).length = 24;                     // -> 32 global -> 2 bars
+            expectEquals (patternBars (triplet), 2);
+
+            triplet.lane (0).length = 48;                     // -> 64 global -> 4 bars
+            expectEquals (patternBars (triplet), 4);
+
+            triplet.lane (0).length = 13;                     // -> ceil(17.33) = 18 -> 2 bars
+            expectEquals (patternBars (triplet), 2);
         }
 
         beginTest ("TripleBuffer returns the default before any publish");
