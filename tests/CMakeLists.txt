@@ -43,6 +43,7 @@ target_sources(RollForgeTests PRIVATE
     BeatboxDetectorTests.cpp
     CaptureTests.cpp
     InputRecorderTests.cpp
+    MidiCaptureQueueTests.cpp
     FolderWatcherTests.cpp
     ResampleTests.cpp
     SongTests.cpp
@@ -84,6 +85,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/FeatureExtractor.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Slicer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/InputRecorder.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/MidiCaptureQueue.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Resample.cpp
     ${CMAKE_SOURCE_DIR}/src/library/BeatboxDetector.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Capture.cpp

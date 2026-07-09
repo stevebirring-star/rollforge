@@ -62,6 +62,7 @@ ENGINE_SOURCES=(
     src/library/FeatureExtractor.cpp
     src/library/Slicer.cpp
     src/engine/InputRecorder.cpp
+    src/engine/MidiCaptureQueue.cpp
     src/engine/Resample.cpp
     src/library/BeatboxDetector.cpp
     src/model/Capture.cpp
@@ -121,6 +122,7 @@ TEST_SOURCES=(
     tests/BeatboxDetectorTests.cpp
     tests/CaptureTests.cpp
     tests/InputRecorderTests.cpp
+    tests/MidiCaptureQueueTests.cpp
     tests/FolderWatcherTests.cpp
     tests/ResampleTests.cpp
     tests/SongTests.cpp

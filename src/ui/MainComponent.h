@@ -102,8 +102,14 @@ private:
     /** REC. `armed` from the transport's toggle; the source decides which capture runs. */
     void setCapturing (bool armed, TransportBar::CaptureSource source);
 
-    /** A pad was played by hand. Quantises it into the pattern if a pad capture is running. */
+    /** A pad was played by hand, now. Quantises it if a pad capture is running. */
     void captureTap (int pad, float velocity);
+
+    /** A pad was played at a known point in the loop (a MIDI note, drained from its queue). */
+    void captureTapAt (int pad, float velocity, std::int64_t transportSample);
+
+    /** Once per timer tick: move any MIDI notes played since the last one into the pattern. */
+    void drainMidiCapture();
 
     /** REC off with the mic source: analyse the take and merge its hits, as one undoable step. */
     void finishMicCapture();

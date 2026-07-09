@@ -133,7 +133,15 @@ void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiM
     {
         const int pad = midiNoteToPad (message.getNoteNumber());
         if (pad >= 0)
-            drumEngine.pushMidiTrigger (pad, message.getFloatVelocity());
+        {
+            const float velocity = message.getFloatVelocity();
+            drumEngine.pushMidiTrigger (pad, velocity);
+
+            // ...and keep a record of it, stamped where the loop was, so REC can quantise it.
+            // The message thread drains this; nothing here may touch the pattern.
+            midiCaptureQueue.push ({ pad, velocity,
+                                     sequencer.isPlaying() ? sequencer.getTransportSamples() : 0 });
+        }
     }
 }
 

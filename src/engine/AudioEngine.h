@@ -15,6 +15,7 @@
 
 #include "engine/DrumEngine.h"
 #include "engine/InputRecorder.h"
+#include "engine/MidiCaptureQueue.h"
 #include "engine/OutputMeter.h"
 #include "engine/MasterBus.h"
 #include "engine/PadMapping.h"
@@ -73,6 +74,11 @@ public:
     /** The microphone capture buffer. Arm it, play, disarm it, take() the samples. */
     InputRecorder& getInputRecorder() noexcept { return inputRecorder; }
 
+    /** Notes played on a MIDI controller, each stamped with where the loop was. Drained by the
+        message thread: a MIDI callback may not touch the pattern or the undo history. The pad
+        sounds immediately either way -- this is only the record of the note. */
+    MidiCaptureQueue& getMidiCaptureQueue() noexcept { return midiCaptureQueue; }
+
     /** Exposed so the UI can host an AudioDeviceSelectorComponent. The engine
         keeps ownership; the UI only reads/edits the shared device manager. */
     juce::AudioDeviceManager& getDeviceManager() noexcept { return deviceManager; }
@@ -127,6 +133,7 @@ private:
     std::atomic<int>    inputChannels     { 0 };
     std::atomic<double> currentSampleRate { 44100.0 };
     InputRecorder     inputRecorder;
+    MidiCaptureQueue  midiCaptureQueue;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
 };

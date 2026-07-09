@@ -1190,6 +1190,9 @@ void MainComponent::setCapturing (bool armed, TransportBar::CaptureSource source
 
         capturing = true;
 
+        // Notes played before REC was pressed are not part of the take.
+        engine.getMidiCaptureQueue().clear();
+
         // Everything captured in one take undoes in one Ctrl+Z. beginNewTransaction here, and
         // not again until REC is released, is the whole of it.
         undoManager.beginNewTransaction();
@@ -1219,6 +1222,30 @@ void MainComponent::setCapturing (bool armed, TransportBar::CaptureSource source
 
 void MainComponent::captureTap (int pad, float velocity)
 {
+    // The transport clock, not a wall clock: the loop and the tap have to agree, and
+    // Time::getMillisecondCounter drifts against the audio device over a long take.
+    captureTapAt (pad, velocity, engine.getSequencer().getTransportSamples());
+}
+
+void MainComponent::drainMidiCapture()
+{
+    // Drained every tick whether or not REC is armed: a queue nobody empties fills up, and a
+    // full queue drops the notes of the take that follows it.
+    const auto batch = engine.getMidiCaptureQueue().take();
+
+    if (! capturing)
+        return;
+
+    for (const auto& note : batch.notes)
+        captureTapAt (note.pad, note.velocity, note.transportSample);
+
+    if (batch.dropped > 0)
+        statusLabel.setText (juce::String (batch.dropped) + " notes came too fast to capture",
+                             juce::dontSendNotification);
+}
+
+void MainComponent::captureTapAt (int pad, float velocity, std::int64_t transportSample)
+{
     auto& seq = engine.getSequencer();
 
     if (! capturing || transportBar.getCaptureSource() != TransportBar::CaptureSource::pads)
@@ -1226,10 +1253,8 @@ void MainComponent::captureTap (int pad, float velocity)
     if (! seq.isPlaying())
         return;
 
-    // The transport clock, not a wall clock: the loop and the tap have to agree, and
-    // Time::getMillisecondCounter drifts against the audio device over a long take.
     const double sampleRate = engine.getSampleRate();
-    const Capture::Hit hit { (double) seq.getTransportSamples() / sampleRate, pad, velocity };
+    const Capture::Hit hit { (double) transportSample / sampleRate, pad, velocity };
 
     int lane = 0, step = 0;
     if (! Capture::quantise (editPattern, hit, editPattern.bpm, lane, step))
@@ -1870,6 +1895,10 @@ void MainComponent::timerCallback()
         }
     }
 
+    // MIDI notes played since the last tick. Before the auto-disarm below, so the last notes of
+    // a take that ended with the transport are not thrown away.
+    drainMidiCapture();
+
     // Stopping the transport under a running capture ends it. Leaving REC lit over a stopped
     // clock would go on collecting taps that all timestamp to the downbeat.
     if (capturing && ! seq.isPlaying())
@@ -2019,10 +2048,14 @@ void MainComponent::openExport()
 
 std::vector<CoachMarks::Step> MainComponent::tourSteps()
 {
-    // Six steps, and the order is load-bearing. Make a Beat does NOT start the transport, so
+    // Seven steps, and the order is load-bearing. Make a Beat does NOT start the transport, so
     // any feature shown before Play would be demonstrated in silence -- which is how a tour
-    // becomes a lecture. Sound first, then the three things this app does that a user could
-    // not have guessed, then where to find the rest.
+    // becomes a lecture. Sound first, then the things this app does that a user could not have
+    // guessed, then where to find the rest.
+    //
+    // REC comes third because it is the least discoverable thing here: a button marked REC
+    // beside a box marked Mic gives no hint that you can beatbox a pattern into it. And it must
+    // come after Play, because capture refuses to run against a stopped clock.
     //
     // Every target is a MainComponent member: CoachMarks cuts its hole around a Component it
     // is handed, so a step cannot point at a button living inside FillBar or PadInspector.
@@ -2035,6 +2068,11 @@ std::vector<CoachMarks::Step> MainComponent::tourSteps()
         { &transportBar, "Play it",
           "Press Play to loop the beat you just made. Nothing plays until you do, so this is "
           "where the sound starts." },
+
+        { &transportBar.getRecordButton(), "Beatbox it in",
+          "REC records what you play onto the grid, quantised. Set the box beside it to Pads and "
+          "tap them, or set it to Mic and beatbox: your kicks, snares and hats are found and "
+          "written for you. The whole take is one undo." },
 
         { &brushButton, "Paint a roll",
           "Turn Roll Brush on, then drag across a lane in the grid to paint an accelerating "

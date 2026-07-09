@@ -56,6 +56,10 @@ public:
 
     /** Greys out the Mic option when the device gave us no input channel. */
     void setMicAvailable (bool available);
+
+    /** The REC button itself, so the guided tour can cut a hole around it rather than around
+        the whole transport. Nothing else should reach in here. */
+    juce::Component& getRecordButton() noexcept { return recButton; }
     void setDisplayedSwing (float amount);
 
 private:

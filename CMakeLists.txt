@@ -141,6 +141,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/MasterBus.cpp
         src/engine/OfflineRenderer.cpp
         src/engine/InputRecorder.cpp
+        src/engine/MidiCaptureQueue.cpp
         src/engine/Resample.cpp
         src/engine/WavExporter.cpp
         src/engine/fx/Compressor.cpp
