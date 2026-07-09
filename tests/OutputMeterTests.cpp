@@ -143,6 +143,31 @@ public:
             expect (m.getVuDb (0) < loudVu - 10.0f, "the needle falls back");
         }
 
+        beginTest ("the needle deflects linearly in amplitude, not in decibels");
+        {
+            // A real VU's -20..0 marks are crowded and its 0..+3 marks are wide, because
+            // the movement deflects with voltage. Driving the needle from dB (and printing
+            // even ticks) is the single tell of a fake meter.
+            expectWithinAbsoluteError (OutputMeter::deflectionForVuDb (3.0f), 1.0f, 0.001f,
+                                       "+3 VU is full-scale deflection");
+            expectWithinAbsoluteError (OutputMeter::deflectionForVuDb (0.0f), 1.0f / 1.413f, 0.002f,
+                                       "0 VU sits at ~71% of the arc");
+            expectWithinAbsoluteError (OutputMeter::deflectionForVuDb (-20.0f), 0.1f / 1.413f, 0.002f,
+                                       "-20 VU sits at ~7% — crowded at the bottom");
+
+            // Doubling the voltage doubles the deflection. That is the whole law.
+            expectWithinAbsoluteError (OutputMeter::deflectionForVuDb (-6.0f) * 2.0f,
+                                       OutputMeter::deflectionForVuDb (0.0f), 0.005f);
+
+            // And the live needle agrees with the printed scale.
+            const float reference = std::pow (10.0f, OutputMeter::zeroVuDbfs / 20.0f);
+            OutputMeter m;
+            m.prepare (sr);
+            feedSteady (m, 0, reference, 2.0);
+            expectWithinAbsoluteError (m.getVuDeflection (0),
+                                       OutputMeter::deflectionForVuDb (0.0f), 0.01f);
+        }
+
         beginTest ("the two channels are independent");
         {
             OutputMeter m;

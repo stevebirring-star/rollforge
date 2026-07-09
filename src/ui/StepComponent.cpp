@@ -1,5 +1,7 @@
 #include "ui/StepComponent.h"
 
+#include "ui/Theme.h"
+
 namespace rollforge
 {
 
@@ -17,6 +19,15 @@ void StepComponent::setState (bool isOn, float vel)
     on = isOn;
     velocity = juce::jlimit (0.05f, 1.0f, vel);
     repaint();
+}
+
+void StepComponent::setAccent (juce::Colour colour)
+{
+    if (accent != colour)
+    {
+        accent = colour;
+        repaint();
+    }
 }
 
 void StepComponent::setActive (bool isActive)
@@ -108,16 +119,22 @@ void StepComponent::paint (juce::Graphics& g)
 
     // Past the lane's length: a hollow outline, so a triplet lane's four unused columns
     // read as "not part of this row" rather than "an empty step you could turn on".
+    const auto& t = theme();
+
     if (! active)
     {
-        g.setColour (juce::Colour (0xff1e1e24));
+        g.setColour (t.background.darker (0.25f));
         g.fillRoundedRectangle (bounds, corner);
+        g.setColour (t.hairline.withAlpha (0.5f));
+        g.drawRoundedRectangle (bounds, corner, 1.0f);
         return;
     }
 
-    const juce::Colour off    { 0xff23232a };
-    const juce::Colour onLow  { 0xff2f5d73 };
-    const juce::Colour onHigh { 0xff4cc2ff };
+    // The step wears the colour of the sound it fires. Velocity is then carried by
+    // brightness and fill height, not by a second hue — one variable, one channel.
+    const juce::Colour off    = t.panel.brighter (0.10f);
+    const juce::Colour onLow  = accent.withSaturation (0.45f).darker (0.55f);
+    const juce::Colour onHigh = accent;
 
     if (on)
     {
@@ -144,7 +161,7 @@ void StepComponent::paint (juce::Graphics& g)
         }
         else
         {
-            g.setColour (juce::Colours::white.withAlpha (0.72f));
+            g.setColour (t.background.withAlpha (0.75f));
             g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
             g.drawText (juce::String (pct), bounds, juce::Justification::centred, false);
         }
@@ -155,15 +172,28 @@ void StepComponent::paint (juce::Graphics& g)
         g.fillRoundedRectangle (bounds, corner);
     }
 
-    g.setColour (current ? juce::Colours::white
-                         : juce::Colour (0xff3a3a44));
-    g.drawRoundedRectangle (bounds, corner, current ? 2.0f : 1.0f);
+    // The playhead is the machine running: cool, and only ever cool.
+    if (current)
+    {
+        g.setColour (t.accentCool.withAlpha (0.22f));
+        g.fillRoundedRectangle (bounds, corner);
+        g.setColour (t.accentCool);
+        g.drawRoundedRectangle (bounds, corner, 1.6f);
+    }
+    else
+    {
+        g.setColour (t.hairline);
+        g.drawRoundedRectangle (bounds, corner, 1.0f);
+    }
 
-    // "Vary just touched this" marker: an amber ring over the normal border, shown
-    // on both added hits and cleared cells (so you can see what was removed too).
+    // "Vary just touched this" marker, shown on added hits and cleared cells alike. It is
+    // BONE, not accentHot: a kick lane's steps are already hot-orange, and an orange ring
+    // on an orange step says nothing. Bone reads against all nine category colours.
     if (changed)
     {
-        g.setColour (juce::Colour (0xffffb43a));
+        g.setColour (t.text.withAlpha (0.35f));
+        g.drawRoundedRectangle (bounds.expanded (1.0f), corner + 1.0f, 2.5f);
+        g.setColour (t.text);
         g.drawRoundedRectangle (bounds, corner, 2.0f);
     }
 }

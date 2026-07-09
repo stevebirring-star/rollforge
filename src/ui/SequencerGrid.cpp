@@ -1,5 +1,7 @@
 #include "ui/SequencerGrid.h"
 
+#include "ui/GridGeometry.h"
+
 namespace rollforge
 {
 
@@ -102,6 +104,19 @@ void SequencerGrid::setLaneTriplet (int lane, bool triplet)
         b->setToggleState (triplet, juce::dontSendNotification);
 }
 
+void SequencerGrid::setLaneColour (int lane, juce::Colour colour)
+{
+    if (lane < 0 || lane >= numLanes)
+        return;
+
+    if (auto* label = laneLabels[lane])
+        label->setColour (juce::Label::textColourId, colour.withMultipliedSaturation (0.75f)
+                                                           .withMultipliedBrightness (0.95f));
+    for (int step = 0; step < numSteps; ++step)
+        if (auto* c = cell (lane, step))
+            c->setAccent (colour);
+}
+
 void SequencerGrid::flashChanged (const std::vector<std::pair<int, int>>& changedCells)
 {
     // Clear any previous flash first so a rapid re-vary doesn't leave stale rings.
@@ -155,15 +170,18 @@ void SequencerGrid::clearPlayheads()
 void SequencerGrid::resized()
 {
     auto area = getLocalBounds();
-    const int rowH = area.getHeight() / numLanes;
-    const int gridW = area.getWidth() - labelColumnWidth;
-    const int cellW = gridW / numSteps;
+    const int gridW = juce::jmax (1, area.getWidth() - labelColumnWidth);
 
     constexpr int lockW = 18;   // narrow padlock column at the left of each lane header
     constexpr int tripW = 18;   // and the "3" triplet toggle beside it
     for (int lane = 0; lane < numLanes; ++lane)
     {
-        const int y = lane * rowH;
+        // Exact edges, never a truncated width: see ui/GridGeometry.h. The lanes and the
+        // steps both tile their space, so nothing drifts as the window resizes.
+        const auto rowY = gridSpan (lane, numLanes, area.getHeight());
+        const int  y    = rowY.getStart();
+        const int  rowH = rowY.getLength();
+
         if (auto* lock = lockButtons[lane])
             lock->setBounds (0, y, lockW, rowH);
         if (auto* trip = tripletButtons[lane])
@@ -173,7 +191,10 @@ void SequencerGrid::resized()
 
         for (int step = 0; step < numSteps; ++step)
             if (auto* c = cell (lane, step))
-                c->setBounds (labelColumnWidth + step * cellW, y, cellW, rowH);
+            {
+                const auto sx = gridSpan (step, numSteps, gridW, labelColumnWidth);
+                c->setBounds (sx.getStart(), y, sx.getLength(), rowH);
+            }
     }
 }
 

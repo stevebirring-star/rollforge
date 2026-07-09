@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include "ui/RollForgeLookAndFeel.h"
+
 #include "library/KitBuilder.h"
 #include "model/ProjectIO.h"
 #include "model/Variator.h"
@@ -14,12 +16,13 @@
 namespace rollforge
 {
 
+// Colour now comes from ui/Theme.h. These aliases keep the call sites short.
 namespace colours
 {
-    static const juce::Colour background { 0xff1a1a1e };
-    static const juce::Colour panel      { 0xff26262c };
-    static const juce::Colour text       { 0xffe8e8ec };
-    static const juce::Colour textDim    { 0xff9a9aa4 };
+    inline juce::Colour background() { return theme().background; }
+    inline juce::Colour panel()      { return theme().buttonFace; }
+    inline juce::Colour text()       { return theme().text; }
+    inline juce::Colour textDim()    { return theme().textDim; }
 }
 
 namespace
@@ -71,51 +74,48 @@ MainComponent::MainComponent()
     // Apply the saved UI scale (default 1.0 when there are no settings yet).
     juce::Desktop::getInstance().setGlobalScaleFactor (AppSettings::load().uiScale);
 
-    titleLabel.setText ("RollForge", juce::dontSendNotification);
-    titleLabel.setFont (juce::FontOptions (30.0f, juce::Font::bold));
-    titleLabel.setColour (juce::Label::textColourId, colours::text);
-    titleLabel.setJustificationType (juce::Justification::centredLeft);
-    addAndMakeVisible (titleLabel);
+    addAndMakeVisible (brandMark);
+    addAndMakeVisible (masterMeter);
 
     statusLabel.setFont (juce::FontOptions (13.0f));
-    statusLabel.setColour (juce::Label::textColourId, colours::textDim);
+    statusLabel.setColour (juce::Label::textColourId, colours::textDim());
     statusLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (statusLabel);
 
-    settingsButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    settingsButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    settingsButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    settingsButton.setColour (juce::TextButton::textColourOffId, colours::text());
     settingsButton.onClick = [this] { openSettings(); };
     addAndMakeVisible (settingsButton);
 
-    libraryButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    libraryButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    libraryButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    libraryButton.setColour (juce::TextButton::textColourOffId, colours::text());
     libraryButton.onClick = [this] { openLibrary(); };
     addAndMakeVisible (libraryButton);
 
-    exportButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    exportButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    exportButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    exportButton.setColour (juce::TextButton::textColourOffId, colours::text());
     exportButton.onClick = [this] { openExport(); };
     addAndMakeVisible (exportButton);
 
-    helpButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    helpButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    helpButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    helpButton.setColour (juce::TextButton::textColourOffId, colours::text());
     helpButton.onClick = [this] { openHelp(); };
     addAndMakeVisible (helpButton);
 
-    saveButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    saveButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    saveButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    saveButton.setColour (juce::TextButton::textColourOffId, colours::text());
     saveButton.onClick = [this] { doSaveProject(); };
     saveButton.setTooltip ("Save the project (kit, pattern, rolls, FX, mute/solo, tempo) to a .rollforge file");
     addAndMakeVisible (saveButton);
 
-    openButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    openButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    openButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    openButton.setColour (juce::TextButton::textColourOffId, colours::text());
     openButton.onClick = [this] { doOpenProject(); };
     openButton.setTooltip ("Open a .rollforge project");
     addAndMakeVisible (openButton);
 
-    sliceButton.setColour (juce::TextButton::buttonColourId, colours::panel);
-    sliceButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    sliceButton.setColour (juce::TextButton::buttonColourId, colours::panel());
+    sliceButton.setColour (juce::TextButton::textColourOffId, colours::text());
     sliceButton.onClick = [this]
     {
         sliceChooser = std::make_unique<juce::FileChooser> ("Slice a loop across the pads",
@@ -300,7 +300,7 @@ MainComponent::MainComponent()
     // Roll brush: toggle it on, then drag across a lane to paint an accelerating
     // roll (drag up = denser). Clear Rolls removes them.
     brushButton.setClickingTogglesState (true);
-    brushButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff2a7a74));
+    brushButton.setColour (juce::TextButton::buttonOnColourId, theme().accentHot);
     brushButton.onClick = [this] { rollOverlay.setBrushEnabled (brushButton.getToggleState()); };
     addAndMakeVisible (brushButton);
 
@@ -414,6 +414,8 @@ MainComponent::MainComponent()
     }
 
     startTimer (33);   // ~30 Hz: reclaim retired buffers + drive the playhead
+    refreshCategoryColours();
+
     setSize (780, 880);
 
     // One-time welcome overlay: shown only on the very first launch (gated by a
@@ -494,6 +496,23 @@ void MainComponent::updateLaneLabelForPad (int padIndex)
     for (int lane = 0; lane < editPattern.numLanes; ++lane)
         if (editPattern.lane (lane).targetPad == padIndex)
             seqGrid.setLaneLabel (lane, label);
+}
+
+void MainComponent::refreshCategoryColours()
+{
+    // A sound owns a colour, and it wears it everywhere: on its pad, and on the sequencer
+    // lane that fires it. This is the whole difference between a grid of grey cells and an
+    // instrument you can read at a glance.
+    for (int pad = 0; pad < kitNumPads; ++pad)
+        padGrid.setPadAccent (pad, theme().colourFor (KitBuilder::categoryForPad (pad)));
+
+    for (int lane = 0; lane < seqGrid.getNumLanes(); ++lane)
+    {
+        const int pad = (lane < editPattern.numLanes) ? editPattern.lane (lane).targetPad : lane;
+        const auto category = (pad >= 0 && pad < kitNumPads) ? KitBuilder::categoryForPad (pad)
+                                                             : SoundCategory::Unknown;
+        seqGrid.setLaneColour (lane, theme().colourFor (category));
+    }
 }
 
 void MainComponent::refreshPadAudibility()
@@ -686,6 +705,7 @@ void MainComponent::applyProject (const Project& p)
 
     refreshGridFromPattern();
     refreshPadAudibility();
+    refreshCategoryColours();
     engine.getSequencer().setPattern (editPattern);
 
     // Reflect the loaded tempo/swing into the transport knobs + the live engine so
@@ -1053,7 +1073,7 @@ void MainComponent::openSettings()
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (view.release());
     options.dialogTitle                  = "Settings";
-    options.dialogBackgroundColour       = colours::background;
+    options.dialogBackgroundColour       = colours::background();
     options.componentToCentreAround      = this;
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar            = true;
@@ -1099,7 +1119,7 @@ void MainComponent::openLibrary()
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (browser.release());
     options.dialogTitle                  = "Sample Library";
-    options.dialogBackgroundColour       = colours::background;
+    options.dialogBackgroundColour       = colours::background();
     options.componentToCentreAround      = this;
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar            = true;
@@ -1126,7 +1146,7 @@ void MainComponent::openExport()
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (panel.release());
     options.dialogTitle                  = "Export";
-    options.dialogBackgroundColour       = colours::background;
+    options.dialogBackgroundColour       = colours::background();
     options.componentToCentreAround      = this;
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar            = true;
@@ -1145,7 +1165,7 @@ void MainComponent::openHelp()
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (new AboutView());
     options.dialogTitle                  = "Help & About";
-    options.dialogBackgroundColour       = colours::background;
+    options.dialogBackgroundColour       = colours::background();
     options.componentToCentreAround      = this;
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar            = true;
@@ -1293,9 +1313,22 @@ void MainComponent::doOpenProject()
 
 void MainComponent::paint (juce::Graphics& g)
 {
-    g.fillAll (colours::background);
+    const auto& t = theme();
 
-    g.setColour (colours::textDim);
+    // The window is a sheet of dark glass, lit from above: a vertical gradient with a
+    // single catch-light along the very top edge. Flat fill is what made it read as paint.
+    g.setGradientFill (juce::ColourGradient (t.background, 0.0f, 0.0f,
+                                             t.backgroundDeep, 0.0f, (float) getHeight(), false));
+    g.fillAll();
+    g.setColour (t.panelHighlight.withAlpha (0.35f));
+    g.drawLine (0.0f, 0.5f, (float) getWidth(), 0.5f, 1.0f);
+
+    // The things you touch are raised; the thing you read is sunk into the chassis.
+    RollForgeLookAndFeel::drawRaisedPanel  (g, transportPanel.toFloat().expanded (6.0f, 4.0f));
+    RollForgeLookAndFeel::drawRecessedWell (g, sequencerWell.toFloat().expanded (5.0f, 4.0f));
+    RollForgeLookAndFeel::drawRaisedPanel  (g, masterPanel.toFloat());
+
+    g.setColour (t.textDim);
     g.setFont (juce::FontOptions (13.0f));
     g.drawText ("Click a pad to play. Drag an audio file onto a pad to load it. Space plays the kick.",
                 getLocalBounds().reduced (20).removeFromBottom (22),
@@ -1306,7 +1339,7 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds().reduced (20);
 
-    titleLabel.setBounds (area.removeFromTop (40));
+    brandMark.setBounds (area.removeFromTop (40).withWidth (240));
     area.removeFromTop (6);
 
     auto statusRow = area.removeFromTop (26);
@@ -1327,8 +1360,9 @@ void MainComponent::resized()
     statusLabel.setBounds (statusRow);
 
     area.removeFromTop (12);
-    transportBar.setBounds (area.removeFromTop (40));
-    area.removeFromTop (8);
+    transportPanel = area.removeFromTop (40);
+    transportBar.setBounds (transportPanel);
+    area.removeFromTop (10);
     fillBar.setBounds (area.removeFromTop (32));
     area.removeFromTop (8);
 
@@ -1346,12 +1380,28 @@ void MainComponent::resized()
     area.removeFromTop (8);
     area.removeFromBottom (26);   // leave room for the hint text
 
-    const auto gridBounds = area.removeFromTop ((int) (area.getHeight() * 0.50f));
+    // The sequencer gives up a little height so the master strip can hold real needles.
+    const auto gridBounds = area.removeFromTop ((int) (area.getHeight() * 0.455f));
     seqGrid.setBounds (gridBounds);
     rollOverlay.setBounds (gridBounds);   // exactly overlaps the grid
-    area.removeFromTop (8);
-    macroKnobs.setBounds (area.removeFromTop (74));
-    area.removeFromTop (8);
+    sequencerWell = gridBounds;
+
+    area.removeFromTop (10);
+
+    // The master faceplate: two VU needles and eight machined knobs on one slab, so the
+    // metering sits where the master FX live and the whole thing reads as rack gear.
+    masterPanel = area.removeFromTop (118);
+    {
+        auto plate = masterPanel.reduced (8, 7);
+        // The meter takes a share of the width rather than a fixed slab, so on a wide
+        // window the needles grow with the knobs instead of stranding them.
+        const int meterWidth = juce::jlimit (200, 300, (int) (plate.getWidth() * 0.30f));
+        masterMeter.setBounds (plate.removeFromLeft (meterWidth));
+        plate.removeFromLeft (10);
+        macroKnobs.setBounds (plate);
+    }
+
+    area.removeFromTop (10);
     padGrid.setBounds (area);
 
     if (firstRun != nullptr)

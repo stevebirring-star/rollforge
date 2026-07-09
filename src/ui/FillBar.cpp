@@ -1,5 +1,8 @@
 #include "ui/FillBar.h"
 
+#include "ui/RollForgeLookAndFeel.h"
+#include "ui/Theme.h"
+
 namespace rollforge
 {
 
@@ -22,8 +25,10 @@ FillBar::FillBar (Sequencer& sequencerToUse) : sequencer (sequencerToUse)
     // snare / hats / toms + a roll) with the current style + intensity, a fresh
     // variation each press. Styled as the primary accent action; Reroll just
     // re-rolls the same settings.
-    fillButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4cc2ff));
-    fillButton.setColour (juce::TextButton::textColourOffId, juce::Colours::black);
+    // Make a Beat is the app's loudest promise, so it wears the hot accent. Everything
+    // the user MAKES is orange; everything the machine DOES is blue.
+    fillButton.setColour (juce::TextButton::buttonColourId, theme().accentHot);
+    fillButton.setColour (juce::TextButton::textColourOffId, theme().background);
     fillButton.onClick   = [this] { ++seed;       fire(); };
     rerollButton.onClick = [this] { seed += 7ull;  fire(); };
     rerollButton.setTooltip ("Generate a fresh beat from the current style + intensity");

@@ -27,6 +27,9 @@
 #include "ui/BrowserPanel.h"
 #include "ui/ExportPanel.h"
 #include "ui/PadInspector.h"
+#include "ui/BrandMark.h"
+#include "ui/MasterMeter.h"
+#include "ui/Theme.h"
 #include "ui/AboutView.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -75,6 +78,7 @@ private:
     void updatePadWaveform (int padIndex);   // recompute a pad's waveform thumbnail from its sample
     void updateLaneLabelForPad (int padIndex);   // refresh sequencer lane label(s) targeting this pad
     void refreshPadAudibility();                 // reflect engine mute/solo into pad dimming
+    void refreshCategoryColours();               // paint every pad + lane with its sound's colour
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
     void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
     RollRegion buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const; // roll under the brush (paint + live meter share this)
@@ -114,8 +118,13 @@ private:
     std::array<bool, (size_t) maxLanes> laneLocked {};   // per-lane "keep on reroll" locks
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     int              autosaveCounter = 0;   // ticks since the last recovery save
-    juce::Label      titleLabel;
+    BrandMark        brandMark;
+    MasterMeter      masterMeter { engine.getOutputMeter() };
     juce::Label      statusLabel;
+
+    // Painted panel geometry, computed in resized() and drawn in paint(). Keeping the
+    // rectangles here is what lets the panels sit BEHIND their child components.
+    juce::Rectangle<int> transportPanel, sequencerWell, masterPanel;
     juce::TextButton settingsButton { "Settings" };
     juce::TextButton libraryButton { "Library" };
     juce::TextButton exportButton { "Export" };

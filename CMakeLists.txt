@@ -105,6 +105,10 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/BrowserPanel.cpp
         src/ui/ExportPanel.cpp
         src/ui/PadInspector.cpp
+        src/ui/Theme.cpp
+        src/ui/RollForgeLookAndFeel.cpp
+        src/ui/MasterMeter.cpp
+        src/ui/BrandMark.cpp
         src/ui/DragExportButton.cpp
         src/ui/SettingsView.cpp
         src/engine/AudioEngine.cpp

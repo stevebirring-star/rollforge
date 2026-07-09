@@ -1,26 +1,27 @@
 #include "ui/TransportBar.h"
 
+#include "ui/Theme.h"
+
 namespace rollforge
 {
 
 namespace
 {
-    const juce::Colour kPanel   { 0xff26262c };
-    const juce::Colour kText    { 0xffe8e8ec };
-    const juce::Colour kTextDim { 0xff9a9aa4 };
-    const juce::Colour kAccent  { 0xff4cc2ff };
+    inline juce::Colour kPanel()   { return theme().buttonFace; }
+    inline juce::Colour kText()     { return theme().text; }
+    inline juce::Colour kTextDim()  { return theme().textDim; }
 }
 
 TransportBar::TransportBar (Sequencer& seq)
     : sequencer (seq)
 {
-    playButton.setColour (juce::TextButton::buttonColourId, kAccent);
-    playButton.setColour (juce::TextButton::textColourOffId, juce::Colours::black);
+    playButton.setColour (juce::TextButton::buttonColourId, theme().accentCool);
+    playButton.setColour (juce::TextButton::textColourOffId, theme().background);
     playButton.onClick = [this] { togglePlay(); };
     addAndMakeVisible (playButton);
 
-    tapButton.setColour (juce::TextButton::buttonColourId, kPanel);
-    tapButton.setColour (juce::TextButton::textColourOffId, kText);
+    tapButton.setColour (juce::TextButton::buttonColourId, kPanel());
+    tapButton.setColour (juce::TextButton::textColourOffId, kText());
     tapButton.onClick = [this] { tapTempo(); };
     addAndMakeVisible (tapButton);
 
@@ -51,12 +52,12 @@ TransportBar::TransportBar (Sequencer& seq)
     addAndMakeVisible (swingSlider);
 
     bpmCaption.setText ("BPM", juce::dontSendNotification);
-    bpmCaption.setColour (juce::Label::textColourId, kTextDim);
+    bpmCaption.setColour (juce::Label::textColourId, kTextDim());
     bpmCaption.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (bpmCaption);
 
     swingCaption.setText ("Swing", juce::dontSendNotification);
-    swingCaption.setColour (juce::Label::textColourId, kTextDim);
+    swingCaption.setColour (juce::Label::textColourId, kTextDim());
     swingCaption.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (swingCaption);
 
@@ -124,8 +125,7 @@ void TransportBar::setDisplayedSwing (float amount)
 
 void TransportBar::paint (juce::Graphics& g)
 {
-    g.setColour (kPanel);
-    g.fillRoundedRectangle (getLocalBounds().toFloat(), 6.0f);
+    juce::ignoreUnused (g);   // the faceplate behind the transport is painted by MainComponent
 }
 
 void TransportBar::resized()

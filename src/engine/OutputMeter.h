@@ -32,8 +32,15 @@ public:
     /** dBFS that reads as 0 VU. -18 dBFS is the common alignment for +4 dBu. */
     static constexpr float zeroVuDbfs = -18.0f;
 
-    /** Integration time of a true VU meter: 99% of a step in 300 ms, and the same back. */
+    /** Integration time of a true VU meter: 99% of a step in 300 ms, and the same back.
+        NOTE this is the SETTLING time, not the filter's time constant. A one-pole reaches
+        99% after ln(100) = 4.6 time constants, so tau is 300 ms / 4.6 = 65 ms. Setting
+        tau to 300 ms — the usual mistake — gives a needle roughly 4.6x too slow. */
     static constexpr float vuIntegrationSeconds = 0.3f;
+
+    /** Full-scale needle deflection, as a multiple of the 0 VU reference. A standard VU
+        face runs to +3 VU, and 10^(3/20) = 1.413. */
+    static constexpr float fullScaleDeflection = 1.413f;
 
     /** How long a peak reading takes to fall away once the signal stops. */
     static constexpr float peakReleaseSeconds = 1.6f;
@@ -88,6 +95,29 @@ public:
         if (blockPeak > held)
             held = blockPeak;
         peakLinear[channel].store (held, std::memory_order_relaxed);
+    }
+
+    /** Where the needle sits, 0..1 across the printed scale.
+
+        A d'Arsonval movement deflects linearly in VOLTAGE, not in decibels — which is why
+        a real VU face has its -20..0 marks crowded together and 0..+3 spread wide. Driving
+        the needle from dB and printing evenly-spaced ticks is the giveaway of a fake one.
+        Message thread. */
+    float getVuDeflection (int channel) const noexcept
+    {
+        if (channel < 0 || channel > 1)
+            return 0.0f;
+        const float reference = std::pow (10.0f, zeroVuDbfs / 20.0f);   // linear RMS at 0 VU
+        const float d = vu[channel].load (std::memory_order_relaxed) / (reference * fullScaleDeflection);
+        return d < 0.0f ? 0.0f : (d > 1.0f ? 1.0f : d);
+    }
+
+    /** Where a dB mark sits on the printed scale, 0..1. Same law as the needle, so the
+        ticks and the needle can never disagree. */
+    static float deflectionForVuDb (float vuDb) noexcept
+    {
+        const float d = std::pow (10.0f, vuDb / 20.0f) / fullScaleDeflection;
+        return d < 0.0f ? 0.0f : (d > 1.0f ? 1.0f : d);
     }
 
     /** VU reading in dB relative to 0 VU (so 0 == the "0 VU" mark, +3 is the red zone).

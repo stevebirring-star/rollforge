@@ -31,6 +31,7 @@ public:
     void setPadAudible (int index, bool audible);   // dim a pad that won't sound
     void setPadReverse (int index, bool reversed);  // reflect reverse state into the pad
     void setPadTrim    (int index, float start, float end);   // reflect the trim region
+    void setPadAccent  (int index, juce::Colour colour);      // the pad's sound colour
 
     std::function<void (int padIndex, float velocity)>        onPadTrigger;
     std::function<void (int padIndex)>                        onPadRelease;   // note-repeat hold end

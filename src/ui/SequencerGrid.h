@@ -35,6 +35,9 @@ public:
     /** Reflect the lane's triplet flag into its "3" toggle (does not fire the callback). */
     void setLaneTriplet (int lane, bool triplet);
 
+    /** The colour of the sound this lane fires. Tints its label and all of its steps. */
+    void setLaneColour (int lane, juce::Colour colour);
+
     /** The step each lane is currently sounding; -1 for none. A triplet lane runs at its
         own rate, so the playhead is per lane rather than one column down the grid. */
     void setLanePlayhead (int lane, int step);

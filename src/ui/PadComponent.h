@@ -42,6 +42,10 @@ public:
     void setReverse (bool reversed);  // reflect reverse state into the R button (no callback)
     void setTrim (float start, float end);   // set the sample-trim region [0..1] (no callback)
 
+    /** The colour of the sound on this pad — its border, its waveform, its meter. A kick
+        is the kick's colour here, on its sequencer lane, and nowhere else. */
+    void setAccent (juce::Colour colour);
+
     std::function<void (int padIndex, float velocity)>       onTrigger;
     std::function<void (int padIndex)>                       onRelease;   // for note-repeat hold
     /** All the audio files dropped on this pad, in order. One file loads a sample;
@@ -80,6 +84,8 @@ private:
     float              trimEnd     = 1.0f;
     bool               trimming    = false;  // dragging a trim handle in the bottom strip
     bool               draggingEnd = false;  // which handle (end vs start) is being dragged
+
+    juce::Colour       accent { 0xff4cc2ff };   // this pad's sound colour
 
     juce::TextButton   muteButton    { "M" };
     juce::TextButton   soloButton    { "S" };

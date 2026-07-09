@@ -1,4 +1,5 @@
 #include "ui/AboutView.h"
+#include "ui/Theme.h"
 
 namespace rollforge
 {
@@ -93,7 +94,7 @@ AboutView::AboutView()
 
 void AboutView::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1a1a1e));
+    g.fillAll (theme().background);
 
     auto r = getLocalBounds().reduced (22, 18);
     auto header = r.removeFromTop (58);

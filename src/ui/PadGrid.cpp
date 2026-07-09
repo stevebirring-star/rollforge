@@ -1,5 +1,7 @@
 #include "ui/PadGrid.h"
 
+#include "ui/GridGeometry.h"
+
 namespace rollforge
 {
 
@@ -91,12 +93,18 @@ void PadGrid::setPadTrim (int index, float start, float end)
 void PadGrid::resized()
 {
     auto area = getLocalBounds();
-    const int cellW = area.getWidth()  / numColumns;
-    const int cellH = area.getHeight() / numRows;
 
+    // Exact edges rather than a truncated cell width, so the 4x4 fills its space at any
+    // window size and its right/bottom edges stay flush with the grids above it.
     for (int i = 0; i < numPads; ++i)
         if (auto* pad = pads[i])
-            pad->setBounds ((i % numColumns) * cellW, (i / numColumns) * cellH, cellW, cellH);
+            pad->setBounds (gridCell (i % numColumns, i / numColumns, numColumns, numRows, area));
+}
+
+void PadGrid::setPadAccent (int index, juce::Colour colour)
+{
+    if (auto* pad = pads[index])
+        pad->setAccent (colour);
 }
 
 juce::String PadGrid::getPadLabel (int index) const

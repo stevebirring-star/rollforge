@@ -1,5 +1,7 @@
 #include "ui/RollBrushOverlay.h"
 
+#include "ui/GridGeometry.h"
+
 namespace rollforge
 {
 
@@ -40,16 +42,17 @@ int RollBrushOverlay::laneAt (int y) const noexcept
 int RollBrushOverlay::stepAt (int x) const noexcept
 {
     const int gridW = juce::jmax (1, getWidth() - labelWidth);
-    const int cellW = juce::jmax (1, gridW / numSteps);
-    return juce::jlimit (0, numSteps - 1, (x - labelWidth) / cellW);
+    return gridIndexAt (x, numSteps, gridW, labelWidth);
 }
 
 juce::Rectangle<int> RollBrushOverlay::cellRect (int lane, int startStep, int len) const noexcept
 {
-    const int rowH  = juce::jmax (1, getHeight() / numLanes);
     const int gridW = juce::jmax (1, getWidth() - labelWidth);
-    const int cellW = juce::jmax (1, gridW / numSteps);
-    return { labelWidth + startStep * cellW, lane * rowH, len * cellW, rowH };
+    const auto rowY = gridSpan (lane, numLanes, getHeight());
+    const int  x0   = gridSpan (startStep, numSteps, gridW, labelWidth).getStart();
+    const int  x1   = gridSpan (juce::jmin (numSteps, startStep + juce::jmax (1, len)) - 1,
+                                numSteps, gridW, labelWidth).getEnd();
+    return { x0, rowY.getStart(), juce::jmax (1, x1 - x0), rowY.getLength() };
 }
 
 void RollBrushOverlay::mouseDown (const juce::MouseEvent& e)

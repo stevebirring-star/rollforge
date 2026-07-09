@@ -28,6 +28,10 @@ public:
         drawn faint and ignores the mouse — the step doesn't exist. */
     void setActive (bool isActive);
 
+    /** The colour of the sound this lane triggers. A kick's steps are the kick's colour,
+        everywhere. Brightness within the cell then carries velocity. */
+    void setAccent (juce::Colour colour);
+
     std::function<void (bool on, float velocity)> onEdit;
     std::function<void()> onGestureStart;   // fired at mouse-down (for undo transactions)
 
@@ -46,6 +50,7 @@ private:
     bool  editing   = false;   // mouse held on this cell -> show a prominent % readout
     bool  downWasOn = false;    // step's on-state at mouse-down (click vs velocity-drag)
     bool  active    = true;     // false -> beyond the lane's length: faint, unclickable
+    juce::Colour accent { 0xff4cc2ff };   // this lane's sound colour
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepComponent)
 };

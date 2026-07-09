@@ -1,5 +1,7 @@
 #include "ui/PadComponent.h"
 
+#include "ui/Theme.h"
+
 #include <cmath>
 
 namespace rollforge
@@ -99,6 +101,15 @@ void PadComponent::setReverse (bool reversed)
     reverseButton.setToggleState (reversed, juce::dontSendNotification);
 }
 
+void PadComponent::setAccent (juce::Colour colour)
+{
+    if (accent != colour)
+    {
+        accent = colour;
+        repaint();
+    }
+}
+
 void PadComponent::setTrim (float start, float end)
 {
     trimStart = juce::jlimit (0.0f, 1.0f, start);
@@ -133,17 +144,22 @@ void PadComponent::resized()
 
 void PadComponent::paint (juce::Graphics& g)
 {
+    const auto& t = theme();
     auto bounds = getLocalBounds().toFloat().reduced (3.0f);
     constexpr float corner = 8.0f;
 
-    const juce::Colour base { 0xff2a2a31 };
-    const juce::Colour lit  { 0xff4cc2ff };
+    const juce::Colour base = t.panelRaised;
+    const juce::Colour lit  = accent;
 
-    auto fill = base.interpolatedWith (lit, juce::jlimit (0.0f, 1.0f, flashLevel * 0.8f));
+    // A struck pad glows at its own colour, brightening with velocity — the MPC read.
+    auto fill = base.interpolatedWith (lit, juce::jlimit (0.0f, 1.0f, flashLevel * 0.55f));
     if (dragOver)
         fill = fill.interpolatedWith (juce::Colours::white, 0.25f);
 
-    g.setColour (fill);
+    g.setColour (t.panelShadow.withAlpha (0.5f));
+    g.fillRoundedRectangle (bounds.translated (0.0f, 1.0f), corner);
+    g.setGradientFill (juce::ColourGradient (fill.brighter (0.06f), bounds.getCentreX(), bounds.getY(),
+                                             fill.darker (0.10f),   bounds.getCentreX(), bounds.getBottom(), false));
     g.fillRoundedRectangle (bounds, corner);
 
     // Waveform thumbnail: mirrored around the vertical centre, behind the label.
@@ -157,7 +173,7 @@ void PadComponent::paint (juce::Graphics& g)
         const int   n    = (int) waveform.size();
         const float step = bounds.getWidth() / (float) n;
 
-        g.setColour (lit.withAlpha (0.30f));
+        g.setColour (accent.withAlpha (0.34f));
         for (int i = 0; i < n; ++i)
         {
             const float h = juce::jlimit (0.0f, 1.0f, waveform[(size_t) i]) * maxH;
@@ -180,16 +196,22 @@ void PadComponent::paint (juce::Graphics& g)
             g.fillRect (juce::Rectangle<float> (x0 + trimEnd * w, bounds.getY(),
                                                 (1.0f - trimEnd) * w, bounds.getHeight()));
 
-        g.setColour (juce::Colour (0xff4cc2ff).withAlpha (0.85f));
+        g.setColour (accent.withAlpha (0.9f));
         const float ty = bounds.getBottom() - 8.0f;
         g.fillRect (juce::Rectangle<float> (x0 + trimStart * w - 1.5f, ty, 3.0f, 8.0f));
         g.fillRect (juce::Rectangle<float> (x0 + trimEnd   * w - 1.5f, ty, 3.0f, 8.0f));
     }
 
-    g.setColour (dragOver ? lit : juce::Colour (0xff3a3a44));
+    // The pad's identity ring. Bright while it sounds, quiet at rest — but always its
+    // own colour, so the kit is legible in a glance.
+    g.setColour (dragOver ? juce::Colours::white
+                          : accent.withAlpha (0.35f + 0.6f * juce::jlimit (0.0f, 1.0f, flashLevel)));
     g.drawRoundedRectangle (bounds, corner, 1.5f);
+    g.setColour (t.panelHighlight.withAlpha (0.5f));
+    g.drawLine (bounds.getX() + corner, bounds.getY() + 0.7f,
+                bounds.getRight() - corner, bounds.getY() + 0.7f, 1.0f);
 
-    g.setColour (juce::Colour (0xffe8e8ec));
+    g.setColour (t.text);
     g.setFont (juce::FontOptions (13.0f));
     g.drawText (label, bounds.reduced (6.0f), juce::Justification::centred, true);
 
@@ -197,13 +219,11 @@ void PadComponent::paint (juce::Graphics& g)
     if (meterLevel > 0.01f)
     {
         auto track = bounds.reduced (8.0f).removeFromBottom (4.0f);
-        g.setColour (juce::Colour (0xff141418));
+        g.setColour (t.panelShadow);
         g.fillRoundedRectangle (track, 2.0f);
 
         const float lvl = juce::jlimit (0.0f, 1.0f, meterLevel);
-        const juce::Colour barCol = lvl < 0.7f ? juce::Colour (0xff45d17a)
-                                  : lvl < 0.9f ? juce::Colour (0xffe0c341)
-                                               : juce::Colour (0xffe0553f);
+        const juce::Colour barCol = lvl < 0.9f ? accent : t.meterRedZone;
         g.setColour (barCol);
         g.fillRoundedRectangle (track.withWidth (track.getWidth() * lvl), 2.0f);
     }

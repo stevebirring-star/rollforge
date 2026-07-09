@@ -1,4 +1,5 @@
 #include "ui/PadInspector.h"
+#include "ui/Theme.h"
 
 namespace rollforge
 {
@@ -76,7 +77,7 @@ PadInspector::PadInspector (const juce::String& padName, float tone, float rever
 
 void PadInspector::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff26262c));
+    g.fillAll (theme().panelRaised);
 }
 
 void PadInspector::resized()
