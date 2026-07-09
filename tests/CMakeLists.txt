@@ -41,6 +41,7 @@ target_sources(RollForgeTests PRIVATE
     SlicerTests.cpp
     SimilarityTests.cpp
     SongTests.cpp
+    TextTests.cpp
     SimilarSearchTests.cpp
     LibraryDbTests.cpp
     ScannerTests.cpp

@@ -113,6 +113,7 @@ TEST_SOURCES=(
     tests/SlicerTests.cpp
     tests/SimilarityTests.cpp
     tests/SongTests.cpp
+    tests/TextTests.cpp
     tests/SimilarSearchTests.cpp
     tests/LibraryDbTests.cpp
     tests/ScannerTests.cpp

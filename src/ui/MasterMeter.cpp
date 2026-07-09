@@ -1,4 +1,5 @@
 #include "ui/MasterMeter.h"
+#include "ui/Text.h"
 
 #include "ui/RollForgeLookAndFeel.h"
 
@@ -35,11 +36,11 @@ namespace
 //==============================================================================
 MasterMeter::MasterMeter (const OutputMeter& source) : meter (source)
 {
-    setTooltip ("Master output level, left and right channels, measured after the limiter — "
+    setTooltip (utf8 ("Master output level, left and right channels, measured after the limiter — "
                 "what actually reaches your speakers.\n"
                 "The needles are true VU: 300 ms averaging, so they read loudness and ignore "
                 "single transients. The slim bar on each face is sample peak, and CLIP lights "
-                "if the output goes over.");
+                "if the output goes over."));
     startTimerHz (30);
 }
 

@@ -1,4 +1,5 @@
 #include "ui/RollBrushOverlay.h"
+#include "ui/Text.h"
 
 #include "ui/GridGeometry.h"
 
@@ -161,7 +162,7 @@ void RollBrushOverlay::paint (juce::Graphics& g)
 
         g.setColour (juce::Colour (0xffb8b8c0));
         g.drawText ("Span  " + juce::String (len) + (len == 1 ? " step" : " steps")
-                        + "  ·  " + juce::String (len / 4.0, 2) + " beats",
+                        + utf8 ("  ·  ") + juce::String (len / 4.0, 2) + " beats",
                     txt.removeFromTop (lineH), juce::Justification::centredLeft, false);
 
         if (getHitCount != nullptr)

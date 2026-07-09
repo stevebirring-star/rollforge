@@ -43,6 +43,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace rollforge
@@ -83,7 +84,24 @@ private:
         chain is doing the switching — the chip highlight already says which step is up, and a
         status line rewriting itself every bar is noise, not feedback. */
     void selectSlot (int slot, bool announce = true);
-    void commitSlot (int slot);                 // the switch has landed: bring the UI across
+
+    /** Hand `pattern` to the engine for `slot`: on the next bar line while playing, at once
+        while stopped. The one road every bar-quantised pattern change takes — a slot switch,
+        a song step, an evolve variation — so they cannot race each other for the queue. */
+    void queueBarPattern (int slot, const Pattern& pattern, bool announce);
+
+    /** The queued pattern has become the active one: bring the UI across to it. */
+    void commitPattern (int slot, const Pattern& pattern);
+
+    void updateEvolve();                        // once per bar: queue the next variation
+    void setEvolving (bool on);
+
+    /** Publish editPattern to the engine. Every route by which the USER replaces the whole
+        groove (Make a Beat, Vary, undo, a slice, a load) goes through here, so evolution
+        re-anchors on what they just made instead of going on varying the pattern they
+        replaced. commitPattern() deliberately does NOT use it: adopting a variation must
+        never make that variation the new anchor. */
+    void pushEditPattern();
     void refreshSlotStates();                   // which of A..H have anything in them
     void updateSongPlayback();                  // once per timer tick: drive the chain
     void refreshSongBar();                      // chain -> chips, and the ADD button's letter
@@ -142,6 +160,20 @@ private:
     std::int64_t         switchCountAtQueue = 0;   // see Sequencer::getSwitchCount()
     bool                 announceSlotChange = true;  // whether the pending switch says so
 
+    // The pattern handed to the engine and not yet heard. `pendingActive` rather than
+    // `pendingSlot >= 0`, because an evolve variation is queued for the slot we are already
+    // standing in and would otherwise be indistinguishable from nothing being queued at all.
+    bool                 pendingActive = false;
+    Pattern              pendingPattern;
+    std::vector<std::pair<int, int>> pendingFlash;   // cells the queued variation changed
+
+    // Infinity mode. Every bar is a fresh variation OF THE ANCHOR, never of the last
+    // variation: varying a variation is a random walk, and a random walk turns a groove into
+    // mush in a dozen bars. The anchor is what you wrote; the drift is bounded by it.
+    Pattern              evolveAnchor;
+    std::uint64_t        evolveSeed    = 1;
+    int                  lastEvolveBar = -1;
+
     // The arrangement. `songStartStep` is the global step at which the chain's bar 0 begins;
     // it is anchored to a bar line so the chain can never drift by a fraction of a bar, and
     // it may lie one bar in the FUTURE while a switch onto the chain's first slot is landing.
@@ -162,6 +194,9 @@ private:
     juce::ComboBox   repeatRateBox;                     // rate: 1/8 .. 1/32, Build
     MacroKnobs       macroKnobs { engine.getMasterBus() };
     PatternSlots     patternSlots;
+    juce::TextButton evolveButton { "EVOLVE" };
+    juce::Label      driftLabel;
+    juce::Slider     driftSlider;
     SongBar          songBar;
     std::array<bool, (size_t) maxLanes> laneLocked {};   // per-lane "keep on reroll" locks
     std::vector<RollBrushOverlay::RollRect> paintedRolls;

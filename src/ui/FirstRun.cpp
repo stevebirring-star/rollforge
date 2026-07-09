@@ -1,4 +1,5 @@
 #include "ui/FirstRun.h"
+#include "ui/Text.h"
 
 namespace rollforge
 {
@@ -29,14 +30,14 @@ void FirstRun::paint (juce::Graphics& g)
     inner.removeFromTop (8);
     g.setFont (juce::FontOptions (14.0f));
     g.setColour (juce::Colour (0xffbcbcc4));
-    const char* tips[] = {
-        "•  Press Play (or the transport) to hear the demo beat.",
-        "•  Click the step grid to program pads; drag up for velocity.",
-        "•  Turn on Roll Brush and drag a lane to paint an accelerating roll.",
-        "•  FILL makes a drum fill; the macro knobs shape the master sound.",
-        "•  Library scans a folder + NEW KIT builds a kit; Export saves MIDI/WAV."
+    const juce::String tips[] = {
+        utf8 ("•  Press Play (or the transport) to hear the demo beat."),
+        utf8 ("•  Click the step grid to program pads; drag up for velocity."),
+        utf8 ("•  Turn on Roll Brush and drag a lane to paint an accelerating roll."),
+        utf8 ("•  FILL makes a drum fill; the macro knobs shape the master sound."),
+        utf8 ("•  Library scans a folder + NEW KIT builds a kit; Export saves MIDI/WAV.")
     };
-    for (auto* t : tips)
+    for (const auto& t : tips)
         g.drawText (t, inner.removeFromTop (26), juce::Justification::centredLeft, true);
 }
 

@@ -1,6 +1,7 @@
 #include "ui/MainComponent.h"
 
 #include "library/Scanner.h"
+#include "ui/Text.h"
 
 #include "ui/RollForgeLookAndFeel.h"
 
@@ -228,7 +229,7 @@ MainComponent::MainComponent()
         auto refresh = [this]
         {
             refreshGridFromPattern();
-            engine.getSequencer().setPattern (editPattern);
+            pushEditPattern();
         };
 
         undoManager.beginNewTransaction();
@@ -272,7 +273,7 @@ MainComponent::MainComponent()
             paintedRolls.clear();             // generated rolls play but aren't drawn on the grid
             rollOverlay.setRolls (paintedRolls);
             transportBar.setSwing (editPattern.swing);   // drives sequencer.setSwing via the slider
-            engine.getSequencer().setPattern (editPattern);
+            pushEditPattern();
         };
 
         undoManager.beginNewTransaction();
@@ -291,7 +292,7 @@ MainComponent::MainComponent()
         auto refresh = [this]
         {
             refreshGridFromPattern();
-            engine.getSequencer().setPattern (editPattern);
+            pushEditPattern();
         };
 
         undoManager.beginNewTransaction();
@@ -338,11 +339,37 @@ MainComponent::MainComponent()
             editPattern = bank.pattern (slot);
             undoManager.clearUndoHistory();
             refreshGridFromPattern();
-            engine.getSequencer().setPattern (editPattern);
+            pushEditPattern();
         }
         refreshSlotStates();
     };
     addAndMakeVisible (patternSlots);
+
+    // EVOLVE: infinity mode. Every bar the engine is handed a fresh variation of the anchor
+    // — never of the last variation, which would random-walk the groove into mush. It makes
+    // something, so it wears the hot accent, like Make a Beat.
+    evolveButton.setClickingTogglesState (true);
+    evolveButton.setColour (juce::TextButton::buttonOnColourId, theme().accentHot);
+    evolveButton.setColour (juce::TextButton::textColourOnId,   theme().background);
+    evolveButton.setTooltip ("Never play the same bar twice: each bar is a fresh variation of "
+                             "this pattern. Locked lanes are left alone.");
+    evolveButton.onClick = [this] { setEvolving (evolveButton.getToggleState()); };
+    addAndMakeVisible (evolveButton);
+
+    driftLabel.setText ("Drift", juce::dontSendNotification);
+    driftLabel.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+    driftLabel.setColour (juce::Label::textColourId, theme().textDim);
+    driftLabel.setJustificationType (juce::Justification::centredRight);
+    addAndMakeVisible (driftLabel);
+
+    // How far each bar strays from the anchor. Bounded well below 1: at full strength the
+    // Variator rewrites enough of a bar that consecutive bars stop sounding related.
+    driftSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    driftSlider.setRange (0.04, 0.40, 0.01);
+    driftSlider.setValue (0.14, juce::dontSendNotification);
+    driftSlider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    driftSlider.setTooltip ("How far each bar strays from the pattern you wrote");
+    addAndMakeVisible (driftSlider);
 
     // The arrangement. Every edit goes through the model and comes back out through
     // refreshSongBar(), so the chips can never disagree with the chain that plays.
@@ -411,7 +438,7 @@ MainComponent::MainComponent()
         editPattern.numRolls = 0;
         paintedRolls.clear();
         rollOverlay.setRolls (paintedRolls);
-        engine.getSequencer().setPattern (editPattern);
+        pushEditPattern();
     };
     addAndMakeVisible (clearRollsButton);
 
@@ -466,7 +493,7 @@ MainComponent::MainComponent()
 
         paintedRolls.push_back ({ lane, startStep, juce::jmax (1, length) });
         rollOverlay.setRolls (paintedRolls);
-        engine.getSequencer().setPattern (editPattern);
+        pushEditPattern();
     };
 
     // Live meter: how many hits the roll under the brush would produce right now
@@ -503,7 +530,8 @@ MainComponent::MainComponent()
         for (int step = 0; step < 16; ++step)
             seqGrid.setStep (lane, step, false, 0.8f);
     }
-    engine.getSequencer().setPattern (editPattern);
+    pushEditPattern();
+    evolveAnchor = editPattern;
     refreshSlotStates();
 
     engine.getDeviceManager().addChangeListener (this);
@@ -631,7 +659,7 @@ void MainComponent::afterStepEdit (int lane, int step)
 {
     const Step& s = editPattern.lane (lane).step (step);
     seqGrid.setStep (lane, step, s.on, s.velocity);
-    engine.getSequencer().setPattern (editPattern);
+    pushEditPattern();     // editing while it evolves means "this is the groove now"
     refreshSlotStates();   // the first lit step turns this slot's letter solid
 }
 
@@ -696,10 +724,11 @@ Project MainComponent::captureProject()
     Project p;
     p.pattern = editPattern;
 
-    // The bank's copy of the slot you are standing in is only refreshed when you leave it,
-    // so park the working pattern before the whole bank is written out.
-    bank.pattern (bank.currentSlot) = editPattern;
+    // The bank's copy of the slot you are standing in is only refreshed when you leave it.
+    // Overwrite it on the way out rather than in the bank itself: while evolving, the bank
+    // holds the anchor, and saving must not destroy it. What you hear is what gets saved.
     p.slots.assign (bank.slots.begin(), bank.slots.end());
+    p.slots[(std::size_t) bank.currentSlot] = editPattern;
     p.currentSlot = bank.currentSlot;
     p.song        = song;
     p.songMode    = songBar.isSongMode();
@@ -760,8 +789,15 @@ void MainComponent::applyProject (const Project& p)
         slot.bpm   = p.bpm;      // the file's transport wins over whatever a slot carried
         slot.swing = p.swing;
     }
+    pendingActive    = false;
     pendingSlot      = -1;
+    pendingFlash.clear();
     patternSlots.setQueued (-1);
+
+    // Evolve is a performance mode, not part of the file. Reset it quietly — setEvolving()
+    // would write "keeping the variation you landed on" over the status line on every load.
+    evolveButton.setToggleState (false, juce::dontSendNotification);
+    lastEvolveBar = -1;
     patternSlots.setCurrent (bank.currentSlot);
 
     song          = p.song;
@@ -771,7 +807,8 @@ void MainComponent::applyProject (const Project& p)
     songBar.setPlayingStep (-1);
     refreshSongBar();
 
-    editPattern = bank.pattern (bank.currentSlot);
+    editPattern  = bank.pattern (bank.currentSlot);
+    evolveAnchor = editPattern;
 
     // Rebuild the kit from the saved per-pad paths (RT-safe per-pad swap). An empty
     // path — or a file that no longer exists — restores the built-in starter sound.
@@ -853,7 +890,7 @@ void MainComponent::applyProject (const Project& p)
     refreshGridFromPattern();
     refreshPadAudibility();
     refreshCategoryColours();
-    engine.getSequencer().setPattern (editPattern);
+    pushEditPattern();
 
     // Reflect the loaded tempo/swing into the transport knobs + the live engine so
     // playback (and the next export) matches the restored pattern. The Displayed
@@ -973,54 +1010,157 @@ void MainComponent::selectSlot (int slot, bool announce)
     announceSlotChange = announce;
 
     // Park the working copy before leaving, or an edit made since the last switch is lost.
-    bank.pattern (bank.currentSlot) = editPattern;
+    // While evolving, what is on screen is a variation, not what the user wrote: park the
+    // ANCHOR, so coming back to this slot later does not inherit a bar of drift.
+    bank.pattern (bank.currentSlot) = evolveButton.getToggleState() ? evolveAnchor : editPattern;
 
     // The slot we are going to may have been written at a different tempo. It does not get
     // to change the transport: the transport tells it what tempo it is now.
     stampTransportOnto (bank.pattern (slot));
 
-    if (engine.getSequencer().isPlaying())
+    queueBarPattern (slot, bank.pattern (slot), announce);
+}
+
+void MainComponent::queueBarPattern (int slot, const Pattern& pattern, bool announce)
+{
+    auto& seq = engine.getSequencer();
+
+    if (! seq.isPlaying())
     {
-        // Land it on the bar line, not under the user's finger: a verse becomes a chorus in
-        // time. The engine owns the moment; the timer notices when it has passed and brings
-        // the grid across (see timerCallback).
-        switchCountAtQueue = engine.getSequencer().getSwitchCount();
-        engine.getSequencer().queuePattern (bank.pattern (slot));
-        pendingSlot = slot;
+        seq.setPattern (pattern);
+        commitPattern (slot, pattern);
+        return;
+    }
+
+    // Land it on the bar line, not under the user's finger: a verse becomes a chorus in
+    // time. The engine owns the moment; the timer notices when it has passed (see
+    // timerCallback) and brings the grid across.
+    switchCountAtQueue = seq.getSwitchCount();
+    seq.queuePattern (pattern);
+
+    pendingActive  = true;
+    pendingSlot    = slot;
+    pendingPattern = pattern;
+
+    if (slot != bank.currentSlot)
+    {
         patternSlots.setQueued (slot);
         if (announce)
             statusLabel.setText (juce::String ("Pattern ")
                                      + juce::String::charToString ((juce::juce_wchar) ('A' + slot))
                                      + " queued for the next bar",
                                  juce::dontSendNotification);
-        return;
     }
-
-    engine.getSequencer().setPattern (bank.pattern (slot));
-    commitSlot (slot);
 }
 
-void MainComponent::commitSlot (int slot)
+void MainComponent::commitPattern (int slot, const Pattern& pattern)
 {
+    const bool slotChanged = (slot != bank.currentSlot);
+
     bank.currentSlot = slot;
-    editPattern      = bank.pattern (slot);
+    editPattern      = pattern;
 
-    // Every undoable step edit holds a before/after for a pattern that is no longer on
-    // screen. Undoing across a switch would stamp one slot's history onto another.
-    undoManager.clearUndoHistory();
+    if (slotChanged)
+    {
+        // Every undoable step edit holds a before/after for a pattern that is no longer on
+        // screen. Undoing across a switch would stamp one slot's history onto another.
+        undoManager.clearUndoHistory();
 
-    pendingSlot = -1;
+        // The new slot's stored pattern is what evolution now departs from.
+        evolveAnchor = bank.pattern (slot);
+    }
+
+    pendingActive = false;
+    pendingSlot   = -1;
     patternSlots.setQueued (-1);
     patternSlots.setCurrent (slot);
     refreshGridFromPattern();
     refreshSlotStates();
     songBar.setCurrentSlot (slot);
 
-    if (announceSlotChange)
+    // Show what the last bar changed. Doing this after refreshGridFromPattern(), which
+    // repaints every cell from scratch and would otherwise wipe the highlight.
+    if (! pendingFlash.empty())
+    {
+        seqGrid.flashChanged (pendingFlash);
+        pendingFlash.clear();
+    }
+
+    if (slotChanged && announceSlotChange)
         statusLabel.setText (juce::String ("Pattern ")
                                  + juce::String::charToString ((juce::juce_wchar) ('A' + slot)),
                              juce::dontSendNotification);
     announceSlotChange = true;
+}
+
+void MainComponent::pushEditPattern()
+{
+    engine.getSequencer().setPattern (editPattern);
+
+    if (evolveButton.getToggleState())
+        evolveAnchor = editPattern;
+}
+
+void MainComponent::setEvolving (bool on)
+{
+    evolveButton.setToggleState (on, juce::dontSendNotification);
+    lastEvolveBar = -1;
+
+    if (on)
+    {
+        evolveAnchor = editPattern;
+        statusLabel.setText (patternIsEmpty (evolveAnchor)
+                                 ? utf8 ("Nothing to evolve — make a beat first")
+                                 : juce::String ("Evolving: a fresh variation every bar"),
+                             juce::dontSendNotification);
+    }
+    else
+    {
+        // No going home. The variation you were hearing when you switched it off is yours.
+        statusLabel.setText (utf8 ("Evolve off — keeping this variation"),
+                             juce::dontSendNotification);
+    }
+}
+
+void MainComponent::updateEvolve()
+{
+    auto& seq = engine.getSequencer();
+
+    if (! evolveButton.getToggleState() || ! seq.isPlaying())
+    {
+        lastEvolveBar = -1;
+        return;
+    }
+
+    // A slot switch (the user's, or the song chain's) already owns this bar's queue. That bar
+    // plays its pattern as written; evolution resumes on the next one.
+    if (pendingActive)
+        return;
+
+    const std::int64_t step = seq.getCurrentStep();
+    if (step < 0)
+        return;
+
+    const int bar = (int) (step / Sequencer::getBarSteps());
+    if (bar == lastEvolveBar)
+        return;   // once per bar, not thirty times a second
+    lastEvolveBar = bar;
+
+    if (patternIsEmpty (evolveAnchor))
+        return;   // there is nothing here to make a variation of
+
+    Pattern next = evolveAnchor;
+    const float amount  = (float) driftSlider.getValue();
+    const auto  changes = Variator::vary (next, amount, evolveSeed++, laneLocked);
+    stampTransportOnto (next);
+
+    pendingFlash.clear();
+    pendingFlash.reserve (changes.size());
+    for (const auto& c : changes)
+        pendingFlash.push_back ({ c.lane, c.step });
+
+    announceSlotChange = false;
+    queueBarPattern (bank.currentSlot, next, false);
 }
 
 void MainComponent::refreshSlotStates()
@@ -1067,7 +1207,7 @@ void MainComponent::updateSongPlayback()
         songStartStep = alreadyThere ? barStart : barStart + barSteps;
         lastSongBar   = -1;
 
-        if (! alreadyThere && first != pendingSlot)
+        if (! alreadyThere && ! pendingActive)
             selectSlot (first, false);
         return;
     }
@@ -1098,7 +1238,7 @@ void MainComponent::updateSongPlayback()
     // Queue the next bar's slot NOW: queuePattern lands on the coming bar line, which is that
     // bar's downbeat. Two adjacent steps naming the same slot are not a switch.
     const int next = song.slotAtBar (bar + 1);
-    if (next >= 0 && next != bank.currentSlot && next != pendingSlot)
+    if (next >= 0 && next != bank.currentSlot && ! pendingActive)
         selectSlot (next, false);
 }
 
@@ -1417,7 +1557,7 @@ void MainComponent::sliceLoopIntoPads (const juce::File& file)
         rollOverlay.setRolls (paintedRolls);
         transportBar.setDisplayedTempo (editPattern.bpm);
         transportBar.setDisplayedSwing (editPattern.swing);
-        engine.getSequencer().setPattern (editPattern);
+        pushEditPattern();
     };
 
     // The pattern swap is undoable as one step (as with Make a Beat). The pad installs
@@ -1426,8 +1566,8 @@ void MainComponent::sliceLoopIntoPads (const juce::File& file)
     undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
 
     statusLabel.setText (juce::String (used) + " slices from " + file.getFileName()
-                             + (isLoopTempo ? " — " + juce::String (bpm, 1) + " BPM"
-                                            : " — not a loop, tempo unchanged"),
+                             + (isLoopTempo ? utf8 (" — ") + juce::String (bpm, 1) + " BPM"
+                                            : utf8 (" — not a loop, tempo unchanged")),
                          juce::dontSendNotification);
 }
 
@@ -1457,21 +1597,22 @@ void MainComponent::timerCallback()
     // A queued A..H switch: the engine swapped the pattern in at the bar line, so bring the
     // grid across. When the transport is stopped the bar line never arrives, so a switch
     // queued and then stopped is applied at once rather than hanging until the next Play.
-    if (pendingSlot >= 0)
+    if (pendingActive)
     {
         if (! seq.isPlaying())
         {
             // Stopped before the bar line ever came: the wait would never end, so apply it.
-            seq.setPattern (bank.pattern (pendingSlot));
-            commitSlot (pendingSlot);
+            seq.setPattern (pendingPattern);
+            commitPattern (pendingSlot, pendingPattern);
         }
         else if (seq.getSwitchCount() != switchCountAtQueue)
         {
-            commitSlot (pendingSlot);
+            commitPattern (pendingSlot, pendingPattern);
         }
     }
 
     updateSongPlayback();
+    updateEvolve();
 
     // Drive the per-pad level meters (called every tick so silent pads decay too).
     auto& drum = engine.getDrumEngine();
@@ -1491,13 +1632,13 @@ void MainComponent::refreshStatus()
     if (auto* device = engine.getDeviceManager().getCurrentAudioDevice())
     {
         statusLabel.setText ("Audio: " + device->getName()
-                                 + "  •  " + juce::String (device->getCurrentSampleRate(), 0) + " Hz"
-                                 + "  •  " + juce::String (device->getCurrentBufferSizeSamples()) + " samples",
+                                 + utf8 ("  •  ") + juce::String (device->getCurrentSampleRate(), 0) + " Hz"
+                                 + utf8 ("  •  ") + juce::String (device->getCurrentBufferSizeSamples()) + " samples",
                              juce::dontSendNotification);
     }
     else
     {
-        statusLabel.setText ("No audio device open — open Audio Settings to choose one.",
+        statusLabel.setText (utf8 ("No audio device open — open Audio Settings to choose one."),
                              juce::dontSendNotification);
     }
 }
@@ -1803,7 +1944,14 @@ void MainComponent::resized()
     fillBar.setBounds (area.removeFromTop (32));
     area.removeFromTop (8);
 
-    patternSlots.setBounds (area.removeFromTop (26));
+    auto patternRow = area.removeFromTop (26);
+    patternSlots.setBounds (patternRow.removeFromLeft (340));
+    patternRow.removeFromLeft (10);
+    evolveButton.setBounds (patternRow.removeFromLeft (78));
+    patternRow.removeFromLeft (8);
+    driftLabel.setBounds (patternRow.removeFromLeft (34));
+    patternRow.removeFromLeft (4);
+    driftSlider.setBounds (patternRow.removeFromLeft (juce::jmin (130, patternRow.getWidth())));
     area.removeFromTop (6);
     songBar.setBounds (area.removeFromTop (26));
     area.removeFromTop (8);

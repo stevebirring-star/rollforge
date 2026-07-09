@@ -1,6 +1,7 @@
 #include "ui/PatternSlots.h"
 
 #include "ui/GridGeometry.h"
+#include "ui/Text.h"
 #include "ui/Theme.h"
 
 namespace rollforge
@@ -90,8 +91,8 @@ PatternSlots::PatternSlots()
         buttons[(std::size_t) i] = std::make_unique<SlotButton> (i, *this);
         buttons[(std::size_t) i]->setTooltip (
             "Pattern " + juce::String::charToString ((juce::juce_wchar) ('A' + i))
-                + " — click to switch (on the next bar while playing). "
-                  "Right-click to copy the current pattern here, or clear it.");
+                + utf8 (" — click to switch (on the next bar while playing). "
+                        "Right-click to copy the current pattern here, or clear it."));
         addAndMakeVisible (*buttons[(std::size_t) i]);
     }
 }

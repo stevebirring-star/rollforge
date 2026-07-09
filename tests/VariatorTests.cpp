@@ -12,6 +12,7 @@
 #include <juce_core/juce_core.h>
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <utility>
@@ -97,6 +98,44 @@ public:
             expect (p.lane (0).step (0).on);
             expect (p.lane (1).step (4).on);
             expect (p.lane (1).step (12).on);
+        }
+
+        beginTest ("evolving from the anchor stays near it; evolving from the last variation walks away");
+        {
+            // The design decision behind infinity mode, stated as a measurement. Each bar is
+            // vary(ANCHOR, seed_n). Do it the obvious other way — vary(previous, seed_n) — and
+            // the groove random-walks: the distance from what the user wrote grows without
+            // bound, and after a dozen bars it is a different pattern wearing the same name.
+            Pattern anchor; FillEngine::generateFill (anchor, FillEngine::BoomBap, 3, 11);
+            const float drift = 0.14f;   // the app's default Drift
+
+            auto cellsDifferingFromAnchor = [&] (const Pattern& p)
+            {
+                int n = 0;
+                for (int li = 0; li < anchor.numLanes; ++li)
+                    for (int st = 0; st < 16; ++st)
+                        if (p.lane (li).step (st).on != anchor.lane (li).step (st).on)
+                            ++n;
+                return n;
+            };
+
+            int worstFromAnchor = 0;
+            for (std::uint64_t bar = 1; bar <= 32; ++bar)
+            {
+                Pattern next = anchor;                       // what the app does
+                Variator::vary (next, drift, bar, noLocks());
+                worstFromAnchor = std::max (worstFromAnchor, cellsDifferingFromAnchor (next));
+            }
+
+            Pattern walking = anchor;                        // what it must not do
+            for (std::uint64_t bar = 1; bar <= 32; ++bar)
+                Variator::vary (walking, drift, bar, noLocks());
+            const int afterWalk = cellsDifferingFromAnchor (walking);
+
+            expect (worstFromAnchor > 0, "a variation that changes nothing is not a variation");
+            expect (afterWalk > 2 * worstFromAnchor,
+                    "the random walk (" + juce::String (afterWalk) + " cells) should have strayed "
+                    "far past the anchored worst case (" + juce::String (worstFromAnchor) + ")");
         }
 
         beginTest ("a locked lane is left untouched");
