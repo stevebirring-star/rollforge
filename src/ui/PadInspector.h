@@ -11,6 +11,9 @@
 // SIMILAR walks this pad through the sounds in the library that are most like the one it
 // holds — same drum type, nearest in feature space. Press it again and it steps to the
 // next-nearest, so auditioning a shortlist is one repeated click, not a trip to a browser.
+//
+// RESAMPLE bounces the whole pattern — kit, rolls, master strip and all — onto this pad, as
+// one seamless loop. Right-clicking the destination is the point: you pick where it lands.
 
 #include "engine/EngineCommand.h"   // LayerMode
 
@@ -25,7 +28,7 @@ class PadInspector final : public juce::Component
 {
 public:
     PadInspector (const juce::String& padName, float tone, float reverbSend,
-                  int numLayers, LayerMode layerMode, bool canFindSimilar);
+                  int numLayers, LayerMode layerMode, bool canFindSimilar, bool canResample);
 
     /** Fired live as the knobs move (the engine applies them without retriggering). */
     std::function<void (float tone)> onToneChanged;
@@ -37,11 +40,16 @@ public:
         button then retires itself and says so, rather than doing nothing on every press. */
     std::function<juce::String()> onSimilar;
 
+    /** Fired by RESAMPLE. Bounce the pattern onto this pad and return the new sound's name;
+        empty if the render or the write failed, and the owner has said why. */
+    std::function<juce::String()> onResample;
+
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
     void findSimilar();
+    void resample();
 
     juce::Label  title;
     juce::Slider toneSlider;
@@ -50,7 +58,8 @@ private:
     juce::Label    sendCaption;
     juce::Label    layersCaption;   // "N layers" — hidden on a single-sample pad
     juce::ComboBox layerModeBox;    // round-robin vs velocity
-    juce::TextButton similarButton { "Similar" };
+    juce::TextButton similarButton  { "Similar" };
+    juce::TextButton resampleButton { "Resample" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PadInspector)
 };

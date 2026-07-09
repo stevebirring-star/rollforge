@@ -1372,6 +1372,89 @@ juce::String MainComponent::similarForPad (int padIndex)
     return file.getFileNameWithoutExtension();
 }
 
+juce::File MainComponent::nextResampleFile()
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                   .getChildFile ("RollForge")
+                   .getChildFile ("Resamples");
+    dir.createDirectory();
+
+    // Never overwrite: a resample is a take, and the one you bounced two minutes ago may be
+    // the one you wanted. The pad's label is this file's name, so it stays identifiable.
+    for (int n = 1; n < 10000; ++n)
+    {
+        auto file = dir.getChildFile ("Resample " + juce::String (n) + ".wav");
+        if (! file.existsAsFile())
+            return file;
+    }
+    return dir.getChildFile ("Resample.wav");
+}
+
+juce::String MainComponent::resampleToPad (int padIndex)
+{
+    if (! Kit::isValidIndex (padIndex))
+        return {};
+
+    if (patternIsEmpty (editPattern))
+    {
+        statusLabel.setText ("Nothing to resample: the pattern is empty", juce::dontSendNotification);
+        return {};
+    }
+
+    const int bars = patternBars (editPattern);
+    auto opts = renderOptions (bars);
+
+    // Long enough for the Space reverb and a crash to die away. All of it is folded back over
+    // the loop, so a generous tail costs nothing but a moment of rendering.
+    opts.tailSeconds = 3.0;
+
+    // A fresh engine, exactly as the exporters do: the live audio thread is never touched, and
+    // the pad we are about to overwrite still plays its old sound into the bounce.
+    DrumEngine renderEngine;
+    installKitIntoEngine (starterKit, renderEngine);
+
+    juce::AudioBuffer<float> buffer;
+    if (OfflineRenderer::render (renderEngine, editPattern, buffer, opts) <= 0)
+    {
+        statusLabel.setText ("Resample failed: nothing was rendered", juce::dontSendNotification);
+        return {};
+    }
+
+    // Fold the overhang back over the start so the bounce loops seamlessly at exactly one
+    // pattern length. OfflineRenderer sizes its render from the same bars/bpm arithmetic.
+    const int loop = Resample::loopSamples (opts.sampleRate, editPattern.bpm, bars);
+    Resample::foldTailIntoLoop (buffer, loop);
+
+    // A dense loop whose sounds ring past the bar really is louder than the render the
+    // limiter saw: three passes of a 3-second tail overlap in a 2-second bar. Turning it down
+    // is the only honest option, but doing it silently is not — the status line says by how
+    // much, and the reduction is the whole loop, so nothing is squashed against anything.
+    const float gain = Resample::limitPeak (buffer, 0.99f);
+
+    auto file = nextResampleFile();
+    if (! WavExporter::writeWav (buffer, opts.sampleRate, file))
+    {
+        statusLabel.setText ("Resample failed: could not write " + file.getFullPathName(),
+                             juce::dontSendNotification);
+        return {};
+    }
+
+    loadFileIntoPad (padIndex, file);
+    refreshCategoryColours();
+
+    // The status strip is narrow, so this has to earn its width: "Resampled 1 bar, -4.1 dB"
+    // tells a producer both what happened and that the take is quieter than what they heard.
+    const juce::String levelNote =
+        gain < 1.0f ? ", " + juce::String (juce::Decibels::gainToDecibels (gain), 1) + " dB"
+                    : juce::String();
+
+    statusLabel.setText ("Resampled " + juce::String (bars) + (bars == 1 ? " bar" : " bars")
+                             + levelNote,
+                         juce::dontSendNotification);
+
+    return file.getFileNameWithoutExtension();
+}
+
 void MainComponent::openPadInspector (int padIndex)
 {
     if (! Kit::isValidIndex (padIndex))
@@ -1386,7 +1469,8 @@ void MainComponent::openPadInspector (int padIndex)
 
     auto inspector = std::make_unique<PadInspector> (
         padGrid.getPadLabel (padIndex), pad.tone, pad.reverbSend,
-        pad.numAlternates(), pad.layerMode, canFindSimilar);
+        pad.numAlternates(), pad.layerMode, canFindSimilar,
+        /*canResample*/ ! patternIsEmpty (editPattern));
 
     // Live edits: re-push the pad's params WITHOUT retiring its sample (same buffer),
     // so a note already sounding keeps playing while you turn the knob.
@@ -1425,6 +1509,12 @@ void MainComponent::openPadInspector (int padIndex)
     {
         if (auto* self = safe.getComponent())
             return self->similarForPad (padIndex);
+        return {};
+    };
+    inspector->onResample = [safe, padIndex] () -> juce::String
+    {
+        if (auto* self = safe.getComponent())
+            return self->resampleToPad (padIndex);
         return {};
     };
 

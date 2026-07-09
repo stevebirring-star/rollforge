@@ -2,6 +2,7 @@
 
 #include "engine/AudioEngine.h"
 #include "engine/OfflineRenderer.h"
+#include "engine/Resample.h"
 #include "engine/SampleRetirementPool.h"
 #include "engine/WavExporter.h"
 #include "model/MidiExporter.h"
@@ -112,6 +113,15 @@ private:
         happened to be saved with. */
     void stampTransportOnto (Pattern& pattern);
     juce::String similarForPad (int padIndex);   // step this pad to its next-nearest library sound
+
+    /** Bounce the current pattern onto `padIndex` as one seamless loop, and return the new
+        sound's name (empty on failure, having said why). The WAV is written to disk rather
+        than held in memory: a pad with no file behind it reverts to a starter sound the next
+        time the project is opened. */
+    juce::String resampleToPad (int padIndex);
+
+    /** `Resamples/Resample N.wav` under the app data dir, N being the first one free. */
+    static juce::File nextResampleFile();
     void rebuildSimilarSearch();                 // after a scan or a re-tag
     void loadLayersIntoPad (int padIndex, const juce::StringArray& files);   // round-robin layers
     void sliceLoopIntoPads (const juce::File& loop);   // chop a break across the pads at its onsets

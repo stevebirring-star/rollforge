@@ -1,5 +1,6 @@
 #include "ui/PadInspector.h"
 #include "ui/RollForgeLookAndFeel.h"
+#include "ui/Text.h"
 #include "ui/Theme.h"
 
 namespace rollforge
@@ -32,7 +33,8 @@ namespace
 }
 
 PadInspector::PadInspector (const juce::String& padName, float tone, float reverbSend,
-                            int numLayers, LayerMode layerMode, bool canFindSimilar)
+                            int numLayers, LayerMode layerMode, bool canFindSimilar,
+                            bool canResample)
 {
     title.setText (padName, juce::dontSendNotification);
     title.setColour (juce::Label::textColourId, panelText);
@@ -88,7 +90,29 @@ PadInspector::PadInspector (const juce::String& padName, float tone, float rever
     similarButton.onClick = [this] { findSimilar(); };
     addAndMakeVisible (similarButton);
 
-    setSize (196, layered ? 212 : 166);
+    // Bounce the whole pattern onto this pad: kit, rolls, macros, EQ, the lot. It makes
+    // something, so it wears the hot accent.
+    resampleButton.setEnabled (canResample);
+    resampleButton.setColour (juce::TextButton::buttonColourId, theme().accentHot);
+    resampleButton.setColour (juce::TextButton::textColourOffId, theme().background);
+    resampleButton.setTooltip (canResample
+        ? utf8 ("Bounce the whole pattern — kit, rolls and master strip — onto this pad, as one "
+                "seamless loop. The pad's own sound is part of what gets bounced.")
+        : juce::String ("Make a beat first: there is nothing to bounce"));
+    resampleButton.onClick = [this] { resample(); };
+    addAndMakeVisible (resampleButton);
+
+    setSize (208, layered ? 212 : 166);
+}
+
+void PadInspector::resample()
+{
+    if (onResample == nullptr)
+        return;
+
+    const auto newName = onResample();
+    if (newName.isNotEmpty())
+        title.setText (newName, juce::dontSendNotification);
 }
 
 void PadInspector::findSimilar()
@@ -120,7 +144,9 @@ void PadInspector::resized()
     title.setBounds (r.removeFromTop (20));
     r.removeFromTop (4);
 
-    similarButton.setBounds (r.removeFromBottom (26).reduced (2, 0));
+    auto actions = r.removeFromBottom (26).reduced (2, 0);
+    similarButton.setBounds (actions.removeFromLeft (actions.getWidth() / 2 - 3));
+    resampleButton.setBounds (actions.removeFromRight (actions.getWidth() - 6));
     r.removeFromBottom (8);
 
     if (layerModeBox.isVisible())

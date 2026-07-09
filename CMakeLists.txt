@@ -119,6 +119,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/DrumEngine.cpp
         src/engine/MasterBus.cpp
         src/engine/OfflineRenderer.cpp
+        src/engine/Resample.cpp
         src/engine/WavExporter.cpp
         src/engine/fx/Compressor.cpp
         src/engine/fx/Crush.cpp
