@@ -14,6 +14,8 @@
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
 #include "library/Slicer.h"
+#include "library/LibraryDb.h"
+#include "library/SimilarSearch.h"
 #include "model/RollCompiler.h"
 #include "model/RollPresets.h"
 #include "model/UndoableActions.h"
@@ -70,6 +72,10 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep
     void loadFileIntoPad (int padIndex, const juce::File& file);
+    void installKitSelection (const std::array<juce::String, kitNumPads>& paths);  // NEW KIT + New Sounds
+    void rerollSounds (std::uint64_t seed);      // swap the kit's samples, keep the groove
+    juce::String similarForPad (int padIndex);   // step this pad to its next-nearest library sound
+    void rebuildSimilarSearch();                 // after a scan or a re-tag
     void loadLayersIntoPad (int padIndex, const juce::StringArray& files);   // round-robin layers
     void sliceLoopIntoPads (const juce::File& loop);   // chop a break across the pads at its onsets
     void auditionSample (const juce::File& file);      // play a browser sample on the preview pad
@@ -98,6 +104,12 @@ private:
     // outlives the Kit/pool/loader that also reference the samples.
     AudioEngine          engine;
     SampleLoader         loader;
+
+    // The sample library. Owned here rather than by BrowserPanel because the pad grid needs
+    // it too, and the browser only exists while its dialog is open. `similarSearch` caches
+    // the normalised feature space; it is rebuilt whenever the corpus changes.
+    LibraryDb            library;
+    SimilarSearch        similarSearch;
     SampleRetirementPool retirementPool;
     Kit                  starterKit;
     Pattern              editPattern;   // the pattern the grid edits (16 lanes -> pads 0..15)
@@ -144,6 +156,14 @@ private:
     // Full file paths of the sample LAYERS loaded into each pad, in order (empty = the
     // built-in starter synth sound). Tracked so Save/Load can rebuild the kit from disk.
     std::array<juce::StringArray, (size_t) maxLanes> padSourcePaths {};
+
+    // Per-pad state for the inspector's SIMILAR button. `similarAnchor` is the sound the
+    // shortlist was computed FROM: pressing Similar repeatedly must walk that one sound's
+    // neighbours, not random-walk away from it (and never ping-pong A->B->A). `similarServed`
+    // is what the button last installed, so a pad changed by any other route re-anchors.
+    std::array<juce::String, (size_t) maxLanes> similarAnchor {};
+    std::array<juce::String, (size_t) maxLanes> similarServed {};
+    std::array<int,          (size_t) maxLanes> similarCursor {};
 
     // The sample on the preview pad. Held so the message thread keeps a reference until
     // the next audition retires it (the SampleBuffer.h ownership contract).

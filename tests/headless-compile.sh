@@ -62,6 +62,7 @@ ENGINE_SOURCES=(
     src/library/FeatureExtractor.cpp
     src/library/Slicer.cpp
     src/library/Similarity.cpp
+    src/library/SimilarSearch.cpp
     src/library/Categoriser.cpp
     src/library/LibraryDb.cpp
     src/library/Scanner.cpp
@@ -110,6 +111,7 @@ TEST_SOURCES=(
     tests/CategoriserTests.cpp
     tests/SlicerTests.cpp
     tests/SimilarityTests.cpp
+    tests/SimilarSearchTests.cpp
     tests/LibraryDbTests.cpp
     tests/ScannerTests.cpp
     tests/KitBuilderTests.cpp

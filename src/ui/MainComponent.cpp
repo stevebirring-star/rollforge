@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include "library/Scanner.h"
+
 #include "ui/RollForgeLookAndFeel.h"
 
 #include "library/KitBuilder.h"
@@ -73,6 +75,15 @@ MainComponent::MainComponent()
 
     // Apply the saved UI scale (default 1.0 when there are no settings yet).
     juce::Desktop::getInstance().setGlobalScaleFactor (AppSettings::load().uiScale);
+
+    // The library outlives the browser dialog, so it is opened here. A failure to open is
+    // survivable: everything library-shaped simply reports itself unavailable.
+    auto dbFile = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                      .getChildFile ("RollForge")
+                      .getChildFile ("library.db");
+    dbFile.getParentDirectory().createDirectory();
+    library.open (dbFile);
+    rebuildSimilarSearch();
 
     addAndMakeVisible (brandMark);
     addAndMakeVisible (masterMeter);
@@ -292,6 +303,11 @@ MainComponent::MainComponent()
             cells.push_back ({ c.lane, c.step });
         seqGrid.flashChanged (cells);
     };
+    // "New Sounds": the mirror of Reroll. Reroll keeps the kit and rewrites the notes;
+    // this keeps the notes and rewrites the kit. A groove you like deserves to be heard
+    // through more than one set of drums.
+    fillBar.onRerollSounds = [this] (std::uint64_t seed) { rerollSounds (seed); };
+
     // Feel presets apply the Humaniser inside FillBar and hand back the swing so the
     // transport's swing control stays in sync.
     fillBar.onFeelSwing = [this] (float swing) { transportBar.setSwing (swing); };
@@ -811,15 +827,151 @@ void MainComponent::loadLayersIntoPad (int padIndex, const juce::StringArray& fi
                          juce::dontSendNotification);
 }
 
+void MainComponent::rebuildSimilarSearch()
+{
+    similarSearch.rebuild (library);
+    fillBar.setLibraryAvailable (! similarSearch.isEmpty());
+}
+
+void MainComponent::installKitSelection (const std::array<juce::String, kitNumPads>& paths)
+{
+    for (int p = 0; p < kitNumPads; ++p)
+    {
+        if (paths[(std::size_t) p].isEmpty())
+            continue;
+
+        // A pad the builder chose to leave alone (a lock, or the same draw twice) keeps the
+        // sample it already has — reinstalling would cut a note that is still ringing, and
+        // would throw away any extra velocity layers loaded onto it.
+        const auto& existing = padSourcePaths[(std::size_t) p];
+        if (! existing.isEmpty() && existing[0] == paths[(std::size_t) p])
+            continue;
+
+        const juce::File file (paths[(std::size_t) p]);
+        if (auto sample = loader.loadFile (file))
+        {
+            // Auto-choke hats (closed cuts open) before installing, so the pad's
+            // choke group is carried into the engine with the new sample.
+            starterKit.pad (p).chokeGroup = KitBuilder::chokeGroupForPad (p);
+            installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
+            padSourcePaths[(std::size_t) p] = juce::StringArray (file.getFullPathName());
+            padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
+            updatePadWaveform (p);
+            updateLaneLabelForPad (p);
+        }
+    }
+}
+
+void MainComponent::rerollSounds (std::uint64_t seed)
+{
+    if (similarSearch.isEmpty())
+    {
+        statusLabel.setText ("Scan a samples folder in the Library first", juce::dontSendNotification);
+        return;
+    }
+
+    KitBuilder::Selection current;
+    for (int p = 0; p < kitNumPads; ++p)
+    {
+        const auto& layers = padSourcePaths[(std::size_t) p];
+        if (! layers.isEmpty())
+            current.paths[(std::size_t) p] = layers[0];
+    }
+
+    // A lane lock already means "leave this lane alone when you reroll". It means the same
+    // thing here, so one padlock protects a lane's groove AND its sound — one lock, one idea.
+    std::array<bool, kitNumPads> locked {};
+    for (int p = 0; p < kitNumPads && p < maxLanes; ++p)
+        locked[(std::size_t) p] = laneLocked[(std::size_t) p];
+
+    KitBuilder kb (library);
+    installKitSelection (kb.build (current, seed, locked).paths);
+    refreshCategoryColours();
+    statusLabel.setText ("New sounds, same groove", juce::dontSendNotification);
+}
+
+juce::String MainComponent::similarForPad (int padIndex)
+{
+    if (! Kit::isValidIndex (padIndex) || similarSearch.isEmpty())
+        return {};
+
+    const auto& layers = padSourcePaths[(std::size_t) padIndex];
+    if (layers.isEmpty())
+        return {};
+
+    const juce::String current = layers[0];
+
+    // Anything other than this button changing the pad's sound (a drop, NEW KIT, Open)
+    // re-anchors the shortlist onto whatever is on the pad now.
+    if (current != similarServed[(std::size_t) padIndex])
+    {
+        similarAnchor[(std::size_t) padIndex] = current;
+        similarCursor[(std::size_t) padIndex] = 0;
+    }
+
+    const juce::String anchor = similarAnchor[(std::size_t) padIndex];
+    constexpr int shortlist = 12;
+
+    juce::StringArray neighbours;
+    if (similarSearch.indexOf (anchor) >= 0)
+    {
+        neighbours = similarSearch.neighboursOf (anchor, shortlist);
+    }
+    else
+    {
+        // The pad holds a file the library has never scanned. Analyse it exactly the way the
+        // Scanner would have, then search — so a dragged-in sample is a first-class query.
+        Scanner      scanner (library);
+        LibraryEntry query;
+        if (scanner.analyseFile (juce::File (anchor), query))
+            neighbours = similarSearch.neighboursOf (query, shortlist);
+    }
+
+    if (neighbours.isEmpty())
+        return {};
+
+    const int cursor = similarCursor[(std::size_t) padIndex] % neighbours.size();
+    similarCursor[(std::size_t) padIndex] = cursor + 1;
+
+    const juce::File file (neighbours[cursor]);
+    if (! file.existsAsFile())
+        return {};
+
+    // loadFileIntoPad zeroes tone + send, because they were dialled in for the outgoing
+    // sample. Similar is the one case where that is wrong: the pad is a slot the user is
+    // auditioning cousins through, and the inspector's knobs stay on screen showing the
+    // values it would silently have thrown away.
+    const float tone = starterKit.pad (padIndex).tone;
+    const float send = starterKit.pad (padIndex).reverbSend;
+
+    loadFileIntoPad (padIndex, file);           // rewrites padSourcePaths[padIndex]
+
+    starterKit.pad (padIndex).tone       = tone;
+    starterKit.pad (padIndex).reverbSend = send;
+    updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+
+    similarServed[(std::size_t) padIndex] = file.getFullPathName();
+    similarAnchor[(std::size_t) padIndex] = anchor;   // keep walking the ORIGINAL shortlist
+    refreshCategoryColours();
+
+    return file.getFileNameWithoutExtension();
+}
+
 void MainComponent::openPadInspector (int padIndex)
 {
     if (! Kit::isValidIndex (padIndex))
         return;
 
     const Pad& pad = starterKit.pad (padIndex);
+
+    // Similar needs a library to search and a sample to search FROM. A pad still holding a
+    // built-in starter sound has no file to analyse, so it offers nothing to be similar to.
+    const bool canFindSimilar = ! similarSearch.isEmpty()
+                             && ! padSourcePaths[(std::size_t) padIndex].isEmpty();
+
     auto inspector = std::make_unique<PadInspector> (
         padGrid.getPadLabel (padIndex), pad.tone, pad.reverbSend,
-        pad.numAlternates(), pad.layerMode);
+        pad.numAlternates(), pad.layerMode, canFindSimilar);
 
     // Live edits: re-push the pad's params WITHOUT retiring its sample (same buffer),
     // so a note already sounding keeps playing while you turn the knob.
@@ -853,6 +1005,12 @@ void MainComponent::openPadInspector (int padIndex)
             self->starterKit.pad (padIndex).layerMode = mode;
             updatePadParamsInEngine (self->starterKit, self->engine.getDrumEngine(), padIndex);
         }
+    };
+    inspector->onSimilar = [safe, padIndex] () -> juce::String
+    {
+        if (auto* self = safe.getComponent())
+            return self->similarForPad (padIndex);
+        return {};
     };
 
     juce::CallOutBox::launchAsynchronously (std::move (inspector),
@@ -1090,28 +1248,13 @@ void MainComponent::openLibrary()
         return;
     }
 
-    auto browser = std::make_unique<BrowserPanel>();
+    auto browser = std::make_unique<BrowserPanel> (library);
     browser->onNewKit = [this] (const std::array<juce::String, kitNumPads>& paths)
     {
-        for (int p = 0; p < kitNumPads; ++p)
-        {
-            if (paths[(size_t) p].isEmpty())
-                continue;
-            const juce::File file (paths[(size_t) p]);
-            if (auto sample = loader.loadFile (file))
-            {
-                // Auto-choke hats (closed cuts open) before installing, so the pad's
-                // choke group is carried into the engine with the new sample.
-                starterKit.pad (p).chokeGroup = KitBuilder::chokeGroupForPad (p);
-                installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
-                padSourcePaths[(size_t) p] = juce::StringArray (file.getFullPathName());
-                padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
-                updatePadWaveform (p);
-                updateLaneLabelForPad (p);
-            }
-        }
+        installKitSelection (paths);
     };
 
+    browser->onLibraryChanged = [this] { rebuildSimilarSearch(); };
     browser->onAudition  = [this] (const juce::String& path) { auditionSample (juce::File (path)); };
     browser->onSendToPad = [this] (const juce::String& path, int pad) { loadFileIntoPad (pad, juce::File (path)); };
     browser->onSliceLoop = [this] (const juce::String& path) { sliceLoopIntoPads (juce::File (path)); };

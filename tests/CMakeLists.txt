@@ -40,6 +40,7 @@ target_sources(RollForgeTests PRIVATE
     CategoriserTests.cpp
     SlicerTests.cpp
     SimilarityTests.cpp
+    SimilarSearchTests.cpp
     LibraryDbTests.cpp
     ScannerTests.cpp
     KitBuilderTests.cpp
@@ -76,6 +77,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/FeatureExtractor.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Slicer.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Similarity.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/SimilarSearch.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Categoriser.cpp
     ${CMAKE_SOURCE_DIR}/src/library/LibraryDb.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Scanner.cpp

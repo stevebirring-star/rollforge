@@ -24,8 +24,12 @@ public:
     /** Chosen sample path per pad ("" = nothing available for that pad). */
     struct Selection { std::array<juce::String, kitNumPads> paths {}; };
 
-    /** Builds a selection: locked pads keep `current`; the rest pick a random
-        sample from their pad's category. Deterministic for a given seed. */
+    /** Builds a selection: locked pads keep `current`; the rest pick a random sample from
+        their pad's category. Deterministic for a given seed.
+
+        No sample lands on two pads unless its category has fewer samples than pads asking
+        for one — the two kicks and the three toms draw from shared lists, and independent
+        draws would routinely repeat. */
     Selection build (const Selection& current,
                      std::uint64_t seed,
                      const std::array<bool, kitNumPads>& locked) const;

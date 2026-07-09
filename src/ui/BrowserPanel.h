@@ -2,7 +2,12 @@
 
 // RollForge — BrowserPanel: the sample-library browser. Scan a folder (populates
 // the SQLite library DB), filter by category, and hit NEW KIT to load a coherent
-// random kit. Owns its own LibraryDb (persisted under the user app-data dir).
+// random kit.
+//
+// The LibraryDb is owned by MainComponent and passed in, because the pad grid needs it
+// too (per-pad "Similar", and the New Sounds reroll) and this panel only exists while its
+// dialog is open. Anything that changes the corpus fires onLibraryChanged so the owner can
+// re-normalise its similarity space.
 //
 // Scanning is synchronous for now (blocks briefly); a background-thread scan with
 // live progress is a follow-up.
@@ -32,7 +37,7 @@ class BrowserPanel final : public juce::Component,
                            private juce::ListBoxModel
 {
 public:
-    BrowserPanel();
+    explicit BrowserPanel (LibraryDb& db);
     ~BrowserPanel() override;
 
     void paint (juce::Graphics&) override;
@@ -50,6 +55,10 @@ public:
     /** Fired by "Slice across the pads": chop this loop at its onsets. */
     std::function<void (const juce::String& path)> onSliceLoop;
 
+    /** Fired whenever the corpus changes (a scan, a re-tag): the owner's cached
+        similarity space is now stale. */
+    std::function<void()> onLibraryChanged;
+
 private:
     void chooseFolderAndScan();
     void refresh();
@@ -61,8 +70,7 @@ private:
     void paintListBoxItem (int row, juce::Graphics&, int width, int height, bool selected) override;
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // click = audition, right = menu
 
-    LibraryDb                 db;
-    bool                      dbOpen = false;   // false -> library.db could not be opened
+    LibraryDb&                db;
     std::vector<LibraryEntry> entries;
 
     juce::TextButton scanButton   { "Scan Folder..." };

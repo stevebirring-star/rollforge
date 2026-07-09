@@ -41,6 +41,12 @@ FillBar::FillBar (Sequencer& sequencerToUse) : sequencer (sequencerToUse)
     varyButton.setTooltip ("Tweak the current beat: nudge a few hits, add ghosts, vary accents");
     addAndMakeVisible (varyButton);
 
+    // Reroll changes the notes and keeps the sounds; New Sounds does exactly the opposite.
+    // The pair is the point: a groove you like is worth auditioning against a dozen kits.
+    soundsButton.onClick = [this] { seed += 29ull; if (onRerollSounds) onRerollSounds (seed); };
+    soundsButton.setTooltip ("Swap the kit's samples from your library, keep the groove exactly as it is");
+    addAndMakeVisible (soundsButton);
+
     // Feel: the one-knob Humaniser exposed as named grooves. Each preset sets the
     // Humaniser amount AND swing together, so a beat never sounds quantized-robotic.
     feelLabel.setText ("Feel", juce::dontSendNotification);
@@ -57,6 +63,14 @@ FillBar::FillBar (Sequencer& sequencerToUse) : sequencer (sequencerToUse)
                                                      feelBox.getSelectedId() - 1));
     };
     addAndMakeVisible (feelBox);
+}
+
+void FillBar::setLibraryAvailable (bool available)
+{
+    soundsButton.setEnabled (available);
+    soundsButton.setTooltip (available
+        ? "Swap the kit's samples from your library, keep the groove exactly as it is"
+        : "Scan a samples folder in the Library first, then this rerolls the kit");
 }
 
 void FillBar::applyFeel (FeelPresets::Feel feel)
@@ -88,19 +102,22 @@ void FillBar::resized()
 {
     auto r = getLocalBounds();
 
+    // Widths are tuned so the whole row still fits at the 780 px minimum window width.
     fillButton.setBounds (r.removeFromLeft (120));     // primary action, leads the row
     r.removeFromLeft (8);
     rerollButton.setBounds (r.removeFromLeft (58));
     r.removeFromLeft (6);
     varyButton.setBounds (r.removeFromLeft (58));
-    r.removeFromLeft (12);
-    styleBox.setBounds (r.removeFromLeft (96));
     r.removeFromLeft (6);
-    intensitySlider.setBounds (r.removeFromLeft (108));
+    soundsButton.setBounds (r.removeFromLeft (84));    // sits with its mirror, Reroll
+    r.removeFromLeft (12);
+    styleBox.setBounds (r.removeFromLeft (90));
+    r.removeFromLeft (6);
+    intensitySlider.setBounds (r.removeFromLeft (96));
 
     // Feel group on the right.
     feelBox.setBounds (r.removeFromRight (150));
-    feelLabel.setBounds (r.removeFromRight (42));
+    feelLabel.setBounds (r.removeFromRight (34));
 }
 
 } // namespace rollforge

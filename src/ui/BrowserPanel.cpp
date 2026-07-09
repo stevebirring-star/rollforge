@@ -7,14 +7,8 @@
 namespace rollforge
 {
 
-BrowserPanel::BrowserPanel()
+BrowserPanel::BrowserPanel (LibraryDb& dbToUse) : db (dbToUse)
 {
-    auto dbFile = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-                      .getChildFile ("RollForge")
-                      .getChildFile ("library.db");
-    dbFile.getParentDirectory().createDirectory();
-    dbOpen = db.open (dbFile);
-
     scanButton.onClick = [this] { chooseFolderAndScan(); };
     addAndMakeVisible (scanButton);
 
@@ -70,12 +64,15 @@ void BrowserPanel::chooseFolderAndScan()
             const int n = scanner.scanBlocking (folder);   // synchronous for now
             statusLabel.setText (juce::String (n) + " samples added", juce::dontSendNotification);
             refresh();
+
+            if (onLibraryChanged != nullptr)
+                onLibraryChanged();
         });
 }
 
 void BrowserPanel::refresh()
 {
-    if (! dbOpen)
+    if (! db.isOpen())
     {
         entries.clear();
         list.updateContent();
@@ -218,6 +215,11 @@ void BrowserPanel::showRowMenu (int row)
             {
                 safe->db.setCategoryOverride (path, (SoundCategory) (choice - retagBase));
                 safe->refresh();
+
+                // A re-tag moves the sample into a different category, and "Similar" is
+                // gated on category — so the owner's search must be told.
+                if (safe->onLibraryChanged != nullptr)
+                    safe->onLibraryChanged();
             }
             else if (choice == sliceId)
             {
