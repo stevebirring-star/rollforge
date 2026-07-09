@@ -136,6 +136,7 @@ if(ROLLFORGE_BUILD_APP)
         src/library/KitInstaller.cpp
         src/library/FeatureExtractor.cpp
         src/library/Slicer.cpp
+        src/library/Similarity.cpp
         src/library/Categoriser.cpp
         src/library/LibraryDb.cpp
         src/library/Scanner.cpp
