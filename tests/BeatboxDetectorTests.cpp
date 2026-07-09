@@ -25,6 +25,11 @@ namespace
 {
     constexpr double sr = 44100.0;
 
+    // Deliberately not the POSIX M_PI: MSVC does not define it in <cmath> unless
+    // _USE_MATH_DEFINES is set first, so it would have failed the Windows job. JUCE
+    // carries the constant, and every platform this builds on has JUCE.
+    constexpr double twoPi = 2.0 * juce::MathConstants<double>::pi;
+
     int at (double seconds) { return (int) std::llround (seconds * sr); }
 
     /** A boomy "b": a low sine with a quick pitch drop and a long-ish body. */
@@ -32,15 +37,12 @@ namespace
     {
         const int start = at (when);
         const int n     = at (0.20);
-        juce::Random random (7);
-        juce::ignoreUnused (random);
-
         for (int i = 0; i < n && start + i < (int) out.size(); ++i)
         {
             const double t     = (double) i / sr;
             const double pitch = 55.0 * (1.0 + 2.5 * std::exp (-t / 0.02));
             const double env   = std::exp (-t / 0.09);
-            out[(std::size_t) (start + i)] += gain * (float) (std::sin (2.0 * M_PI * pitch * t) * env);
+            out[(std::size_t) (start + i)] += gain * (float) (std::sin (twoPi * pitch * t) * env);
         }
     }
 
@@ -58,7 +60,7 @@ namespace
             const double env = std::exp (-t / 0.05);
             const float  w   = random.nextFloat() * 2.0f - 1.0f;
             lowpass += (w - lowpass) * 0.12f;    // damp it: mid brightness, not a hat
-            const double body = 0.55 * std::sin (2.0 * M_PI * 190.0 * t) * std::exp (-t / 0.035);
+            const double body = 0.55 * std::sin (twoPi * 190.0 * t) * std::exp (-t / 0.035);
             out[(std::size_t) (start + i)] += gain * (float) ((lowpass * 1.6 + body) * env);
         }
     }
