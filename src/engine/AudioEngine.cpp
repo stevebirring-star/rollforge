@@ -76,6 +76,13 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
     if (numOutputChannels <= 0 || numSamples <= 0)
         return;
 
+    // Flush denormals for the whole callback. Every feedback path in the signal chain
+    // decays towards zero and then sits there: the two plate reverbs' comb lines, the
+    // limiter's and compressor's envelope followers, the per-voice tone filter. A
+    // denormal multiply costs orders of magnitude more than a normal one on x86, so an
+    // idle-but-running reverb is exactly the thing that turns into an audio dropout.
+    const juce::ScopedNoDenormals noDenormals;
+
     // Wrap the driver's output channels (JUCE guarantees non-null output pointers
     // for [0, numOutputChannels)), start from silence, then let the DrumEngine
     // render additively. All RT-safe: no alloc/lock/IO on this thread.

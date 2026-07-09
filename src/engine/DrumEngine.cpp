@@ -144,6 +144,14 @@ void DrumEngine::applySendReturn (juce::AudioBuffer<float>& buffer, int numSampl
 
     // Keep reverberating for a while after the last send is turned down, or the tail of
     // the hit that fed it would be chopped off mid-decay.
+    //
+    // The gate is deliberately the pad CONFIGURATION, not whether the send buffer has
+    // energy in it this block. A per-pad stem renders one pad's hits through an engine
+    // that still has all 16 pads configured, so a configuration-based gate is identical
+    // in the mix and in every stem — which is what lets the stems sum back to the mix.
+    // Gating on energy would idle the reverb during a quiet stem and not during the mix,
+    // and the two would stop agreeing. The cost of running it over silence is ~10 flops
+    // a sample, and the ScopedNoDenormals in the callers keeps that true.
     if (anySendActive)
         sendTailSamples = (int) (sampleRate * 3.0);
     else

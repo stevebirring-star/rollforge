@@ -12,6 +12,10 @@ namespace OfflineRenderer
 
 int render (DrumEngine& engine, const Pattern& pattern, juce::AudioBuffer<float>& out, const Options& opts)
 {
+    // The same reason as the live callback: the reverbs, the limiter and the compressor
+    // all decay into denormals, and an export is thousands of blocks of exactly that.
+    const juce::ScopedNoDenormals noDenormals;
+
     const double sr        = opts.sampleRate > 0.0 ? opts.sampleRate : 44100.0;
     const int    blockSize = opts.blockSize > 0 ? opts.blockSize : 512;
     const double bpm       = pattern.bpm > 0.0 ? pattern.bpm : 120.0;
