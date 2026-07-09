@@ -221,6 +221,43 @@ public:
             e.process (buf);
             expect (buf.getMagnitude (0, 0, block) > 0.0f);
         }
+
+        beginTest ("the 17th (preview) pad sounds without disturbing the 16 kit pads");
+        {
+            // The library browser auditions through a pad past the kit, so previewing a
+            // sample can't change what a kit pad plays, light its meter, or be gated by
+            // mute/solo. Mirrors AudioEngine's DrumEngine { 1024, 64, previewPadIndex + 1 }.
+            constexpr int previewPad = 16;
+            DrumEngine engine { 1024, 64, previewPad + 1 };
+            engine.prepare (sampleRate, blockSize);
+            expectEquals (engine.getNumPads(), previewPad + 1);
+
+            // Longer than one block, so the voice is provably still active afterwards.
+            juce::AudioBuffer<float> audio (1, blockSize * 4);
+            for (int i = 0; i < audio.getNumSamples(); ++i)
+                audio.setSample (0, i, 0.5f);
+            SampleBuffer::Ptr preview = new SampleBuffer (std::move (audio), sampleRate, "preview");
+
+            engine.pushSetPad (previewPad, preview, VoiceParameters {}, 0);
+            engine.pushTrigger (previewPad, 1.0f);
+
+            juce::AudioBuffer<float> buffer (2, blockSize);
+            buffer.clear();
+            engine.process (buffer);
+
+            expect (! isSilent (buffer), "the preview pad is audible");
+            expect (engine.getNumActiveVoices() >= 1);
+
+            // Meters cover the 16 kit pads only; the preview must not spill into them.
+            for (int p = 0; p < 16; ++p)
+                expectWithinAbsoluteError (engine.getPadLevel (p), 0.0f, 1.0e-6f);
+            expectWithinAbsoluteError (engine.getPadLevel (previewPad), 0.0f, 1.0e-6f);
+
+            // Soloing a kit pad must not silence the preview: gating applies to sequenced
+            // hits, and isPadAudible never gates an index past the kit.
+            engine.setPadSoloed (0, true);
+            expect (engine.isPadAudible (previewPad));
+        }
     }
 };
 

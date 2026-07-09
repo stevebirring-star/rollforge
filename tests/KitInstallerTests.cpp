@@ -92,6 +92,48 @@ public:
             expectEquals (pool.getNumRetired(), 0);
         }
 
+        beginTest ("hot-swapping a pad mid-note never frees the buffer a voice is reading");
+        {
+            // The browser's "Send to pad" (and drag-drop, and NEW KIT) can replace a
+            // pad's sample while the sequencer is running and a voice is part-way through
+            // the outgoing buffer. The retirement pool's single strong reference is what
+            // makes that safe: the audio thread can only take the count to 1, never to 0.
+            DrumEngine engine;
+            engine.prepare (sr, 64);
+            SampleRetirementPool pool;
+            Kit kit;
+
+            auto oldSample = makeSample (0.5f, 2048);   // long enough to still be playing after the swap
+            installSampleIntoPad (pool, kit, engine, 0, oldSample);
+
+            juce::AudioBuffer<float> buf (2, 64);
+            buf.clear();
+            engine.process (buf);                       // engine adopts the old sample
+
+            engine.pushTrigger (0, 1.0f);
+            buf.clear();
+            engine.process (buf);                       // a voice is now reading oldSample
+            expect (engine.getNumActiveVoices() > 0);
+
+            installSampleIntoPad (pool, kit, engine, 0, makeSample (0.25f, 16));
+            expectEquals (pool.getNumRetired(), 1);
+
+            buf.clear();
+            engine.process (buf);                       // pad slot drops its ref; the voice keeps one
+            expect (engine.getNumActiveVoices() > 0, "the old voice plays on through the swap");
+
+            oldSample = nullptr;                        // only the pool + the live voice hold it now
+            expectEquals (pool.sweep(), 0, "a buffer a voice is still reading must not be freed");
+
+            for (int i = 0; i < 200 && engine.getNumActiveVoices() > 0; ++i)
+            {
+                buf.clear();
+                engine.process (buf);
+            }
+            expectEquals (engine.getNumActiveVoices(), 0);
+            expectEquals (pool.sweep(), 1, "reclaimed on the message thread once the voice finished");
+        }
+
         beginTest ("installSampleIntoPad ignores invalid input");
         {
             DrumEngine engine;

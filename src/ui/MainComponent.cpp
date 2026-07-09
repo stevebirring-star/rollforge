@@ -615,17 +615,50 @@ void MainComponent::applyProject (const Project& p)
 void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
 {
     // Decode on the message thread (fast for typical drum one-shots), then swap
-    // the pad's sample via the RT-safe retire-old / install-new path.
+    // the pad's sample via the RT-safe retire-old / install-new path. Swapping a live
+    // pad is safe while the sequencer runs: installSampleIntoPad retires the outgoing
+    // buffer before the Kit drops it, so a voice still playing it keeps it alive.
     if (auto sample = loader.loadFile (file))
     {
+        // A trim region belongs to the sample it was cut from. Without this, dropping a
+        // kick onto a slice pad would play only the first 12% of it, and a reversed pad
+        // would silently reverse whatever landed there next.
+        if (Kit::isValidIndex (padIndex))
+        {
+            Pad& pad = starterKit.pad (padIndex);
+            pad.startFraction = 0.0f;
+            pad.endFraction   = 1.0f;
+            pad.reverse       = false;
+            pad.chokeGroup    = KitBuilder::chokeGroupForPad (padIndex);   // closed hat cuts open
+        }
+
         installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), padIndex, sample);
         if (padIndex >= 0 && padIndex < (int) padSourcePath.size())
             padSourcePath[(size_t) padIndex] = file.getFullPathName();
-        padGrid.setPadLabel (padIndex, file.getFileNameWithoutExtension());
+        padGrid.setPadLabel   (padIndex, file.getFileNameWithoutExtension());
+        padGrid.setPadReverse (padIndex, false);
+        padGrid.setPadTrim    (padIndex, 0.0f, 1.0f);
         updatePadWaveform (padIndex);
         updateLaneLabelForPad (padIndex);
         padGrid.flashPad (padIndex);
     }
+}
+
+void MainComponent::auditionSample (const juce::File& file)
+{
+    auto sample = loader.loadFile (file);
+    if (sample == nullptr)
+        return;
+
+    // Same retire-before-replace ordering as installSampleIntoPad: the pool holds the
+    // outgoing buffer so the audio thread, dropping its last reference, can only take
+    // the count to 1 — never to 0, which would delete on the audio thread.
+    retirementPool.retire (previewSample);
+    previewSample = sample;
+
+    auto& drum = engine.getDrumEngine();
+    drum.pushSetPad (AudioEngine::previewPadIndex, sample, VoiceParameters {}, noChokeGroup);
+    drum.pushTrigger (AudioEngine::previewPadIndex, 1.0f);   // same FIFO -> setPad lands first
 }
 
 void MainComponent::sliceLoopIntoPads (const juce::File& file)
@@ -685,16 +718,22 @@ void MainComponent::sliceLoopIntoPads (const juce::File& file)
         updateLaneLabelForPad (i);
     }
 
+    Pattern before = editPattern;
+    before.swing   = engine.getSequencer().getSwing();
+    Pattern after  = before;
+
     // The grid is one bar of 16 steps, so treat the whole loop as that bar: the tempo
     // that makes Play reproduce the break is the one where a bar lasts exactly as long
     // as the loop. A 2-bar 174 BPM break therefore reads as one bar at 87 — the same
     // music, and the only reading under which the 16 steps cover the entire loop.
+    //
+    // If that tempo is not musically plausible the file isn't a loop (slicing a 0.4 s
+    // one-shot implies 600 BPM). Chop it anyway — that's a useful thing to do — but
+    // leave the tempo alone rather than clamping it and wrecking the session's.
     const double loopSeconds = (double) numSamples / loop->getSampleRate();
-    const double bpm         = juce::jlimit (40.0, 300.0, 240.0 / loopSeconds);
-
-    Pattern before = editPattern;
-    before.swing   = engine.getSequencer().getSwing();
-    Pattern after  = before;
+    const double naturalBpm  = 240.0 / loopSeconds;
+    const bool   isLoopTempo = naturalBpm >= 40.0 && naturalBpm <= 300.0;
+    const double bpm         = isLoopTempo ? naturalBpm : before.bpm;
 
     // Slicing lays out a whole arrangement, so it clears every lane rather than just
     // the ones it fills: anything left behind would play on top of the break. It is one
@@ -738,7 +777,8 @@ void MainComponent::sliceLoopIntoPads (const juce::File& file)
     undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
 
     statusLabel.setText (juce::String (used) + " slices from " + file.getFileName()
-                             + " — " + juce::String (bpm, 1) + " BPM",
+                             + (isLoopTempo ? " — " + juce::String (bpm, 1) + " BPM"
+                                            : " — not a loop, tempo unchanged"),
                          juce::dontSendNotification);
 }
 
@@ -845,6 +885,10 @@ void MainComponent::openLibrary()
             }
         }
     };
+
+    browser->onAudition  = [this] (const juce::String& path) { auditionSample (juce::File (path)); };
+    browser->onSendToPad = [this] (const juce::String& path, int pad) { loadFileIntoPad (pad, juce::File (path)); };
+    browser->onSliceLoop = [this] (const juce::String& path) { sliceLoopIntoPads (juce::File (path)); };
 
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (browser.release());

@@ -66,6 +66,7 @@ private:
     void timerCallback() override;                              // retirement sweep
     void loadFileIntoPad (int padIndex, const juce::File& file);
     void sliceLoopIntoPads (const juce::File& loop);   // chop a break across the pads at its onsets
+    void auditionSample (const juce::File& file);      // play a browser sample on the preview pad
     void updatePadLabels();
     void updatePadWaveform (int padIndex);   // recompute a pad's waveform thumbnail from its sample
     void updateLaneLabelForPad (int padIndex);   // refresh sequencer lane label(s) targeting this pad
@@ -121,6 +122,10 @@ private:
     // Full file path of the sample loaded into each pad ("" = the built-in starter
     // synth sound). Tracked so Save/Load can rebuild the kit from disk.
     std::array<juce::String, (size_t) maxLanes>      padSourcePath {};
+
+    // The sample on the preview pad. Held so the message thread keeps a reference until
+    // the next audition retires it (the SampleBuffer.h ownership contract).
+    SampleBuffer::Ptr                               previewSample;
 
     juce::TooltipWindow tooltipWindow { this };   // enables tooltips app-wide (lane locks, sliders)
 

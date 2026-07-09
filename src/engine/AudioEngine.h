@@ -68,6 +68,12 @@ public:
     /** Exposed so the app can install a Kit into the DrumEngine (KitInstaller). */
     DrumEngine& getDrumEngine() noexcept { return drumEngine; }
 
+    /** A 17th pad, past the 16 kit pads, reserved for auditioning a library sample.
+        It is a normal pad in every respect — same setPad/trigger path, same voice
+        pool — but no lane targets it, mute/solo never gate it, and the meter array
+        stops at 16, so previewing cannot disturb the kit. */
+    static constexpr int previewPadIndex = 16;
+
     /** Exposed so the app/transport UI can drive the sequencer (pattern, play,
         tempo). All of its control methods are message-thread safe. */
     Sequencer& getSequencer() noexcept { return sequencer; }
@@ -95,7 +101,7 @@ private:
 
     //==============================================================================
     juce::AudioDeviceManager deviceManager;
-    DrumEngine               drumEngine;
+    DrumEngine               drumEngine { 1024, 64, previewPadIndex + 1 };   // 16 kit pads + preview
     Sequencer                sequencer;
     MasterBus                masterBus;
 

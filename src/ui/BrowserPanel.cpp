@@ -118,21 +118,49 @@ void BrowserPanel::paintListBoxItem (int row, juce::Graphics& g, int width, int 
 
 void BrowserPanel::listBoxItemClicked (int row, const juce::MouseEvent& e)
 {
-    // Right-click (or ctrl-click) a sample to correct its category — the auto-tagger
-    // gets things wrong sometimes, and Atlas flatly can't fix it. The override is
-    // persisted and survives a re-scan.
-    if (row < 0 || row >= (int) entries.size() || ! e.mods.isPopupMenu())
+    if (row < 0 || row >= (int) entries.size())
         return;
 
+    if (e.mods.isPopupMenu())
+    {
+        showRowMenu (row);
+        return;
+    }
+
+    // A plain click auditions the sample through the engine's preview pad, so you can
+    // hear what you're browsing without disturbing the kit.
+    if (onAudition != nullptr)
+        onAudition (entries[(size_t) row].path);
+}
+
+void BrowserPanel::showRowMenu (int row)
+{
     const juce::String  path    = entries[(size_t) row].path;
     const juce::String  name    = entries[(size_t) row].name;
     const SoundCategory current = entries[(size_t) row].category;
 
-    juce::PopupMenu menu;
-    menu.addSectionHeader ("Re-tag \"" + name.substring (0, 22) + "\" as");
+    // Menu ids: 1..16 = send to that pad; 100 = slice; 200+ = re-tag as that category.
+    constexpr int sendBase  = 1;
+    constexpr int sliceId   = 100;
+    constexpr int retagBase = 200;
+
+    juce::PopupMenu sendMenu;
+    for (int p = 0; p < kitNumPads; ++p)
+        sendMenu.addItem (sendBase + p, "Pad " + juce::String (p + 1));
+
+    // Re-tagging corrects the auto-tagger, which gets things wrong sometimes and which
+    // Atlas flatly can't fix. The override is persisted and survives a re-scan.
+    juce::PopupMenu retagMenu;
     for (int i = 0; i <= (int) SoundCategory::Fx; ++i)          // real categories, not Unknown
-        menu.addItem (i + 1, categoryName ((SoundCategory) i),
-                      /*enabled*/ true, /*ticked*/ current == (SoundCategory) i);
+        retagMenu.addItem (retagBase + i, categoryName ((SoundCategory) i),
+                           /*enabled*/ true, /*ticked*/ current == (SoundCategory) i);
+
+    juce::PopupMenu menu;
+    menu.addSectionHeader (name.substring (0, 28));
+    menu.addSubMenu ("Send to pad", sendMenu);
+    menu.addItem (sliceId, "Slice across the pads");
+    menu.addSeparator();
+    menu.addSubMenu ("Re-tag as", retagMenu);
 
     juce::Component::SafePointer<BrowserPanel> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&list),
@@ -140,8 +168,21 @@ void BrowserPanel::listBoxItemClicked (int row, const juce::MouseEvent& e)
         {
             if (safe == nullptr || choice <= 0)
                 return;
-            safe->db.setCategoryOverride (path, (SoundCategory) (choice - 1));
-            safe->refresh();
+
+            if (choice >= retagBase)
+            {
+                safe->db.setCategoryOverride (path, (SoundCategory) (choice - retagBase));
+                safe->refresh();
+            }
+            else if (choice == sliceId)
+            {
+                if (safe->onSliceLoop != nullptr)
+                    safe->onSliceLoop (path);
+            }
+            else if (safe->onSendToPad != nullptr)
+            {
+                safe->onSendToPad (path, choice - sendBase);
+            }
         });
 }
 

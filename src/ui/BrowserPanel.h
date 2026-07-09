@@ -5,7 +5,14 @@
 // random kit. Owns its own LibraryDb (persisted under the user app-data dir).
 //
 // Scanning is synchronous for now (blocks briefly); a background-thread scan with
-// live progress is a follow-up. Audition-on-click + drag->pad are also deferred.
+// live progress is a follow-up.
+//
+// Click a row to audition it. Right-click for the per-sample actions: send it to a
+// pad, slice it across the pads, or re-tag its category.
+//
+// "Send to pad" rather than drag-to-pad: this panel lives in a DialogWindow, which
+// launchAsync() puts into a modal state, and a JUCE internal drag cannot reach a
+// component outside the modal window. A menu is deterministic and does the same job.
 
 #include "library/KitBuilder.h"
 #include "library/LibraryDb.h"
@@ -33,15 +40,25 @@ public:
     /** Fired by NEW KIT with the chosen sample path per pad ("" = leave pad). */
     std::function<void (const std::array<juce::String, kitNumPads>&)> onNewKit;
 
+    /** Fired on a plain click: play this sample through the engine's preview pad. */
+    std::function<void (const juce::String& path)> onAudition;
+
+    /** Fired by "Send to pad": load this sample into that pad, replacing what's there. */
+    std::function<void (const juce::String& path, int padIndex)> onSendToPad;
+
+    /** Fired by "Slice across the pads": chop this loop at its onsets. */
+    std::function<void (const juce::String& path)> onSliceLoop;
+
 private:
     void chooseFolderAndScan();
     void refresh();
     void rebuildKit();
+    void showRowMenu (int row);
 
     // juce::ListBoxModel
     int  getNumRows() override;
     void paintListBoxItem (int row, juce::Graphics&, int width, int height, bool selected) override;
-    void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // right-click = re-tag
+    void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // click = audition, right = menu
 
     LibraryDb                 db;
     bool                      dbOpen = false;   // false -> library.db could not be opened
