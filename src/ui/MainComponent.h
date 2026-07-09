@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/AudioEngine.h"
+#include "engine/OfflineRenderer.h"
 #include "engine/SampleRetirementPool.h"
 #include "engine/WavExporter.h"
 #include "model/MidiExporter.h"
@@ -74,6 +75,11 @@ private:
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
     void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
     RollRegion buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const; // roll under the brush (paint + live meter share this)
+    /** Render settings for `bars` bars with the master strip exactly as it sounds.
+        Every export goes through this — a caller that hand-rolled Options would
+        silently drop whichever field it forgot (as the mix export did with EQ/comp). */
+    OfflineRenderer::Options renderOptions (int bars, bool applyMasterFx = true);
+
     Project captureProject();                  // snapshot the session (pattern + FX)
     void    applyProject (const Project&);      // restore a session (pattern + FX)
 

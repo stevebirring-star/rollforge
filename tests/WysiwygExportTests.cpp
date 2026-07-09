@@ -156,6 +156,56 @@ public:
             // The Drive macro must actually change the export, not vanish on the way out.
             expect (maxAbsDiff (a, b) > 0.001f);
         }
+
+        beginTest ("EVERY master-strip control is baked into the rendered audio");
+        {
+            // Testing one macro was not enough. Drive was baked and passed this file's
+            // older test, while the EQ and the glue compressor — added later — were never
+            // copied into OfflineRenderer::Options and so vanished from every export.
+            // Exercise each control on its own, so adding a control without wiring it
+            // through fails here rather than in someone's DAW.
+            DrumEngine engine;
+            Kit kit = StarterKit::build (44100.0);
+            installKitIntoEngine (kit, engine);
+
+            Pattern p;
+            p.numLanes = 1; p.bpm = 120.0;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            for (int s = 0; s < 16; s += 4)
+                p.lane (0).step (s).on = true;
+
+            OfflineRenderer::Options clean;
+            clean.applyMasterFx = true; clean.bars = 1; clean.tailSeconds = 0.3;
+
+            juce::AudioBuffer<float> reference;
+            OfflineRenderer::render (engine, p, reference, clean);
+            expect (reference.getMagnitude (0, 0, reference.getNumSamples()) > 0.0f);
+
+            struct Control { const char* name; void (*apply) (OfflineRenderer::Options&); };
+            const Control controls[] = {
+                { "punch",  [] (OfflineRenderer::Options& o) { o.punch  =  1.0f; } },
+                { "drive",  [] (OfflineRenderer::Options& o) { o.drive  =  1.0f; } },
+                { "crush",  [] (OfflineRenderer::Options& o) { o.crush  =  1.0f; } },
+                { "space",  [] (OfflineRenderer::Options& o) { o.space  =  1.0f; } },
+                { "lowEq",  [] (OfflineRenderer::Options& o) { o.lowEq  = 12.0f; } },
+                { "midEq",  [] (OfflineRenderer::Options& o) { o.midEq  = 12.0f; } },
+                { "highEq", [] (OfflineRenderer::Options& o) { o.highEq = 12.0f; } },
+                { "comp",   [] (OfflineRenderer::Options& o) { o.comp   =  1.0f; } },
+            };
+
+            for (const auto& c : controls)
+            {
+                OfflineRenderer::Options driven = clean;
+                c.apply (driven);
+
+                DrumEngine fresh; installKitIntoEngine (kit, fresh);
+                juce::AudioBuffer<float> rendered;
+                OfflineRenderer::render (fresh, p, rendered, driven);
+
+                expect (maxAbsDiff (reference, rendered) > 0.001f,
+                        juce::String (c.name) + " is not baked into the export");
+            }
+        }
     }
 };
 

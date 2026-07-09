@@ -32,6 +32,10 @@ int render (DrumEngine& engine, const Pattern& pattern, juce::AudioBuffer<float>
         bus.setDrive (opts.drive);
         bus.setCrush (opts.crush);
         bus.setSpace (opts.space);
+        bus.setLowEqDb  (opts.lowEq);
+        bus.setMidEqDb  (opts.midEq);
+        bus.setHighEqDb (opts.highEq);
+        bus.setComp     (opts.comp);
     }
 
     // 1/16 step = a quarter-note / 4.

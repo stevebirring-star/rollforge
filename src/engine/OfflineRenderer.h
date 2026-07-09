@@ -24,7 +24,13 @@ namespace OfflineRenderer
         int    bars          = 1;
         double tailSeconds   = 1.0;    // extra time for decays after the last step
         bool   applyMasterFx = true;
-        float  punch = 0.0f, space = 0.0f, crush = 0.0f, drive = 0.0f;
+
+        // The whole master strip, so a render matches what the strip is doing. Every
+        // field must default to the bus's own neutral value, or a caller that forgets
+        // one silently exports something it isn't hearing.
+        float  punch = 0.0f, space = 0.0f, crush = 0.0f, drive = 0.0f;   // macros, 0 = bypass
+        float  lowEq = 0.0f, midEq = 0.0f, highEq = 0.0f;                // dB, 0 = flat
+        float  comp  = 0.0f;                                             // glue, 0 = bypass
     };
 
     /** Renders `opts.bars` bars of `pattern` (plus a decay tail) into `out`

@@ -963,6 +963,22 @@ void MainComponent::doExportMidi (int loops)
         });
 }
 
+OfflineRenderer::Options MainComponent::renderOptions (int bars, bool applyMasterFx)
+{
+    OfflineRenderer::Options opts;
+    opts.sampleRate    = 44100.0;
+    opts.bars          = bars;
+    opts.applyMasterFx = applyMasterFx;
+
+    // MasterBus getters are message-thread safe (they read the same atomics the knobs write).
+    auto& bus = engine.getMasterBus();
+    opts.punch = bus.getPunch();     opts.drive  = bus.getDrive();
+    opts.crush = bus.getCrush();     opts.space  = bus.getSpace();
+    opts.lowEq = bus.getLowEqDb();   opts.midEq  = bus.getMidEqDb();
+    opts.highEq = bus.getHighEqDb(); opts.comp   = bus.getComp();
+    return opts;
+}
+
 void MainComponent::doExportWav (int loops)
 {
     const int bars = patternBars (editPattern) * juce::jmax (1, loops);
@@ -982,14 +998,7 @@ void MainComponent::doExportWav (int loops)
             // thread is never touched.
             DrumEngine exportEngine;
             installKitIntoEngine (starterKit, exportEngine);
-
-            OfflineRenderer::Options opts;
-            opts.sampleRate = 44100.0;
-            opts.bars = bars;
-            auto& bus = engine.getMasterBus();
-            opts.punch = bus.getPunch(); opts.drive = bus.getDrive();
-            opts.crush = bus.getCrush(); opts.space = bus.getSpace();
-            WavExporter::exportMix (exportEngine, editPattern, f, opts);
+            WavExporter::exportMix (exportEngine, editPattern, f, renderOptions (bars));
         });
 }
 
@@ -1008,9 +1017,11 @@ void MainComponent::doExportStems (int loops)
             DrumEngine exportEngine;
             installKitIntoEngine (starterKit, exportEngine);
 
-            OfflineRenderer::Options opts;
-            opts.bars = bars;
-            WavExporter::exportStems (exportEngine, editPattern, dir, opts);
+            // Stems are PRE-MASTER, as everywhere else: the master strip belongs on the
+            // sum, not on each part. Running it per stem would give every stem its own
+            // limiter and compressor — a nonlinearity — and the stems would no longer
+            // add back up to the mix (which is what StemNullTests exists to guarantee).
+            WavExporter::exportStems (exportEngine, editPattern, dir, renderOptions (bars, false));
         });
 }
 
