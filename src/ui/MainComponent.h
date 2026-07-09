@@ -12,6 +12,7 @@
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
+#include "library/Slicer.h"
 #include "model/RollCompiler.h"
 #include "model/RollPresets.h"
 #include "model/UndoableActions.h"
@@ -64,6 +65,7 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep
     void loadFileIntoPad (int padIndex, const juce::File& file);
+    void sliceLoopIntoPads (const juce::File& loop);   // chop a break across the pads at its onsets
     void updatePadLabels();
     void updatePadWaveform (int padIndex);   // recompute a pad's waveform thumbnail from its sample
     void updateLaneLabelForPad (int padIndex);   // refresh sequencer lane label(s) targeting this pad
@@ -106,6 +108,7 @@ private:
     juce::TextButton helpButton { "Help" };
     juce::TextButton saveButton { "Save" };
     juce::TextButton openButton { "Open" };
+    juce::TextButton sliceButton { "Slice" };
 
     juce::Component::SafePointer<juce::DialogWindow> settingsWindow;
     juce::Component::SafePointer<juce::DialogWindow> libraryWindow;
@@ -113,6 +116,7 @@ private:
     juce::Component::SafePointer<juce::DialogWindow> helpWindow;
     std::unique_ptr<juce::FileChooser>               exportChooser;
     std::unique_ptr<juce::FileChooser>               projectChooser;
+    std::unique_ptr<juce::FileChooser>               sliceChooser;
 
     // Full file path of the sample loaded into each pad ("" = the built-in starter
     // synth sound). Tracked so Save/Load can rebuild the kit from disk.

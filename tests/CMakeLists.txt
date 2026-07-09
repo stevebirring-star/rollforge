@@ -35,6 +35,7 @@ target_sources(RollForgeTests PRIVATE
     HumaniserTests.cpp
     FxSmokeTests.cpp
     CategoriserTests.cpp
+    SlicerTests.cpp
     LibraryDbTests.cpp
     ScannerTests.cpp
     KitBuilderTests.cpp
@@ -68,6 +69,7 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/StarterKit.cpp
     ${CMAKE_SOURCE_DIR}/src/library/KitInstaller.cpp
     ${CMAKE_SOURCE_DIR}/src/library/FeatureExtractor.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/Slicer.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Categoriser.cpp
     ${CMAKE_SOURCE_DIR}/src/library/LibraryDb.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Scanner.cpp

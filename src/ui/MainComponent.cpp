@@ -109,6 +109,24 @@ MainComponent::MainComponent()
     openButton.setTooltip ("Open a .rollforge project");
     addAndMakeVisible (openButton);
 
+    sliceButton.setColour (juce::TextButton::buttonColourId, colours::panel);
+    sliceButton.setColour (juce::TextButton::textColourOffId, colours::text);
+    sliceButton.onClick = [this]
+    {
+        sliceChooser = std::make_unique<juce::FileChooser> ("Slice a loop across the pads",
+                                                            juce::File(), loader.getSupportedWildcards());
+        sliceChooser->launchAsync (juce::FileBrowserComponent::openMode
+                                       | juce::FileBrowserComponent::canSelectFiles,
+            [this] (const juce::FileChooser& fc)
+            {
+                const auto f = fc.getResult();
+                if (f.existsAsFile())
+                    sliceLoopIntoPads (f);
+            });
+    };
+    sliceButton.setTooltip ("Chop a drum loop at its onsets, one slice per pad, and lay it back out on the grid");
+    addAndMakeVisible (sliceButton);
+
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
         engine.triggerPad (index, velocity);   // the pad flashes itself on click
@@ -610,6 +628,120 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
     }
 }
 
+void MainComponent::sliceLoopIntoPads (const juce::File& file)
+{
+    // Every slice pad shares one choke group, so a slice is cut off the instant the
+    // next one fires. That is what makes the pads replay a contiguous break rather
+    // than smear its tails over each other. Hats use group 1 (KitBuilder).
+    constexpr int sliceChokeGroup = 2;
+
+    auto loop = loader.loadFile (file);
+    if (loop == nullptr || loop->getNumSamples() <= 0 || loop->getSampleRate() <= 0.0)
+    {
+        statusLabel.setText ("Couldn't read " + file.getFileName(), juce::dontSendNotification);
+        return;
+    }
+
+    // Analyse a mono fold; the pads still play the original (possibly stereo) buffer.
+    const int   numSamples = loop->getNumSamples();
+    const int   numChans   = loop->getNumChannels();
+    const auto& audio      = loop->getAudio();
+
+    std::vector<float> mono ((std::size_t) numSamples, 0.0f);
+    for (int c = 0; c < numChans; ++c)
+    {
+        const float* src = audio.getReadPointer (c);
+        for (int i = 0; i < numSamples; ++i)
+            mono[(std::size_t) i] += src[i];
+    }
+    if (numChans > 1)
+        for (auto& s : mono)
+            s /= (float) numChans;
+
+    const auto slices = Slicer::sliceToFractions (mono.data(), numSamples, loop->getSampleRate(), kitNumPads);
+    const int  used   = juce::jmin ((int) slices.size(), kitNumPads);
+    if (used <= 0)
+        return;
+
+    // One decoded buffer, installed into every slice pad. The pads differ only by
+    // their trim region, and the retirement pool refcounts the shared buffer, so
+    // this costs one decode and one copy of the audio (see Slicer.h).
+    auto& drum = engine.getDrumEngine();
+    for (int i = 0; i < used; ++i)
+    {
+        Pad& pad = starterKit.pad (i);
+        pad.startFraction = slices[(std::size_t) i].startFraction;
+        pad.endFraction   = slices[(std::size_t) i].endFraction;
+        pad.reverse       = false;
+        pad.chokeGroup    = sliceChokeGroup;
+
+        installSampleIntoPad (retirementPool, starterKit, drum, i, loop);
+
+        padSourcePath[(std::size_t) i] = file.getFullPathName();
+        padGrid.setPadLabel   (i, "Slice " + juce::String (i + 1));
+        padGrid.setPadReverse (i, false);
+        padGrid.setPadTrim    (i, pad.startFraction, pad.endFraction);
+        updatePadWaveform (i);
+        updateLaneLabelForPad (i);
+    }
+
+    // The grid is one bar of 16 steps, so treat the whole loop as that bar: the tempo
+    // that makes Play reproduce the break is the one where a bar lasts exactly as long
+    // as the loop. A 2-bar 174 BPM break therefore reads as one bar at 87 — the same
+    // music, and the only reading under which the 16 steps cover the entire loop.
+    const double loopSeconds = (double) numSamples / loop->getSampleRate();
+    const double bpm         = juce::jlimit (40.0, 300.0, 240.0 / loopSeconds);
+
+    Pattern before = editPattern;
+    before.swing   = engine.getSequencer().getSwing();
+    Pattern after  = before;
+
+    // Slicing lays out a whole arrangement, so it clears every lane rather than just
+    // the ones it fills: anything left behind would play on top of the break. It is one
+    // undoable step, so Ctrl+Z brings the old pattern back.
+    for (int i = 0; i < maxLanes; ++i)
+    {
+        Lane& lane = after.lane (i);
+        lane = Lane {};
+        lane.targetPad = i;
+        lane.length    = 16;
+    }
+    after.numLanes = maxLanes;
+
+    const auto steps = Slicer::slicesToSteps (slices, 16);
+    for (int i = 0; i < used && i < (int) steps.size(); ++i)
+    {
+        Step& s = after.lane (i).step (steps[(std::size_t) i]);
+        s.on       = true;
+        s.velocity = 0.9f;
+    }
+
+    // A break carries its own groove in the audio; swing would shift the slices off
+    // the timing they were cut from. Rolls belong to the pattern that just went away.
+    after.bpm     = bpm;
+    after.swing   = 0.0f;
+    after.numRolls = 0;
+
+    auto refresh = [this]
+    {
+        refreshGridFromPattern();
+        paintedRolls.clear();
+        rollOverlay.setRolls (paintedRolls);
+        transportBar.setDisplayedTempo (editPattern.bpm);
+        transportBar.setDisplayedSwing (editPattern.swing);
+        engine.getSequencer().setPattern (editPattern);
+    };
+
+    // The pattern swap is undoable as one step (as with Make a Beat). The pad installs
+    // are not — same as NEW KIT and dropping a file on a pad.
+    undoManager.beginNewTransaction();
+    undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+
+    statusLabel.setText (juce::String (used) + " slices from " + file.getFileName()
+                             + " — " + juce::String (bpm, 1) + " BPM",
+                         juce::dontSendNotification);
+}
+
 void MainComponent::timerCallback()
 {
     // Reclaim retired sample buffers that no voice references any more.
@@ -895,6 +1027,8 @@ void MainComponent::resized()
     libraryButton.setBounds (statusRow.removeFromRight (80));
     statusRow.removeFromRight (8);
     exportButton.setBounds (statusRow.removeFromRight (72));
+    statusRow.removeFromRight (8);
+    sliceButton.setBounds (statusRow.removeFromRight (58));
     statusRow.removeFromRight (8);
     saveButton.setBounds (statusRow.removeFromRight (58));
     statusRow.removeFromRight (6);

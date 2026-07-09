@@ -59,6 +59,7 @@ ENGINE_SOURCES=(
     src/library/StarterKit.cpp
     src/library/KitInstaller.cpp
     src/library/FeatureExtractor.cpp
+    src/library/Slicer.cpp
     src/library/Categoriser.cpp
     src/library/LibraryDb.cpp
     src/library/Scanner.cpp
@@ -102,6 +103,7 @@ TEST_SOURCES=(
     tests/HumaniserTests.cpp
     tests/FxSmokeTests.cpp
     tests/CategoriserTests.cpp
+    tests/SlicerTests.cpp
     tests/LibraryDbTests.cpp
     tests/ScannerTests.cpp
     tests/KitBuilderTests.cpp
