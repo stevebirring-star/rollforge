@@ -30,7 +30,17 @@ ExportPanel::ExportPanel()
     addAndMakeVisible (exportWavButton);
     addAndMakeVisible (exportStemsButton);
 
-    setSize (320, 232);
+    dragCaption.setText ("...or drag straight into your DAW", juce::dontSendNotification);
+    dragCaption.setColour (juce::Label::textColourId, juce::Colour (0xff9a9aa4));
+    dragCaption.setJustificationType (juce::Justification::centredLeft);
+    addAndMakeVisible (dragCaption);
+
+    dragMidiChip.renderFile = [this] { return onDragOutMidi ? onDragOutMidi (selectedLoops()) : juce::File(); };
+    dragWavChip.renderFile  = [this] { return onDragOutWav  ? onDragOutWav  (selectedLoops()) : juce::File(); };
+    addAndMakeVisible (dragMidiChip);
+    addAndMakeVisible (dragWavChip);
+
+    setSize (320, 300);
 }
 
 int ExportPanel::selectedLoops() const
@@ -56,6 +66,14 @@ void ExportPanel::resized()
     exportWavButton.setBounds (r.removeFromTop (34));
     r.removeFromTop (8);
     exportStemsButton.setBounds (r.removeFromTop (34));
+
+    r.removeFromTop (12);
+    dragCaption.setBounds (r.removeFromTop (20));
+    r.removeFromTop (4);
+    auto dragRow = r.removeFromTop (30);
+    dragMidiChip.setBounds (dragRow.removeFromLeft (dragRow.getWidth() / 2 - 4));
+    dragRow.removeFromLeft (8);
+    dragWavChip.setBounds (dragRow);
 }
 
 } // namespace rollforge

@@ -1,8 +1,10 @@
 #pragma once
 
 // RollForge — ExportPanel: a small dialog with the export actions (MIDI, WAV mix,
-// WAV stems). The owner wires each button to a file-chooser + exporter. UI only.
-// (Project save/load UI + drag-out are follow-ups.)
+// WAV stems) plus two chips you can drag straight into a DAW. The owner wires each
+// button to a file-chooser + exporter, and each chip to a temp-file renderer. UI only.
+
+#include "ui/DragExportButton.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -25,6 +27,10 @@ public:
     std::function<void (int loops)> onExportWav;
     std::function<void (int loops)> onExportStems;
 
+    // Render the drag payload to a temp file and return it. Same loop count as above.
+    std::function<juce::File (int loops)> onDragOutMidi;
+    std::function<juce::File (int loops)> onDragOutWav;
+
 private:
     int selectedLoops() const;
 
@@ -34,6 +40,9 @@ private:
     juce::TextButton exportMidiButton  { "Export MIDI" };
     juce::TextButton exportWavButton   { "Export WAV (mix)" };
     juce::TextButton exportStemsButton { "Export Stems (per pad)" };
+    juce::Label      dragCaption;
+    DragExportButton dragMidiChip { "Drag MIDI", "Drag this into your DAW to drop the pattern as a MIDI clip" };
+    DragExportButton dragWavChip  { "Drag Audio", "Drag this into your DAW to drop the rendered loop as audio" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ExportPanel)
 };

@@ -75,6 +75,10 @@ private:
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
     void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
     RollRegion buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const; // roll under the brush (paint + live meter share this)
+    /** Renders the pattern to a temp file for a drag-out, returning it (empty on
+        failure). MIDI when `asMidi`, otherwise a WAV mix of the master output. */
+    juce::File renderDragFile (int loops, bool asMidi);
+
     /** Render settings for `bars` bars with the master strip exactly as it sounds.
         Every export goes through this — a caller that hand-rolled Options would
         silently drop whichever field it forgot (as the mix export did with EQ/comp). */

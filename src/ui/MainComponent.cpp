@@ -63,6 +63,10 @@ MainComponent::MainComponent()
 {
     setWantsKeyboardFocus (true);
 
+    // Drag payloads have to outlive their drag, so nothing can delete them at the time.
+    // The next launch is the first safe moment to reclaim them.
+    DragExportButton::sweepStaleTempFiles();
+
     // Apply the saved UI scale (default 1.0 when there are no settings yet).
     juce::Desktop::getInstance().setGlobalScaleFactor (AppSettings::load().uiScale);
 
@@ -914,6 +918,8 @@ void MainComponent::openExport()
     panel->onExportMidi  = [this] (int loops) { doExportMidi  (loops); };
     panel->onExportWav   = [this] (int loops) { doExportWav   (loops); };
     panel->onExportStems = [this] (int loops) { doExportStems (loops); };
+    panel->onDragOutMidi = [this] (int loops) { return renderDragFile (loops, true); };
+    panel->onDragOutWav  = [this] (int loops) { return renderDragFile (loops, false); };
 
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (panel.release());
@@ -961,6 +967,31 @@ void MainComponent::doExportMidi (int loops)
                 f = f.withFileExtension ("mid");
             MidiExporter::save (editPattern, f, bars);
         });
+}
+
+juce::File MainComponent::renderDragFile (int loops, bool asMidi)
+{
+    const int bars = patternBars (editPattern) * juce::jmax (1, loops);
+    auto dir = DragExportButton::dragTempDirectory();
+
+    // Stable names: each drag overwrites the last. The files must outlive their drag
+    // (a receiver may read the path after XdndFinished), so nothing deletes them here;
+    // sweepStaleTempFiles() clears the directory at the next launch.
+    if (asMidi)
+    {
+        auto file = dir.getChildFile ("RollForge-loop.mid");
+        return MidiExporter::save (editPattern, file, bars) ? file : juce::File();
+    }
+
+    auto file = dir.getChildFile ("RollForge-loop.wav");
+
+    // A fresh engine, exactly as the Export buttons do: the live audio thread is never
+    // touched. Rendering is faster than real time and runs here on the message thread,
+    // on mouse-down, so the drag gesture itself never stalls.
+    DrumEngine exportEngine;
+    installKitIntoEngine (starterKit, exportEngine);
+    return WavExporter::exportMix (exportEngine, editPattern, file, renderOptions (bars))
+               ? file : juce::File();
 }
 
 OfflineRenderer::Options MainComponent::renderOptions (int bars, bool applyMasterFx)

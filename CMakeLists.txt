@@ -104,6 +104,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
         src/ui/ExportPanel.cpp
+        src/ui/DragExportButton.cpp
         src/ui/SettingsView.cpp
         src/engine/AudioEngine.cpp
         src/engine/Clock.cpp
