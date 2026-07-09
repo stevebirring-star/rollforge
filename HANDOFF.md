@@ -4,44 +4,88 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-09 (the Credibility / table-stakes tier is complete on `feature/make-a-beat`)._
+_Last updated: 2026-07-09 evening (everything is shipped, pushed, public and Windows-verified; awaiting a human Windows test)._
 
 ---
 
-## 0. Read this first (2026-07-09)
+## 0. Read this first (2026-07-09 evening)
 
-**Branch `feature/make-a-beat` is 23 commits ahead of origin and NOT pushed** — CI is still
-billing-blocked, so verification has been local. `cmake --build build-local && ./build-local/
-tests/RollForgeTests_artefacts/Release/RollForgeTests` → **196 test groups pass**.
+**There is nothing left to build.** Every tier of the roadmap artifact is shipped: the moat
+(generative rhythm), Credibility (table stakes), the whole **P2 "Later"** tier, and the **v2 big
+bet** (Capture: tap-to-pattern + beatbox). Three P2 items were deliberately never built and are
+claimed nowhere: perceptual filter sliders, auto silence-trim on import, and keyword
+prompt-to-beat (dropped on its own critique -- "a preset-picker in NL clothing").
 
-Both post-v1 tiers are now done: the **moat** (generative rhythm) and **Credibility**
-(table-stakes). Credibility #5–#10 landed this session: slice-loop-to-pads, browser
-audition + send-to-pad + hot-swap, native drag-out to a DAW, per-pad tone + reverb send,
-velocity layers + round-robin, and per-lane triplets.
+**Branch `feature/make-a-beat` is PUSHED and 47 commits ahead of `master`.** It has never been
+merged; merging it is an open decision.
 
-**The GUI can now be driven and screenshotted from an agent session** when the laptop is
-docked (two monitors on `:0`): windows open Normal rather than Iconic. Use `xwininfo`'s
-"Absolute upper-left" for the client origin (`xdotool getwindowgeometry` reports the frame
-and your clicks land wrong), `xdotool` to click/drag, and `ffmpeg -f x11grab` to capture
-(there is no imagemagick on this box). Delete `~/.config/RollForge/recovery.rollforge`
-before each run or the previous session is restored. Never `pkill -f 'RollForge…'` — the
-pattern matches your own shell's argv and kills it; kill by PID.
+**CI is green, Windows included.** The repo was made **public** on 2026-07-09 to unblock GitHub
+Actions -- a failed payment / spending limit had been failing every job in 2-4 seconds. Public
+repos get free unlimited Actions. Linux 5m42s, ASan 4m2s, **Windows 8m30s**, 299 test groups.
+This branch had never been compiled by MSVC before; reading it first found one guaranteed break
+(`M_PI` is POSIX and absent from MSVC's `<cmath>` -- use `juce::MathConstants`).
 
-That capability immediately found three bugs that had survived every headless test:
+**v0.2.0 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
+behind HTTP basic auth). **Do not tag a release** -- the repo is public, so a GitHub Release
+would put the binaries at public URLs and the download password would protect nothing. Dispatch
+`release.yml` instead; its publish job is gated on `github.ref_type == 'tag'`. See
+[`web/README.md`](web/README.md).
 
-1. **Undo/redo never worked on Linux.** X11 hands JUCE the lowercase keysym for Ctrl+Z, and
-   `keyPressed` compared against `'Z'`. Fixed (`9f1d6a3`).
-2. **The master EQ and glue compressor were missing from every export**, contradicting the
-   "guaranteed WYSIWYG export" the moat claims. The golden test only exercised one control;
-   it now drives all eight. Stems also now render pre-master so they sum to the mix
-   (`a973431`).
-3. **Loading a sample onto a pad never reset its trim**, so dropping a kick on a slice pad
-   played 12% of it (`004796a`).
+### The only open item
 
-Next up is the roadmap artifact's "Later / P2" tier (waveform-on-pads polish, browser
-similarity sort, background scan) and the v2 big bet (beatbox / tap-to-pattern).
+**A producer friend is testing the Windows build and will report back.** That is the first human
+audio/GUI acceptance pass on Windows. Two things are compiler-verified but never human-verified,
+and both are new:
 
----
+1. `AudioEngine` now opens **one input channel** for beatbox capture (WASAPI on Windows). The
+   output-only fallback -- no microphone, or mic privacy blocked -- has never executed anywhere.
+2. Beatbox capture was verified by piping synthesised audio through a PulseAudio null sink. A
+   real mouth, a real microphone and room noise are a different test; the classifier is coarse
+   by design (three classes, because a mouth makes three sounds).
+
+### How to verify anything here
+
+The laptop is a real X11 desktop, so the app can be **driven and screenshotted**: `xdotool` to
+click, `ffmpeg -f x11grab` to capture. Build with `build-local`, never the stale `build/`:
+
+```
+cmake --build build-local -j8
+./build-local/tests/RollForgeTests_artefacts/Release/RollForgeTests    # 299 test groups
+```
+
+Sanitizers, both of which have earned their keep:
+
+```
+cmake --build build-asan2 --target RollForgeTests && ./build-asan2/.../RollForgeTests
+cmake -B build-tsan -DROLLFORGE_TSAN=ON && setarch $(uname -m) -R ./build-tsan/.../RollForgeTests
+```
+
+The `setarch -R` is **not optional** -- TSan's shadow mapping collides with modern kernel ASLR
+and the binary aborts before a single test runs. TSan is what makes `InputRecorder`,
+`MidiCaptureQueue` and `FolderWatcher` believable; ASan cannot see a data race.
+
+Real-signal testing that paid off, and is repeatable:
+- **Audio in**: `pactl load-module module-null-sink sink_name=rfbeatbox`, set it as the default
+  source, `paplay -d rfbeatbox take.wav`. Restore the default source afterwards.
+- **MIDI in**: the app subscribes to ALSA's `Midi Through` port, so `aplaymidi -p 14:0 taps.mid`
+  plays notes straight into it.
+
+### Bugs found by this work, worth remembering as a class
+
+- `Project` grew to **473 KB** and blew the stack (caught by ASan; Windows' 1 MB thread stack
+  would have followed). A `static_assert` now guards its size.
+- The **CLIP lamp could never light**: the limiter hard-clamps at 0.98 and the meter was fed
+  after it. It now watches the limiter's *input*.
+- Settings' "Add folder" button wrote to `AppSettings::sampleFolders`, which **nothing ever
+  read**. It showed a count that meant nothing and scanned nothing. Removed; orphaned folders
+  are migrated into the real watch list once, on launch.
+- `juce::String` decodes a `char` literal as **Latin-1**, so every em-dash in the UI rendered as
+  mojibake. Use `utf8()` (`src/ui/Text.h`).
+- `Slicer` snaps its first onset to sample 0 -- correct for tiling slices, wrong for anything
+  that cares *when* a hit happened. Opt out with `snapFirstToZero = false`.
+- A 30-agent audit of the in-app Help found **three claims that were simply false**. The Help now
+  also generates the public user manual, so stale Help is stale documentation. See
+  `web/gen_page.py`.
 
 ## 1. Where we are
 

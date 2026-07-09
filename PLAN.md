@@ -229,9 +229,40 @@ CI green. **RollForge is feature-complete for v1.**
 
 ---
 
-## Scope guard (NOT building in v1)
+## Post-v1 — the moat, Credibility, P2, and the big bet ✅ (2026-07-08 / 07-09)
 
-No plugin hosting · no melodic/pitched mode · no audio recording · no
-time-stretching · no cloud/content store · no ML embeddings · no macOS target
-(kept structurally possible) · no MIDI-controller mapping UI (incoming MIDI
-notes trigger pads — that's it).
+Everything on the "Roadmap to beat Atlas" artifact is shipped except three items that were
+deliberately never built (perceptual filter sliders, auto silence-trim on import, keyword
+prompt-to-beat). Branch `feature/make-a-beat`, 47 commits ahead of `master`, CI green on Linux +
+Windows + ASan, clean under TSan. **299 headless test groups.**
+
+| File | Role |
+|---|---|
+| `model/Capture.{h,cpp}` | One quantiser for both capture sources. Rounds a hit onto **its own lane's** grid (12 steps for a triplet lane, 16 for a straight one). Rounding past the last step **wraps to 0** — nobody taps a downbeat late. |
+| `library/BeatboxDetector.{h,cpp}` | Onsets → kick / snare / hat. Three classes, because a mouth makes three sounds. Reuses `Slicer` + `Categoriser`. |
+| `engine/InputRecorder.{h,cpp}` | RT-safe audio-thread → message-thread handoff (`armed`/`writing` release-acquire handshake). Never allocates on the audio thread. |
+| `engine/MidiCaptureQueue.{h,cpp}` | Multi-producer (one thread per MIDI device) → message thread. Bounded, drop-on-full; drops come back **with** the notes, because reading them separately loses exactly the notes dropped between the two calls. |
+| `model/Song.{h,cpp}` | The arrangement chain. One question, once per bar: "which slot at bar B?" |
+| `library/Similarity.{h,cpp}` | Z-scored feature space + PCA, sign-pinned so the map never renders mirrored. |
+| `library/SimilarSearch.{h,cpp}` | Category gates, features order. A kick's neighbours are always kicks. |
+| `library/FolderWatcher.{h,cpp}` | Auto-ingest. **The worker thread never touches the database**; it queues rows, the message thread writes them. |
+| `library/SampleAnalyser.{h,cpp}` | Split out of `Scanner`: the half that has nothing to do with a DB. |
+| `engine/Resample.{h,cpp}` | Folds a bounce's decay tail back over the loop start, where the next pass would have put it. |
+| `ui/CoachMarks.{h,cpp}` | The guided tour. The hole is a **real** hole: `hitTest` is false inside it, so the highlighted control is live. |
+| `ui/Text.h` | `utf8()`. `juce::String` decodes a `char` literal as **Latin-1**; every em-dash in the UI was mojibake without this. |
+| `ui/SimilarityMap`, `ui/PatternSlots`, `ui/SongBar` | Constellation browser, A–H strip, arrangement chips. |
+| `web/gen_page.py` | Generates <https://getstackbase.com/rollforge>. Its **user manual is generated from `AboutView.cpp`**, so page and app cannot drift. |
+
+---
+
+## Scope guard (what we are NOT building)
+
+No plugin hosting · no melodic/pitched mode · no time-stretching · no cloud/content store ·
+no ML embeddings · no macOS target (kept structurally possible) · no MIDI-controller mapping UI
+(incoming MIDI notes trigger pads and are captured — that's it).
+
+**"No audio recording" was a v1 guard and it is now deliberately broken.** The roadmap flagged
+this as a scope change, not an oversight: Capture's MIC mode records the input for up to 30
+seconds so it can find the hits in it. `AudioEngine` therefore opens **one input channel**, with
+a fallback to output-only when there is no microphone. Nothing else records, and nothing is
+written to disk without the user asking.
