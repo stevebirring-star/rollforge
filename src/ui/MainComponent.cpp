@@ -7,6 +7,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include <cmath>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -610,6 +611,22 @@ void MainComponent::applyProject (const Project& p)
     // path — or a file that no longer exists — restores the built-in starter sound.
     Kit fresh = StarterKit::build (44100.0);
     auto& drum = engine.getDrumEngine();
+
+    // Decode each distinct file ONCE for the whole load. A sliced project points all 16
+    // pads at the same loop, differing only by trim: without this it would decode that
+    // loop sixteen times and hold sixteen copies of it, throwing away exactly the shared
+    // buffer that slicing is built on. SampleBuffer is immutable, so sharing is safe.
+    std::map<juce::String, SampleBuffer::Ptr> decoded;
+    auto decode = [&] (const juce::String& path) -> SampleBuffer::Ptr
+    {
+        auto it = decoded.find (path);
+        if (it != decoded.end())
+            return it->second;
+        auto sample = loader.loadFile (juce::File (path));
+        decoded.emplace (path, sample);   // cache misses too, so a dead path is tried once
+        return sample;
+    };
+
     for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
     {
         // Every layer the pad had, in order; a layer whose file is gone is dropped.
@@ -621,7 +638,7 @@ void MainComponent::applyProject (const Project& p)
         std::vector<SampleBuffer::Ptr> layers;
         juce::StringArray              loadedPaths;
         for (const auto& path : wanted)
-            if (auto loaded = loader.loadFile (juce::File (path)))
+            if (auto loaded = decode (path))
             {
                 layers.push_back (loaded);
                 loadedPaths.add (path);
@@ -786,20 +803,36 @@ void MainComponent::openPadInspector (int padIndex)
 
     // Live edits: re-push the pad's params WITHOUT retiring its sample (same buffer),
     // so a note already sounding keeps playing while you turn the knob.
-    inspector->onToneChanged = [this, padIndex] (float tone)
+    //
+    // The CallOutBox lives on the desktop and outlives this call, so the callbacks hold a
+    // SafePointer rather than a raw `this`. Nothing tracks the bubble the way the dialog
+    // windows are tracked in the destructor, and quitting with one open would otherwise
+    // run these against a dead MainComponent.
+    juce::Component::SafePointer<MainComponent> safe (this);
+
+    inspector->onToneChanged = [safe, padIndex] (float tone)
     {
-        starterKit.pad (padIndex).tone = tone;
-        updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+        if (auto* self = safe.getComponent())
+        {
+            self->starterKit.pad (padIndex).tone = tone;
+            updatePadParamsInEngine (self->starterKit, self->engine.getDrumEngine(), padIndex);
+        }
     };
-    inspector->onSendChanged = [this, padIndex] (float send)
+    inspector->onSendChanged = [safe, padIndex] (float send)
     {
-        starterKit.pad (padIndex).reverbSend = send;
-        updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+        if (auto* self = safe.getComponent())
+        {
+            self->starterKit.pad (padIndex).reverbSend = send;
+            updatePadParamsInEngine (self->starterKit, self->engine.getDrumEngine(), padIndex);
+        }
     };
-    inspector->onLayerModeChanged = [this, padIndex] (LayerMode mode)
+    inspector->onLayerModeChanged = [safe, padIndex] (LayerMode mode)
     {
-        starterKit.pad (padIndex).layerMode = mode;
-        updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+        if (auto* self = safe.getComponent())
+        {
+            self->starterKit.pad (padIndex).layerMode = mode;
+            updatePadParamsInEngine (self->starterKit, self->engine.getDrumEngine(), padIndex);
+        }
     };
 
     juce::CallOutBox::launchAsynchronously (std::move (inspector),

@@ -4,7 +4,42 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-05 (Phase 7 complete — packaging & polish; RollForge is v1 feature-complete)._
+_Last updated: 2026-07-09 (the Credibility / table-stakes tier is complete on `feature/make-a-beat`)._
+
+---
+
+## 0. Read this first (2026-07-09)
+
+**Branch `feature/make-a-beat` is 23 commits ahead of origin and NOT pushed** — CI is still
+billing-blocked, so verification has been local. `cmake --build build-local && ./build-local/
+tests/RollForgeTests_artefacts/Release/RollForgeTests` → **196 test groups pass**.
+
+Both post-v1 tiers are now done: the **moat** (generative rhythm) and **Credibility**
+(table-stakes). Credibility #5–#10 landed this session: slice-loop-to-pads, browser
+audition + send-to-pad + hot-swap, native drag-out to a DAW, per-pad tone + reverb send,
+velocity layers + round-robin, and per-lane triplets.
+
+**The GUI can now be driven and screenshotted from an agent session** when the laptop is
+docked (two monitors on `:0`): windows open Normal rather than Iconic. Use `xwininfo`'s
+"Absolute upper-left" for the client origin (`xdotool getwindowgeometry` reports the frame
+and your clicks land wrong), `xdotool` to click/drag, and `ffmpeg -f x11grab` to capture
+(there is no imagemagick on this box). Delete `~/.config/RollForge/recovery.rollforge`
+before each run or the previous session is restored. Never `pkill -f 'RollForge…'` — the
+pattern matches your own shell's argv and kills it; kill by PID.
+
+That capability immediately found three bugs that had survived every headless test:
+
+1. **Undo/redo never worked on Linux.** X11 hands JUCE the lowercase keysym for Ctrl+Z, and
+   `keyPressed` compared against `'Z'`. Fixed (`9f1d6a3`).
+2. **The master EQ and glue compressor were missing from every export**, contradicting the
+   "guaranteed WYSIWYG export" the moat claims. The golden test only exercised one control;
+   it now drives all eight. Stems also now render pre-master so they sum to the mix
+   (`a973431`).
+3. **Loading a sample onto a pad never reset its trim**, so dropping a kick on a slice pad
+   played 12% of it (`004796a`).
+
+Next up is the roadmap artifact's "Later / P2" tier (waveform-on-pads polish, browser
+similarity sort, background scan) and the v2 big bet (beatbox / tap-to-pattern).
 
 ---
 
