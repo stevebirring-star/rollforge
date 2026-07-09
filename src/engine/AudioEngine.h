@@ -14,6 +14,7 @@
 // atomic flag.
 
 #include "engine/DrumEngine.h"
+#include "engine/OutputMeter.h"
 #include "engine/MasterBus.h"
 #include "engine/PadMapping.h"
 #include "engine/Sequencer.h"
@@ -82,6 +83,10 @@ public:
         message-thread safe. */
     MasterBus& getMasterBus() noexcept { return masterBus; }
 
+    /** The master output's VU + peak readings, taken after the master bus and limiter —
+        i.e. what actually leaves the app. Read from the UI timer. */
+    const OutputMeter& getOutputMeter() const noexcept { return outputMeter; }
+
 private:
     //==============================================================================
     // juce::AudioIODeviceCallback
@@ -104,6 +109,7 @@ private:
     DrumEngine               drumEngine { 1024, 64, previewPadIndex + 1 };   // 16 kit pads + preview
     Sequencer                sequencer;
     MasterBus                masterBus;
+    OutputMeter              outputMeter;
 
     juce::StringArray enabledMidiInputs;   // device ids we registered a callback on
     std::atomic<bool> audioRunning { false };

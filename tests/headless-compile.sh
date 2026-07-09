@@ -105,6 +105,7 @@ TEST_SOURCES=(
     tests/FeelPresetsTests.cpp
     tests/HumaniserTests.cpp
     tests/FxSmokeTests.cpp
+    tests/OutputMeterTests.cpp
     tests/CategoriserTests.cpp
     tests/SlicerTests.cpp
     tests/LibraryDbTests.cpp

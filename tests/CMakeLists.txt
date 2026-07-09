@@ -36,6 +36,7 @@ target_sources(RollForgeTests PRIVATE
     FeelPresetsTests.cpp
     HumaniserTests.cpp
     FxSmokeTests.cpp
+    OutputMeterTests.cpp
     CategoriserTests.cpp
     SlicerTests.cpp
     LibraryDbTests.cpp

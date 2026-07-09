@@ -57,6 +57,7 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
     drumEngine.prepare (sampleRate, blockSize);
     sequencer.prepare (sampleRate);
     masterBus.prepare (sampleRate, blockSize);
+    outputMeter.prepare (sampleRate);
 
     audioRunning.store (true, std::memory_order_release);
 }
@@ -64,6 +65,7 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 void AudioEngine::audioDeviceStopped()
 {
     audioRunning.store (false, std::memory_order_release);
+    outputMeter.reset();   // the needles fall to rest rather than freezing mid-scale
 }
 
 void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputChannelData*/,
@@ -94,6 +96,10 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
 
     // Master chain (future macro FX) + always-on brickwall limiter.
     masterBus.process (output);
+
+    // Meter what actually leaves the app: after the limiter, not before it.
+    for (int ch = 0; ch < juce::jmin (2, numOutputChannels); ++ch)
+        outputMeter.processBlock (ch, output.getReadPointer (ch), numSamples);
 }
 
 void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
