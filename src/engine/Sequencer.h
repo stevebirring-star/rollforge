@@ -80,6 +80,13 @@ public:
     double       getTempo()        const noexcept { return pendingTempo.load (std::memory_order_acquire); }
     bool         isSwitchQueued()  const noexcept { return switchQueued.load (std::memory_order_acquire); }
 
+    /** The transport position at the START of the block currently being rendered, in samples
+        since Play was pressed (the clock is reset then). Zero while stopped is not meaningful;
+        check isPlaying(). Capture timestamps its hits against this, so a tap and a beatboxed
+        hit are measured on the same clock the sequencer plays to -- a wall clock would drift
+        against the audio device. */
+    std::int64_t getTransportSamples() const noexcept { return transportSamples.load (std::memory_order_acquire); }
+
     /** The bar the queued switch quantises to, in global 1/16 steps. Song mode counts bars
         off getCurrentStep() and must use the same number the switch does, not its own 16. */
     static constexpr int getBarSteps() noexcept { return barLengthSteps; }
@@ -143,7 +150,8 @@ private:
     std::atomic<bool>   resetRequested { false };
     std::atomic<bool>   switchQueued   { false };
 
-    std::atomic<std::int64_t> switchCount  { 0 };
+    std::atomic<std::int64_t> switchCount      { 0 };
+    std::atomic<std::int64_t> transportSamples { 0 };
     std::atomic<std::int64_t> currentStep  { -1 };
     std::atomic<std::int64_t> triggerCount { 0 };
 };

@@ -22,6 +22,7 @@
 #include "model/RollCompiler.h"
 #include "model/RollPresets.h"
 #include "model/PatternBank.h"
+#include "model/Capture.h"
 #include "model/Song.h"
 #include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
@@ -97,6 +98,15 @@ private:
 
     /** The queued pattern has become the active one: bring the UI across to it. */
     void commitPattern (int slot, const Pattern& pattern);
+
+    /** REC. `armed` from the transport's toggle; the source decides which capture runs. */
+    void setCapturing (bool armed, TransportBar::CaptureSource source);
+
+    /** A pad was played by hand. Quantises it into the pattern if a pad capture is running. */
+    void captureTap (int pad, float velocity);
+
+    /** REC off with the mic source: analyse the take and merge its hits, as one undoable step. */
+    void finishMicCapture();
 
     void updateEvolve();                        // once per bar: queue the next variation
     void setEvolving (bool on);
@@ -190,6 +200,10 @@ private:
     // Infinity mode. Every bar is a fresh variation OF THE ANCHOR, never of the last
     // variation: varying a variation is a random walk, and a random walk turns a groove into
     // mush in a dozen bars. The anchor is what you wrote; the drift is bounded by it.
+    // Capture. `capturing` mirrors the transport's REC toggle; the undo transaction opened
+    // when it armed groups every tap of the take into one Ctrl+Z.
+    bool                 capturing = false;
+
     Pattern              evolveAnchor;
     std::uint64_t        evolveSeed    = 1;
     int                  lastEvolveBar = -1;

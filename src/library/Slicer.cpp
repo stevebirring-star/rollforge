@@ -120,8 +120,9 @@ namespace
         }
 
         // The first slice must start at sample 0, so snap the leading onset there rather
-        // than stranding the loop's head (and any pickup) in a slice nobody plays.
-        if (! onsets.empty())
+        // than stranding the loop's head (and any pickup) in a slice nobody plays. Callers who
+        // need the true time of the first hit, rather than a tiling, opt out.
+        if (opt.snapFirstToZero && ! onsets.empty())
             onsets.front().sample = 0;
 
         return onsets;

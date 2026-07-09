@@ -61,7 +61,10 @@ ENGINE_SOURCES=(
     src/library/KitInstaller.cpp
     src/library/FeatureExtractor.cpp
     src/library/Slicer.cpp
+    src/engine/InputRecorder.cpp
     src/engine/Resample.cpp
+    src/library/BeatboxDetector.cpp
+    src/model/Capture.cpp
     src/model/Song.cpp
     src/library/SampleAnalyser.cpp
     src/library/FolderWatcher.cpp
@@ -115,6 +118,9 @@ TEST_SOURCES=(
     tests/CategoriserTests.cpp
     tests/SlicerTests.cpp
     tests/SimilarityTests.cpp
+    tests/BeatboxDetectorTests.cpp
+    tests/CaptureTests.cpp
+    tests/InputRecorderTests.cpp
     tests/FolderWatcherTests.cpp
     tests/ResampleTests.cpp
     tests/SongTests.cpp

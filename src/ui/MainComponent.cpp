@@ -2,6 +2,7 @@
 
 #include "ui/CoachMarks.h"
 
+#include "library/BeatboxDetector.h"
 #include "library/SampleAnalyser.h"
 #include "ui/Text.h"
 
@@ -165,6 +166,7 @@ MainComponent::MainComponent()
     padGrid.onPadTrigger = [this] (int index, float velocity)
     {
         engine.triggerPad (index, velocity);   // the pad flashes itself on click
+        captureTap (index, velocity);
         // Note-repeat: this mouse-down is hit #1; if Repeat is on, start retriggering.
         noteRepeat.noteOn (index, velocity, engine.getSequencer().getTempo());
     };
@@ -329,6 +331,14 @@ MainComponent::MainComponent()
 
     // Feel presets apply the Humaniser inside FillBar and hand back the swing so the
     // transport's swing control stays in sync.
+    // REC: capture what you play. The transport owns the toggle because capture IS a transport
+    // mode -- it needs the clock, and it means nothing while the loop is stopped.
+    transportBar.onRecordChanged = [this] (bool armed, TransportBar::CaptureSource source)
+    {
+        setCapturing (armed, source);
+    };
+    transportBar.setMicAvailable (engine.hasAudioInput());
+
     fillBar.onFeelSwing = [this] (float swing) { transportBar.setSwing (swing); };
     addAndMakeVisible (fillBar);
 
@@ -471,6 +481,7 @@ MainComponent::MainComponent()
     noteRepeat.onHit = [this] (int pad, float velocity)
     {
         engine.triggerPad (pad, velocity);
+        captureTap (pad, velocity);
         padGrid.flashPad (pad);
     };
     repeatButton.setClickingTogglesState (true);
@@ -1155,6 +1166,131 @@ void MainComponent::setEvolving (bool on)
     }
 }
 
+void MainComponent::setCapturing (bool armed, TransportBar::CaptureSource source)
+{
+    auto& seq = engine.getSequencer();
+
+    if (armed)
+    {
+        // Both captures timestamp against the transport clock. Stopped, that clock says zero
+        // for every hit, and a whole take would pile onto the downbeat.
+        if (! seq.isPlaying())
+        {
+            transportBar.clearRecord();
+            statusLabel.setText ("Press Play first: capture needs the clock", juce::dontSendNotification);
+            return;
+        }
+
+        if (source == TransportBar::CaptureSource::mic && ! engine.hasAudioInput())
+        {
+            transportBar.clearRecord();
+            statusLabel.setText ("No microphone on this device", juce::dontSendNotification);
+            return;
+        }
+
+        capturing = true;
+
+        // Everything captured in one take undoes in one Ctrl+Z. beginNewTransaction here, and
+        // not again until REC is released, is the whole of it.
+        undoManager.beginNewTransaction();
+
+        if (source == TransportBar::CaptureSource::mic)
+        {
+            engine.getInputRecorder().start();
+            statusLabel.setText ("Beatbox over the loop...", juce::dontSendNotification);
+        }
+        else
+        {
+            statusLabel.setText ("Tap the pads...", juce::dontSendNotification);
+        }
+        return;
+    }
+
+    if (! capturing)
+        return;
+
+    capturing = false;
+
+    if (source == TransportBar::CaptureSource::mic)
+        finishMicCapture();
+    else
+        statusLabel.setText ("Captured", juce::dontSendNotification);
+}
+
+void MainComponent::captureTap (int pad, float velocity)
+{
+    auto& seq = engine.getSequencer();
+
+    if (! capturing || transportBar.getCaptureSource() != TransportBar::CaptureSource::pads)
+        return;
+    if (! seq.isPlaying())
+        return;
+
+    // The transport clock, not a wall clock: the loop and the tap have to agree, and
+    // Time::getMillisecondCounter drifts against the audio device over a long take.
+    const double sampleRate = engine.getSampleRate();
+    const Capture::Hit hit { (double) seq.getTransportSamples() / sampleRate, pad, velocity };
+
+    int lane = 0, step = 0;
+    if (! Capture::quantise (editPattern, hit, editPattern.bpm, lane, step))
+        return;   // no lane plays that pad
+
+    const Step before = editPattern.lane (lane).step (step);
+    const Step after  = Capture::merge (before, velocity);
+
+    // Applied at once, so the next pass of the loop plays what you just tapped. Every tap is a
+    // perform() inside the transaction opened by REC, so the take undoes as one.
+    undoManager.perform (new SetStepAction (editPattern, lane, step, before, after,
+                                            [this] (int l, int s) { afterStepEdit (l, s); }));
+}
+
+void MainComponent::finishMicCapture()
+{
+    auto& recorder = engine.getInputRecorder();
+    recorder.stop();
+
+    const auto  audio       = recorder.take();
+    const double sampleRate = recorder.getSampleRate();
+    const auto  startSample = recorder.getStartTransportSample();
+
+    if (audio.empty() || startSample < 0)
+    {
+        statusLabel.setText ("Nothing was recorded", juce::dontSendNotification);
+        return;
+    }
+
+    auto hits = BeatboxDetector::detect (audio.data(), (int) audio.size(), sampleRate);
+    if (hits.empty())
+    {
+        statusLabel.setText ("No hits found in that take", juce::dontSendNotification);
+        return;
+    }
+
+    // The recording did not begin at the top of the loop. Shift every hit by where it did.
+    const double offset = (double) startSample / sampleRate;
+    for (auto& hit : hits)
+        hit.seconds += offset;
+
+    Pattern before = editPattern;
+    Pattern after  = editPattern;
+
+    Capture::Options options;
+    options.bpm = editPattern.bpm;
+    const auto result = Capture::apply (after, hits, options);
+
+    auto refresh = [this]
+    {
+        refreshGridFromPattern();
+        pushEditPattern();
+    };
+
+    // One undoable step for the whole take, inside the transaction REC opened.
+    undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+
+    statusLabel.setText (juce::String (result.placed + result.merged) + " hits captured",
+                         juce::dontSendNotification);
+}
+
 void MainComponent::updateEvolve()
 {
     auto& seq = engine.getSequencer();
@@ -1734,6 +1870,15 @@ void MainComponent::timerCallback()
         }
     }
 
+    // Stopping the transport under a running capture ends it. Leaving REC lit over a stopped
+    // clock would go on collecting taps that all timestamp to the downbeat.
+    if (capturing && ! seq.isPlaying())
+    {
+        const auto source = transportBar.getCaptureSource();
+        transportBar.clearRecord();
+        setCapturing (false, source);
+    }
+
     updateSongPlayback();
     updateEvolve();
 
@@ -1781,7 +1926,12 @@ void MainComponent::refreshStatus()
 void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 {
     if (source == &engine.getDeviceManager())
+    {
         refreshStatus();
+
+        // A device swap can take the microphone away, or give one back. The Mic option follows.
+        transportBar.setMicAvailable (engine.hasAudioInput());
+    }
 }
 
 void MainComponent::openSettings()
@@ -2247,6 +2397,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (key == juce::KeyPress::spaceKey)
     {
         engine.triggerPad (0, 1.0f);
+        captureTap (0, 1.0f);
         padGrid.flashPad (0);
         return true;
     }
@@ -2256,6 +2407,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (pad >= 0)
     {
         engine.triggerPad (pad, 1.0f);
+        captureTap (pad, 1.0f);
         padGrid.flashPad (pad);
         return true;
     }

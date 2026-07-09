@@ -52,6 +52,12 @@ namespace Slicer
         float noiseGateFraction   = 0.02f; // ignore windows quieter than this fraction of the peak
         float minOnsetSpacingMs   = 25.0f; // reject double-triggers closer than this
         float backtrackMs         = 6.0f;  // rewind an onset to the local energy minimum before it
+
+        /** Slicing tiles [0, n) with no gaps, so the first slice has to start at sample 0 and
+            the leading onset is snapped there. Anything that cares WHEN a hit happened -- the
+            beatbox capture does -- must turn this off, or a recording whose first hit lands
+            half a second in reports it on the downbeat. */
+        bool  snapFirstToZero     = true;
     };
 
     /** Onset positions, in SAMPLE indices, ascending. Always starts with 0 when the

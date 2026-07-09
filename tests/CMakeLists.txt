@@ -40,6 +40,9 @@ target_sources(RollForgeTests PRIVATE
     CategoriserTests.cpp
     SlicerTests.cpp
     SimilarityTests.cpp
+    BeatboxDetectorTests.cpp
+    CaptureTests.cpp
+    InputRecorderTests.cpp
     FolderWatcherTests.cpp
     ResampleTests.cpp
     SongTests.cpp
@@ -80,7 +83,10 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/KitInstaller.cpp
     ${CMAKE_SOURCE_DIR}/src/library/FeatureExtractor.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Slicer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/InputRecorder.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Resample.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/BeatboxDetector.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/Capture.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Song.cpp
     ${CMAKE_SOURCE_DIR}/src/library/SampleAnalyser.cpp
     ${CMAKE_SOURCE_DIR}/src/library/FolderWatcher.cpp

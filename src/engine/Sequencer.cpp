@@ -96,6 +96,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     {
         clock.reset();
         pendingCount = 0;
+        transportSamples.store (0, std::memory_order_release);
     }
 
     const bool nowPlaying = playing.load (std::memory_order_acquire);
@@ -118,6 +119,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     }
 
     const std::int64_t blockStart = clock.getSampleCounter();
+    transportSamples.store (blockStart, std::memory_order_release);
 
     // 1. Generate this block's step events (swapping a queued pattern on the bar).
     clock.processBlock (numSamples, [&] (std::int64_t stepIndex, int offset) noexcept

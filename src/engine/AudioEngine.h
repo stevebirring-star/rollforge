@@ -14,6 +14,7 @@
 // atomic flag.
 
 #include "engine/DrumEngine.h"
+#include "engine/InputRecorder.h"
 #include "engine/OutputMeter.h"
 #include "engine/MasterBus.h"
 #include "engine/PadMapping.h"
@@ -61,6 +62,16 @@ public:
 
     /** True if a device is currently open and running. UI-thread use only. */
     bool isAudioRunning() const noexcept { return audioRunning.load (std::memory_order_acquire); }
+
+    /** The open device's sample rate, or 44100 when nothing is open. Any thread. */
+    double getSampleRate() const noexcept { return currentSampleRate.load (std::memory_order_acquire); }
+
+    /** True when the open device gave us at least one input channel. Beatbox capture is dead
+        without one, and a REC button that records silence is worse than one that is greyed. */
+    bool hasAudioInput() const noexcept { return inputChannels.load (std::memory_order_acquire) > 0; }
+
+    /** The microphone capture buffer. Arm it, play, disarm it, take() the samples. */
+    InputRecorder& getInputRecorder() noexcept { return inputRecorder; }
 
     /** Exposed so the UI can host an AudioDeviceSelectorComponent. The engine
         keeps ownership; the UI only reads/edits the shared device manager. */
@@ -112,7 +123,10 @@ private:
     OutputMeter              outputMeter;
 
     juce::StringArray enabledMidiInputs;   // device ids we registered a callback on
-    std::atomic<bool> audioRunning { false };
+    std::atomic<bool>   audioRunning      { false };
+    std::atomic<int>    inputChannels     { 0 };
+    std::atomic<double> currentSampleRate { 44100.0 };
+    InputRecorder     inputRecorder;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
 };

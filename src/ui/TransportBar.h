@@ -42,6 +42,20 @@ public:
     /** Stop from outside — a one-shot song chain reaching its end. The button has its own
         `playing` flag, so setting the sequencer directly would leave it reading "Stop". */
     void stop();
+
+    /** Capture. REC arms it; the box beside it chooses what is being captured. */
+    enum class CaptureSource { pads = 0, mic = 1 };
+
+    std::function<void (bool armed, CaptureSource)> onRecordChanged;
+
+    bool isRecording() const noexcept;
+    CaptureSource getCaptureSource() const noexcept;
+
+    /** Disarm from outside (the capture finished, or the transport stopped under it). */
+    void clearRecord();
+
+    /** Greys out the Mic option when the device gave us no input channel. */
+    void setMicAvailable (bool available);
     void setDisplayedSwing (float amount);
 
 private:
@@ -52,6 +66,8 @@ private:
 
     juce::TextButton playButton { "Play" };
     juce::TextButton tapButton  { "Tap" };
+    juce::TextButton recButton  { "REC" };
+    juce::ComboBox   sourceBox;
     juce::Slider     bpmSlider;
     juce::Slider     swingSlider;
     juce::Label      bpmCaption;

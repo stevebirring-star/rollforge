@@ -140,6 +140,7 @@ if(ROLLFORGE_BUILD_APP)
         src/engine/DrumEngine.cpp
         src/engine/MasterBus.cpp
         src/engine/OfflineRenderer.cpp
+        src/engine/InputRecorder.cpp
         src/engine/Resample.cpp
         src/engine/WavExporter.cpp
         src/engine/fx/Compressor.cpp
@@ -160,6 +161,7 @@ if(ROLLFORGE_BUILD_APP)
         src/library/StarterKit.cpp
         src/library/KitInstaller.cpp
         src/library/FeatureExtractor.cpp
+        src/library/BeatboxDetector.cpp
         src/library/Slicer.cpp
         src/library/Similarity.cpp
     src/library/SimilarSearch.cpp
@@ -170,6 +172,7 @@ if(ROLLFORGE_BUILD_APP)
         src/library/Scanner.cpp
         src/library/KitBuilder.cpp
         src/library/sqlite/sqlite3.c
+        src/model/Capture.cpp
         src/model/Song.cpp
         src/model/RollCompiler.cpp
         src/model/RollPresets.cpp
