@@ -6,7 +6,7 @@
 // progress. juce_core + juce_audio_formats (no GUI) so it is headless-testable.
 
 #include "library/LibraryDb.h"
-#include "library/SampleLoader.h"
+#include "library/SampleAnalyser.h"
 
 #include <juce_core/juce_core.h>
 
@@ -26,14 +26,14 @@ public:
 
     /** Decode one file and fill `out` (path, name, features, category). No DB
         write. Returns false if the file can't be decoded. */
-    bool analyseFile (const juce::File& file, LibraryEntry& out);
+    bool analyseFile (const juce::File& file, LibraryEntry& out) { return analyser.analyse (file, out); }
 
     /** Files visited so far in the current scan (any thread). */
     int getScannedCount() const noexcept { return scanned.load (std::memory_order_acquire); }
 
 private:
     LibraryDb&       db;
-    SampleLoader     loader;
+    SampleAnalyser   analyser;
     std::atomic<int> scanned { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Scanner)

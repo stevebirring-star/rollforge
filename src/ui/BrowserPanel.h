@@ -1,13 +1,14 @@
 #pragma once
 
-// RollForge — BrowserPanel: the sample-library browser. Scan a folder (populates
-// the SQLite library DB), filter by category, and hit NEW KIT to load a coherent
-// random kit.
+// RollForge — BrowserPanel: the sample-library browser. Watch a folder (the FolderWatcher
+// analyses it in the background and keeps it up to date), filter by category, and hit NEW KIT
+// to load a coherent random kit.
 //
-// The LibraryDb is owned by MainComponent and passed in, because the pad grid needs it
-// too (per-pad "Similar", and the New Sounds reroll) and this panel only exists while its
-// dialog is open. Anything that changes the corpus fires onLibraryChanged so the owner can
-// re-normalise its similarity space.
+// The LibraryDb and the FolderWatcher are owned by MainComponent and passed in: the pad grid
+// needs the library too (per-pad "Similar", the New Sounds reroll), and the watcher has to
+// keep ingesting while this dialog is closed. A re-tag fires onLibraryChanged so the owner can
+// re-normalise its similarity space; new samples arrive through the watcher instead, and this
+// panel notices them by polling totalAdded().
 //
 // Scanning is synchronous for now (blocks briefly); a background-thread scan with
 // live progress is a follow-up.
@@ -24,6 +25,7 @@
 // launchAsync() puts into a modal state, and a JUCE internal drag cannot reach a
 // component outside the modal window. A menu is deterministic and does the same job.
 
+#include "library/FolderWatcher.h"
 #include "library/KitBuilder.h"
 #include "library/LibraryDb.h"
 #include "ui/SimilarityMap.h"
@@ -41,10 +43,11 @@ namespace rollforge
 {
 
 class BrowserPanel final : public juce::Component,
-                           private juce::ListBoxModel
+                           private juce::ListBoxModel,
+                           private juce::Timer
 {
 public:
-    explicit BrowserPanel (LibraryDb& db);
+    BrowserPanel (LibraryDb& db, FolderWatcher& watcher);
     ~BrowserPanel() override;
 
     void paint (juce::Graphics&) override;
@@ -67,7 +70,9 @@ public:
     std::function<void()> onLibraryChanged;
 
 private:
-    void chooseFolderAndScan();
+    void showFoldersMenu();
+    void chooseFolderToWatch();
+    void timerCallback() override;   // polls the watcher for progress + new samples
     void refresh();
     void rebuildKit();
     void setMapView (bool showMap);
@@ -86,10 +91,11 @@ private:
     void listBoxItemClicked (int row, const juce::MouseEvent&) override;   // click = audition, right = menu
 
     LibraryDb&                db;
+    FolderWatcher&            watcher;
     std::vector<LibraryEntry> allEntries;   // the whole library: what the map plots
     std::vector<LibraryEntry> entries;      // filtered by category: what the list shows
 
-    juce::TextButton scanButton   { "Scan Folder..." };
+    juce::TextButton foldersButton { "Folders..." };
     juce::TextButton newKitButton { "NEW KIT" };
     juce::ComboBox   categoryFilter;
     juce::ListBox    list;
@@ -99,6 +105,9 @@ private:
 
     std::unique_ptr<juce::FileChooser> chooser;
     std::uint64_t                      kitSeed = 1;
+
+    int  lastAdded = 0;      // watcher.totalAdded() at the last refresh
+    bool wasBusy   = false;  // to catch the moment a scan finishes
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BrowserPanel)
 };

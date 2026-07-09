@@ -15,6 +15,7 @@
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
 #include "library/Slicer.h"
+#include "library/FolderWatcher.h"
 #include "library/LibraryDb.h"
 #include "library/SimilarSearch.h"
 #include "model/RollCompiler.h"
@@ -156,6 +157,12 @@ private:
     // it too, and the browser only exists while its dialog is open. `similarSearch` caches
     // the normalised feature space; it is rebuilt whenever the corpus changes.
     LibraryDb            library;
+
+    // Declared after `library` so it is destroyed BEFORE it: its worker thread is joined in
+    // its destructor, and until then it holds a reference to the database.
+    FolderWatcher        watcher { library };
+    bool                 similarSearchDirty = false;
+
     SimilarSearch        similarSearch;
     SampleRetirementPool retirementPool;
     Kit                  starterKit;

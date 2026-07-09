@@ -45,10 +45,30 @@ FetchContent_MakeAvailable(JUCE)
 # Sanitizer helper (opt-in, used by the ASan CI job)
 # ---------------------------------------------------------------------------
 function(rollforge_apply_sanitizers target)
+    if(ROLLFORGE_ASAN AND ROLLFORGE_TSAN)
+        message(FATAL_ERROR "ROLLFORGE_ASAN and ROLLFORGE_TSAN cannot be enabled together")
+    endif()
+
     if(ROLLFORGE_ASAN AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
         message(STATUS "RollForge: enabling ASan/UBSan for ${target}")
         target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer -g)
         target_link_options(${target}    PRIVATE -fsanitize=address,undefined)
+    endif()
+
+    # ASan cannot see a data race. FolderWatcher hands rows from a worker thread to the
+    # message thread, so the class that most needs checking is the one ASan says least about.
+    #
+    #   cmake -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROLLFORGE_TSAN=ON
+    #   cmake --build build-tsan --target RollForgeTests
+    #   setarch $(uname -m) -R ./build-tsan/tests/RollForgeTests_artefacts/Debug/RollForgeTests
+    #
+    # The setarch is not optional: TSan's shadow mapping collides with the address-space
+    # randomisation modern kernels use, and the binary aborts with "unexpected memory mapping"
+    # before a single test runs.
+    if(ROLLFORGE_TSAN AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+        message(STATUS "RollForge: enabling ThreadSanitizer for ${target}")
+        target_compile_options(${target} PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g)
+        target_link_options(${target}    PRIVATE -fsanitize=thread)
     endif()
 endfunction()
 
@@ -144,6 +164,8 @@ if(ROLLFORGE_BUILD_APP)
     src/library/SimilarSearch.cpp
         src/library/Categoriser.cpp
         src/library/LibraryDb.cpp
+        src/library/SampleAnalyser.cpp
+        src/library/FolderWatcher.cpp
         src/library/Scanner.cpp
         src/library/KitBuilder.cpp
         src/library/sqlite/sqlite3.c

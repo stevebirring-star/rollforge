@@ -40,6 +40,7 @@ target_sources(RollForgeTests PRIVATE
     CategoriserTests.cpp
     SlicerTests.cpp
     SimilarityTests.cpp
+    FolderWatcherTests.cpp
     ResampleTests.cpp
     SongTests.cpp
     TextTests.cpp
@@ -81,6 +82,8 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/Slicer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Resample.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Song.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/SampleAnalyser.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/FolderWatcher.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Similarity.cpp
     ${CMAKE_SOURCE_DIR}/src/library/SimilarSearch.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Categoriser.cpp

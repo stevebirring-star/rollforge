@@ -63,6 +63,8 @@ ENGINE_SOURCES=(
     src/library/Slicer.cpp
     src/engine/Resample.cpp
     src/model/Song.cpp
+    src/library/SampleAnalyser.cpp
+    src/library/FolderWatcher.cpp
     src/library/Similarity.cpp
     src/library/SimilarSearch.cpp
     src/library/Categoriser.cpp
@@ -113,6 +115,7 @@ TEST_SOURCES=(
     tests/CategoriserTests.cpp
     tests/SlicerTests.cpp
     tests/SimilarityTests.cpp
+    tests/FolderWatcherTests.cpp
     tests/ResampleTests.cpp
     tests/SongTests.cpp
     tests/TextTests.cpp

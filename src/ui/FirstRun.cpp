@@ -35,7 +35,7 @@ void FirstRun::paint (juce::Graphics& g)
         utf8 ("•  Click the step grid to program pads; drag up for velocity."),
         utf8 ("•  Turn on Roll Brush and drag a lane to paint an accelerating roll."),
         utf8 ("•  FILL makes a drum fill; the macro knobs shape the master sound."),
-        utf8 ("•  Library scans a folder + NEW KIT builds a kit; Export saves MIDI/WAV.")
+        utf8 ("•  Library watches a folder + NEW KIT builds a kit; Export saves MIDI/WAV.")
     };
     for (const auto& t : tips)
         g.drawText (t, inner.removeFromTop (26), juce::Justification::centredLeft, true);

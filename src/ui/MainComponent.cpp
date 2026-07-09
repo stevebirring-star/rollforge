@@ -1,6 +1,6 @@
 #include "ui/MainComponent.h"
 
-#include "library/Scanner.h"
+#include "library/SampleAnalyser.h"
 #include "ui/Text.h"
 
 #include "ui/RollForgeLookAndFeel.h"
@@ -85,6 +85,10 @@ MainComponent::MainComponent()
     dbFile.getParentDirectory().createDirectory();
     library.open (dbFile);
     rebuildSimilarSearch();
+
+    // Auto-ingest. Anything in a watched folder that the library has not seen is analysed on a
+    // background thread from here on; drainIntoDb() below is the only place its rows land.
+    watcher.start();
 
     addAndMakeVisible (brandMark);
     addAndMakeVisible (masterMeter);
@@ -1336,9 +1340,9 @@ juce::String MainComponent::similarForPad (int padIndex)
     {
         // The pad holds a file the library has never scanned. Analyse it exactly the way the
         // Scanner would have, then search — so a dragged-in sample is a first-class query.
-        Scanner      scanner (library);
-        LibraryEntry query;
-        if (scanner.analyseFile (juce::File (anchor), query))
+        SampleAnalyser analyser;
+        LibraryEntry   query;
+        if (analyser.analyse (juce::File (anchor), query))
             neighbours = similarSearch.neighboursOf (query, shortlist);
     }
 
@@ -1704,6 +1708,18 @@ void MainComponent::timerCallback()
     updateSongPlayback();
     updateEvolve();
 
+    // The watcher's rows reach the database HERE, on the message thread, a batch per tick.
+    // Re-normalising the similarity space is O(library), so it waits for the import to settle
+    // rather than running once per batch.
+    if (watcher.drainIntoDb() > 0)
+        similarSearchDirty = true;
+
+    if (similarSearchDirty && ! watcher.isBusy() && watcher.pendingRows() == 0)
+    {
+        similarSearchDirty = false;
+        rebuildSimilarSearch();
+    }
+
     // Drive the per-pad level meters (called every tick so silent pads decay too).
     auto& drum = engine.getDrumEngine();
     for (int p = 0; p < kitNumPads; ++p)
@@ -1773,7 +1789,7 @@ void MainComponent::openLibrary()
         return;
     }
 
-    auto browser = std::make_unique<BrowserPanel> (library);
+    auto browser = std::make_unique<BrowserPanel> (library, watcher);
     browser->onNewKit = [this] (const std::array<juce::String, kitNumPads>& paths)
     {
         installKitSelection (paths);

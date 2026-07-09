@@ -51,6 +51,15 @@ public:
     bool setCategoryOverride (const juce::String& path, SoundCategory category);
     bool clearCategoryOverride (const juce::String& path);
 
+    // Folders the watcher keeps an eye on. Persisted, because a library you have to re-add
+    // on every launch is not a library. Adding one twice is not an error.
+    bool addWatchedFolder (const juce::String& path);
+    bool removeWatchedFolder (const juce::String& path);
+    juce::StringArray watchedFolders() const;
+
+    /** Just the paths, for the watcher's "have I seen this file?" set. */
+    juce::StringArray allPaths() const;
+
     int  count() const;
 
     std::vector<LibraryEntry> all() const;

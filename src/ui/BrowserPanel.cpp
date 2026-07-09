@@ -1,6 +1,5 @@
 #include "ui/BrowserPanel.h"
 
-#include "library/Scanner.h"
 #include "library/Similarity.h"
 #include "ui/RollForgeLookAndFeel.h"
 #include "ui/Theme.h"
@@ -8,10 +7,13 @@
 namespace rollforge
 {
 
-BrowserPanel::BrowserPanel (LibraryDb& dbToUse) : db (dbToUse)
+BrowserPanel::BrowserPanel (LibraryDb& dbToUse, FolderWatcher& watcherToUse)
+    : db (dbToUse), watcher (watcherToUse)
 {
-    scanButton.onClick = [this] { chooseFolderAndScan(); };
-    addAndMakeVisible (scanButton);
+    foldersButton.onClick = [this] { showFoldersMenu(); };
+    foldersButton.setTooltip ("Watch a folder of samples. Anything you drop into it later is "
+                              "analysed and added on its own.");
+    addAndMakeVisible (foldersButton);
 
     newKitButton.onClick = [this] { rebuildKit(); };
     addAndMakeVisible (newKitButton);
@@ -55,18 +57,76 @@ BrowserPanel::BrowserPanel (LibraryDb& dbToUse) : db (dbToUse)
     list.setOutlineThickness (0);
     addAndMakeVisible (list);
 
+    lastAdded = watcher.totalAdded();
     refresh();
+    startTimerHz (5);   // progress while a folder is being ingested behind us
     setSize (460, 420);
 }
 
 BrowserPanel::~BrowserPanel()
 {
+    stopTimer();
     list.setModel (nullptr);
 }
 
-void BrowserPanel::chooseFolderAndScan()
+void BrowserPanel::showFoldersMenu()
 {
-    chooser = std::make_unique<juce::FileChooser> ("Choose a samples folder");
+    constexpr int addId    = 1;
+    constexpr int rescanId = 2;
+    constexpr int stopBase = 100;
+
+    const auto watched = watcher.folders();
+
+    juce::PopupMenu menu;
+    menu.addItem (addId, "Add a folder to watch...");
+    menu.addItem (rescanId, "Look for new files now", ! watched.isEmpty());
+
+    if (! watched.isEmpty())
+    {
+        menu.addSeparator();
+        menu.addSectionHeader (watched.size() == 1 ? "Watching 1 folder"
+                                                   : "Watching " + juce::String (watched.size()) + " folders");
+        for (int i = 0; i < watched.size(); ++i)
+        {
+            juce::PopupMenu sub;
+            sub.addItem (stopBase + i, "Stop watching");
+
+            // The last two path components: enough to tell two "Kicks" folders apart without
+            // a menu the width of the screen.
+            const juce::File f (watched[i]);
+            menu.addSubMenu (f.getParentDirectory().getFileName() + "/" + f.getFileName(), sub);
+        }
+    }
+
+    juce::Component::SafePointer<BrowserPanel> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&foldersButton),
+        [safe, watched] (int choice)
+        {
+            if (safe == nullptr || choice <= 0)
+                return;
+
+            if (choice == addId)
+            {
+                safe->chooseFolderToWatch();
+            }
+            else if (choice == rescanId)
+            {
+                safe->watcher.poke();
+                safe->statusLabel.setText ("Looking for new samples...", juce::dontSendNotification);
+            }
+            else if (choice >= stopBase && choice - stopBase < watched.size())
+            {
+                // The samples stay. Forgetting a folder is not the same as wanting your kicks
+                // deleted, and the files are still on disk if you change your mind.
+                safe->watcher.removeFolder (juce::File (watched[choice - stopBase]));
+                safe->refresh();
+            }
+        });
+}
+
+void BrowserPanel::chooseFolderToWatch()
+{
+    chooser = std::make_unique<juce::FileChooser> ("Choose a samples folder to watch");
     chooser->launchAsync (
         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
         [this] (const juce::FileChooser& fc)
@@ -75,17 +135,38 @@ void BrowserPanel::chooseFolderAndScan()
             if (! folder.isDirectory())
                 return;
 
-            statusLabel.setText ("Scanning...", juce::dontSendNotification);
-            repaint();
-
-            Scanner scanner (db);
-            const int n = scanner.scanBlocking (folder);   // synchronous for now
-            statusLabel.setText (juce::String (n) + " samples added", juce::dontSendNotification);
-            refresh();
-
-            if (onLibraryChanged != nullptr)
-                onLibraryChanged();
+            // No blocking scan. The watcher decodes on its own thread; this window stays alive,
+            // and the samples appear as they are analysed.
+            watcher.addFolder (folder);
+            statusLabel.setText ("Scanning " + folder.getFileName() + "...", juce::dontSendNotification);
         });
+}
+
+void BrowserPanel::timerCallback()
+{
+    const bool busy = watcher.isBusy();
+
+    if (busy)
+    {
+        const int total = watcher.filesFound();
+        const int done  = watcher.filesDone();
+        statusLabel.setText (total > 0 ? "Analysing " + juce::String (done) + " / " + juce::String (total)
+                                       : juce::String ("Looking for new samples..."),
+                             juce::dontSendNotification);
+    }
+
+    // Refresh once the dust settles rather than on every row: a list that reshuffles under the
+    // cursor forty times a second is worse than one that appears a moment late.
+    const int added = watcher.totalAdded();
+    const bool settled = ! busy && watcher.pendingRows() == 0;
+
+    if (settled && (added != lastAdded || wasBusy))
+    {
+        lastAdded = added;
+        refresh();
+    }
+
+    wasBusy = busy;
 }
 
 void BrowserPanel::refresh()
@@ -293,7 +374,7 @@ void BrowserPanel::resized()
     auto r = getLocalBounds().reduced (8);
 
     auto top = r.removeFromTop (28);
-    scanButton.setBounds (top.removeFromLeft (110));
+    foldersButton.setBounds (top.removeFromLeft (100));
     top.removeFromLeft (6);
     newKitButton.setBounds (top.removeFromLeft (90));
     top.removeFromLeft (6);
