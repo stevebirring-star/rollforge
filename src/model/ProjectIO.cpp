@@ -173,6 +173,14 @@ juce::String toJson (const Project& proj)
         po->setProperty ("trimEnd",   pad.endFraction);
         po->setProperty ("tone",      pad.tone);
         po->setProperty ("send",      pad.reverbSend);
+        if (! pad.extraLayerPaths.isEmpty())
+        {
+            juce::Array<var> layers;
+            for (const auto& path : pad.extraLayerPaths)
+                layers.add (var (path));
+            po->setProperty ("layers",    layers);
+            po->setProperty ("layerMode", pad.layerMode);
+        }
         pads.add (var (po));
     }
     root->setProperty ("pads", pads);
@@ -218,6 +226,13 @@ bool fromJson (const juce::String& json, Project& out)
             pad.endFraction    = (float) (double) pv.getProperty ("trimEnd", 1.0);
             pad.tone           = (float) (double) pv.getProperty ("tone", 0.0);   // absent -> flat
             pad.reverbSend     = (float) (double) pv.getProperty ("send", 0.0);   // absent -> dry
+            pad.layerMode      = (int) pv.getProperty ("layerMode", 0);
+
+            // Absent "layers" -> a one-layer pad, which every pre-layers project is.
+            pad.extraLayerPaths.clear();
+            if (auto* layers = pv.getProperty ("layers", var()).getArray())
+                for (const auto& layer : *layers)
+                    pad.extraLayerPaths.add (layer.toString());
         }
     }
 

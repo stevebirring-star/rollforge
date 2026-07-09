@@ -138,9 +138,13 @@ MainComponent::MainComponent()
         noteRepeat.noteOn (index, velocity, engine.getSequencer().getTempo());
     };
     padGrid.onPadRelease = [this] (int index) { noteRepeat.noteOff (index); };
-    padGrid.onPadFileDropped = [this] (int index, const juce::File& file)
+    padGrid.onPadFilesDropped = [this] (int index, const juce::StringArray& files)
     {
-        loadFileIntoPad (index, file);
+        // One file loads a sample; several stack as round-robin layers on the pad.
+        if (files.size() == 1)
+            loadFileIntoPad (index, juce::File (files[0]));
+        else if (files.size() > 1)
+            loadLayersIntoPad (index, files);
     };
     padGrid.onPadMute = [this] (int index, bool muted)
     {
@@ -540,7 +544,12 @@ Project MainComponent::captureProject()
     for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
     {
         ProjectPad& pad = p.pads[(size_t) i];
-        pad.samplePath = padSourcePath[(size_t) i];   // full path; "" = starter synth sound
+        const juce::StringArray& paths = padSourcePaths[(size_t) i];
+        pad.samplePath = paths.isEmpty() ? juce::String() : paths[0];   // "" = starter synth sound
+        pad.extraLayerPaths.clear();
+        for (int layer = 1; layer < paths.size(); ++layer)
+            pad.extraLayerPaths.add (paths[layer]);
+        pad.layerMode = (int) starterKit.pad (i).layerMode;
         pad.chokeGroup = starterKit.pad (i).chokeGroup;
         pad.muted      = drum.isPadMuted (i);
         pad.soloed     = drum.isPadSoloed (i);
@@ -563,26 +572,39 @@ void MainComponent::applyProject (const Project& p)
     auto& drum = engine.getDrumEngine();
     for (int i = 0; i < kitNumPads && i < projectNumPads; ++i)
     {
-        const juce::String path = p.pads[(size_t) i].samplePath;
-        SampleBuffer::Ptr  sample;
-        juce::String       label;
+        // Every layer the pad had, in order; a layer whose file is gone is dropped.
+        juce::StringArray wanted;
+        if (p.pads[(size_t) i].samplePath.isNotEmpty())
+            wanted.add (p.pads[(size_t) i].samplePath);
+        wanted.addArray (p.pads[(size_t) i].extraLayerPaths);
 
-        if (path.isNotEmpty())
+        std::vector<SampleBuffer::Ptr> layers;
+        juce::StringArray              loadedPaths;
+        for (const auto& path : wanted)
             if (auto loaded = loader.loadFile (juce::File (path)))
             {
-                sample = loaded;
-                label  = juce::File (path).getFileNameWithoutExtension();
-                padSourcePath[(size_t) i] = path;
+                layers.push_back (loaded);
+                loadedPaths.add (path);
             }
 
-        if (sample == nullptr)   // empty path, or the file is gone -> starter sound
+        juce::String label;
+        if (! layers.empty())
         {
-            sample = fresh.pad (i).primarySample();
-            label  = (sample != nullptr) ? sample->getName() : juce::String();
-            padSourcePath[(size_t) i] = juce::String();
+            label = juce::File (loadedPaths[0]).getFileNameWithoutExtension();
+            if (layers.size() > 1)   // match what loadLayersIntoPad shows
+                label += " x" + juce::String ((int) layers.size());
         }
+        else   // no saved sample, or the files are gone -> the built-in starter sound
+        {
+            if (auto starter = fresh.pad (i).primarySample())
+            {
+                layers.push_back (starter);
+                label = starter->getName();
+            }
+        }
+        padSourcePaths[(size_t) i] = loadedPaths;
 
-        if (sample != nullptr)
+        if (! layers.empty())
         {
             starterKit.pad (i).chokeGroup    = p.pads[(size_t) i].chokeGroup;
             starterKit.pad (i).reverse       = p.pads[(size_t) i].reverse;
@@ -590,7 +612,9 @@ void MainComponent::applyProject (const Project& p)
             starterKit.pad (i).endFraction   = p.pads[(size_t) i].endFraction;
             starterKit.pad (i).tone          = p.pads[(size_t) i].tone;
             starterKit.pad (i).reverbSend    = p.pads[(size_t) i].reverbSend;
-            installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), i, sample);
+            starterKit.pad (i).layerMode     = (LayerMode) p.pads[(size_t) i].layerMode;
+            installLayersIntoPad (retirementPool, starterKit, engine.getDrumEngine(), i,
+                                  layers.data(), (int) layers.size());
             padGrid.setPadLabel (i, label);
             updatePadWaveform (i);
             padGrid.setPadReverse (i, p.pads[(size_t) i].reverse);
@@ -645,8 +669,8 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
         }
 
         installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), padIndex, sample);
-        if (padIndex >= 0 && padIndex < (int) padSourcePath.size())
-            padSourcePath[(size_t) padIndex] = file.getFullPathName();
+        if (padIndex >= 0 && padIndex < (int) padSourcePaths.size())
+            padSourcePaths[(size_t) padIndex] = juce::StringArray (file.getFullPathName());
         padGrid.setPadLabel   (padIndex, file.getFileNameWithoutExtension());
         padGrid.setPadReverse (padIndex, false);
         padGrid.setPadTrim    (padIndex, 0.0f, 1.0f);
@@ -656,6 +680,60 @@ void MainComponent::loadFileIntoPad (int padIndex, const juce::File& file)
     }
 }
 
+void MainComponent::loadLayersIntoPad (int padIndex, const juce::StringArray& files)
+{
+    if (! Kit::isValidIndex (padIndex))
+        return;
+
+    std::vector<SampleBuffer::Ptr> layers;
+    juce::StringArray              paths;
+    for (const auto& path : files)
+    {
+        if ((int) layers.size() >= maxSampleAlternates)
+            break;
+        if (auto sample = loader.loadFile (juce::File (path)))
+        {
+            layers.push_back (sample);
+            paths.add (path);
+        }
+    }
+
+    if (layers.empty())
+        return;
+    if (layers.size() == 1)
+    {
+        loadFileIntoPad (padIndex, juce::File (paths[0]));
+        return;
+    }
+
+    // A stack of layers replaces the pad outright, so trim/tone/reverse — dialled in for
+    // the sound that was there — reset, exactly as a single-sample load does.
+    Pad& pad = starterKit.pad (padIndex);
+    pad.startFraction = 0.0f;
+    pad.endFraction   = 1.0f;
+    pad.reverse       = false;
+    pad.tone          = 0.0f;
+    pad.reverbSend    = 0.0f;
+    pad.chokeGroup    = KitBuilder::chokeGroupForPad (padIndex);
+    pad.layerMode     = LayerMode::roundRobin;   // the reason you'd drop several files
+
+    installLayersIntoPad (retirementPool, starterKit, engine.getDrumEngine(), padIndex,
+                          layers.data(), (int) layers.size());
+
+    padSourcePaths[(std::size_t) padIndex] = paths;
+    padGrid.setPadLabel   (padIndex, juce::File (paths[0]).getFileNameWithoutExtension()
+                                         + " x" + juce::String ((int) layers.size()));
+    padGrid.setPadReverse (padIndex, false);
+    padGrid.setPadTrim    (padIndex, 0.0f, 1.0f);
+    updatePadWaveform (padIndex);
+    updateLaneLabelForPad (padIndex);
+    padGrid.flashPad (padIndex);
+
+    statusLabel.setText (juce::String ((int) layers.size()) + " round-robin layers on pad "
+                             + juce::String (padIndex + 1),
+                         juce::dontSendNotification);
+}
+
 void MainComponent::openPadInspector (int padIndex)
 {
     if (! Kit::isValidIndex (padIndex))
@@ -663,7 +741,8 @@ void MainComponent::openPadInspector (int padIndex)
 
     const Pad& pad = starterKit.pad (padIndex);
     auto inspector = std::make_unique<PadInspector> (
-        padGrid.getPadLabel (padIndex), pad.tone, pad.reverbSend);
+        padGrid.getPadLabel (padIndex), pad.tone, pad.reverbSend,
+        pad.numAlternates(), pad.layerMode);
 
     // Live edits: re-push the pad's params WITHOUT retiring its sample (same buffer),
     // so a note already sounding keeps playing while you turn the knob.
@@ -675,6 +754,11 @@ void MainComponent::openPadInspector (int padIndex)
     inspector->onSendChanged = [this, padIndex] (float send)
     {
         starterKit.pad (padIndex).reverbSend = send;
+        updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
+    };
+    inspector->onLayerModeChanged = [this, padIndex] (LayerMode mode)
+    {
+        starterKit.pad (padIndex).layerMode = mode;
         updatePadParamsInEngine (starterKit, engine.getDrumEngine(), padIndex);
     };
 
@@ -749,7 +833,7 @@ void MainComponent::sliceLoopIntoPads (const juce::File& file)
 
         installSampleIntoPad (retirementPool, starterKit, drum, i, loop);
 
-        padSourcePath[(std::size_t) i] = file.getFullPathName();
+        padSourcePaths[(std::size_t) i] = juce::StringArray (file.getFullPathName());
         padGrid.setPadLabel   (i, "Slice " + juce::String (i + 1));
         padGrid.setPadReverse (i, false);
         padGrid.setPadTrim    (i, pad.startFraction, pad.endFraction);
@@ -917,7 +1001,7 @@ void MainComponent::openLibrary()
                 // choke group is carried into the engine with the new sample.
                 starterKit.pad (p).chokeGroup = KitBuilder::chokeGroupForPad (p);
                 installSampleIntoPad (retirementPool, starterKit, engine.getDrumEngine(), p, sample);
-                padSourcePath[(size_t) p] = file.getFullPathName();
+                padSourcePaths[(size_t) p] = juce::StringArray (file.getFullPathName());
                 padGrid.setPadLabel (p, file.getFileNameWithoutExtension());
                 updatePadWaveform (p);
                 updateLaneLabelForPad (p);

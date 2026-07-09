@@ -288,13 +288,17 @@ void PadComponent::filesDropped (const juce::StringArray& files, int, int)
     dragOver = false;
     repaint();
 
-    if (onFileDropped)
-        for (const auto& f : files)
-            if (isAudioFile (f))
-            {
-                onFileDropped (index, juce::File (f));
-                break;   // one sample per pad
-            }
+    if (onFilesDropped == nullptr)
+        return;
+
+    // Drop one file to load a sample; drop several to stack them as round-robin layers.
+    juce::StringArray audioFiles;
+    for (const auto& f : files)
+        if (isAudioFile (f))
+            audioFiles.add (f);
+
+    if (! audioFiles.isEmpty())
+        onFilesDropped (index, audioFiles);
 }
 
 void PadComponent::timerCallback()

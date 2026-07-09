@@ -25,7 +25,8 @@ namespace
     }
 }
 
-PadInspector::PadInspector (const juce::String& padName, float tone, float reverbSend)
+PadInspector::PadInspector (const juce::String& padName, float tone, float reverbSend,
+                            int numLayers, LayerMode layerMode)
 {
     title.setText (padName, juce::dontSendNotification);
     title.setColour (juce::Label::textColourId, panelText);
@@ -50,7 +51,27 @@ PadInspector::PadInspector (const juce::String& padName, float tone, float rever
     addAndMakeVisible (toneCaption);
     addAndMakeVisible (sendCaption);
 
-    setSize (196, 132);
+    // A one-sample pad has nothing to choose between, so it doesn't ask.
+    const bool layered = numLayers > 1;
+    if (layered)
+    {
+        styleCaption (layersCaption, juce::String (numLayers) + " layers");
+        addAndMakeVisible (layersCaption);
+
+        layerModeBox.addItem ("Round-robin", (int) LayerMode::roundRobin + 1);
+        layerModeBox.addItem ("By velocity", (int) LayerMode::velocity   + 1);
+        layerModeBox.setSelectedId ((int) layerMode + 1, juce::dontSendNotification);
+        layerModeBox.setTooltip ("Round-robin cycles the layers so repeats don't machine-gun; "
+                                 "By velocity picks a layer from how hard the hit is.");
+        layerModeBox.onChange = [this]
+        {
+            if (onLayerModeChanged)
+                onLayerModeChanged ((LayerMode) (layerModeBox.getSelectedId() - 1));
+        };
+        addAndMakeVisible (layerModeBox);
+    }
+
+    setSize (196, layered ? 178 : 132);
 }
 
 void PadInspector::paint (juce::Graphics& g)
@@ -63,6 +84,14 @@ void PadInspector::resized()
     auto r = getLocalBounds().reduced (8);
     title.setBounds (r.removeFromTop (20));
     r.removeFromTop (4);
+
+    if (layerModeBox.isVisible())
+    {
+        auto bottom = r.removeFromBottom (26);
+        layerModeBox.setBounds (bottom.reduced (2, 0));
+        layersCaption.setBounds (r.removeFromBottom (16));
+        r.removeFromBottom (4);
+    }
 
     auto captions = r.removeFromTop (14);
     toneCaption.setBounds (captions.removeFromLeft (captions.getWidth() / 2));

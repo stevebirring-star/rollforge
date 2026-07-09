@@ -18,7 +18,14 @@ inline constexpr int projectNumPads = 16;
 
 struct ProjectPad
 {
-    juce::String samplePath;             // relative or absolute path to the sample
+    juce::String samplePath;             // layer 0's path ("" = the built-in starter sound)
+
+    // Layers 1..N of a round-robin / velocity-layered pad, in order. Written under a
+    // separate JSON key so a project saved before layers existed still loads: an absent
+    // key simply means a one-layer pad, which is what every old project is.
+    juce::StringArray extraLayerPaths;
+    int          layerMode      = 0;      // LayerMode: 0 = round-robin, 1 = velocity
+
     float        gain           = 1.0f;
     float        pitchSemitones = 0.0f;
     float        pan            = 0.0f;

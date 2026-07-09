@@ -21,6 +21,7 @@ target_sources(RollForgeTests PRIVATE
     SampleLoaderTests.cpp
     StarterKitTests.cpp
     KitInstallerTests.cpp
+    LayerTests.cpp
     PadMappingTests.cpp
     PatternModelTests.cpp
     ClockTimingTests.cpp

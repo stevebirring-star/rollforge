@@ -90,6 +90,7 @@ TEST_SOURCES=(
     tests/SampleLoaderTests.cpp
     tests/StarterKitTests.cpp
     tests/KitInstallerTests.cpp
+    tests/LayerTests.cpp
     tests/PadMappingTests.cpp
     tests/PatternModelTests.cpp
     tests/ClockTimingTests.cpp

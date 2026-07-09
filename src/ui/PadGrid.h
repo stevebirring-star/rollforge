@@ -34,7 +34,7 @@ public:
 
     std::function<void (int padIndex, float velocity)>        onPadTrigger;
     std::function<void (int padIndex)>                        onPadRelease;   // note-repeat hold end
-    std::function<void (int padIndex, const juce::File& file)> onPadFileDropped;
+    std::function<void (int padIndex, const juce::StringArray& files)> onPadFilesDropped;
     std::function<void (int padIndex, bool muted)>            onPadMute;
     std::function<void (int padIndex, bool soloed)>           onPadSolo;
     std::function<void (int padIndex, bool reversed)>         onPadReverse;

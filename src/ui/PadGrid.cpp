@@ -19,10 +19,10 @@ PadGrid::PadGrid()
             if (onPadRelease)
                 onPadRelease (index);
         };
-        pad->onFileDropped = [this] (int index, const juce::File& file)
+        pad->onFilesDropped = [this] (int index, const juce::StringArray& files)
         {
-            if (onPadFileDropped)
-                onPadFileDropped (index, file);
+            if (onPadFilesDropped)
+                onPadFilesDropped (index, files);
         };
         pad->onMute = [this] (int index, bool muted)  { if (onPadMute) onPadMute (index, muted); };
         pad->onSolo = [this] (int index, bool soloed) { if (onPadSolo) onPadSolo (index, soloed); };

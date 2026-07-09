@@ -89,6 +89,7 @@ private:
         int          pad;
         float        velocity;
         float        pitchOffset; // extra semitones (rolls); 0 for plain steps
+        int          sampleLock;  // -1 = let the pad pick its layer; else pin that one
     };
 
     // A bar for switch quantisation = 16 steps (4/4 at 1/16). Configurable later.
@@ -100,7 +101,8 @@ private:
 
     void applyIncomingPattern (bool nowPlaying) noexcept;
     void generateStepEvents (std::int64_t stepIndex, std::int64_t stepSample) noexcept;
-    void addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset = 0.0f) noexcept;
+    void addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset = 0.0f,
+                   int sampleLock = -1) noexcept;
     void renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& buffer,
                            std::int64_t blockStart, int numSamples) noexcept;
 

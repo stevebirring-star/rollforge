@@ -8,6 +8,8 @@
 // 80-pixel tile unusable. A right-click bubble keeps the grid readable and still puts
 // the controls on the pad you clicked.
 
+#include "engine/EngineCommand.h"   // LayerMode
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
@@ -18,11 +20,13 @@ namespace rollforge
 class PadInspector final : public juce::Component
 {
 public:
-    PadInspector (const juce::String& padName, float tone, float reverbSend);
+    PadInspector (const juce::String& padName, float tone, float reverbSend,
+                  int numLayers, LayerMode layerMode);
 
     /** Fired live as the knobs move (the engine applies them without retriggering). */
     std::function<void (float tone)> onToneChanged;
     std::function<void (float send)> onSendChanged;
+    std::function<void (LayerMode)>  onLayerModeChanged;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -31,8 +35,10 @@ private:
     juce::Label  title;
     juce::Slider toneSlider;
     juce::Slider sendSlider;
-    juce::Label  toneCaption;
-    juce::Label  sendCaption;
+    juce::Label    toneCaption;
+    juce::Label    sendCaption;
+    juce::Label    layersCaption;   // "N layers" — hidden on a single-sample pad
+    juce::ComboBox layerModeBox;    // round-robin vs velocity
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PadInspector)
 };

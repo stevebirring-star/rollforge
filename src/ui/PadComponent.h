@@ -2,9 +2,10 @@
 
 // RollForge — PadComponent: one clickable drum pad.
 //
-// Click to audition (fires onTrigger); drop an audio file on it to load it into
-// the pad (fires onFileDropped). Flashes briefly when triggered. UI only — it
-// talks to the engine through the std::function callbacks the PadGrid wires up.
+// Click to audition (fires onTrigger); drop audio files on it to load them (fires
+// onFilesDropped — one file is a sample, several are round-robin layers). Right-click
+// for the pad's TONE/SEND. Flashes briefly when triggered. UI only — it talks to the
+// engine through the std::function callbacks the PadGrid wires up.
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -43,7 +44,9 @@ public:
 
     std::function<void (int padIndex, float velocity)>       onTrigger;
     std::function<void (int padIndex)>                       onRelease;   // for note-repeat hold
-    std::function<void (int padIndex, const juce::File& file)> onFileDropped;
+    /** All the audio files dropped on this pad, in order. One file loads a sample;
+        several load round-robin layers. */
+    std::function<void (int padIndex, const juce::StringArray& files)> onFilesDropped;
     std::function<void (int padIndex, bool muted)>             onMute;
     std::function<void (int padIndex, bool soloed)>            onSolo;
     std::function<void (int padIndex, bool reversed)>          onReverse;

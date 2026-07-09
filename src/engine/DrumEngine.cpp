@@ -57,8 +57,26 @@ bool DrumEngine::pushSetPad (int padIndex,
                              const VoiceParameters& params,
                              int chokeGroup) noexcept
 {
-    // The command carries a raw pointer; the caller keeps `sample` alive.
-    return commands.push (EngineCommand::makeSetPad (padIndex, sample.get(), params, chokeGroup));
+    return pushSetPadLayers (padIndex, &sample, sample != nullptr ? 1 : 0,
+                             LayerMode::roundRobin, params, chokeGroup);
+}
+
+bool DrumEngine::pushSetPadLayers (int padIndex,
+                                   const SampleBuffer::Ptr* layers,
+                                   int numLayers,
+                                   LayerMode layerMode,
+                                   const VoiceParameters& params,
+                                   int chokeGroup) noexcept
+{
+    // The command carries raw pointers; the caller keeps every layer alive.
+    SampleBuffer* raw[maxPadLayers] {};
+    int n = 0;
+    for (int i = 0; i < numLayers && n < maxPadLayers; ++i)
+        if (layers[i] != nullptr)
+            raw[n++] = layers[i].get();
+
+    return commands.push (EngineCommand::makeSetPad (padIndex, raw, n, (int) layerMode,
+                                                     params, chokeGroup));
 }
 
 bool DrumEngine::pushMidiTrigger (int padIndex, float velocity) noexcept
@@ -87,7 +105,10 @@ void DrumEngine::prepare (double newSampleRate, int maxBlockSize)
     sendTailSamples = 0;
 
     // Reset every render, so an offline render (which prepares first) is reproducible
-    // and a per-pad stem starts from the same reverb state as the mix.
+    // and a per-pad stem starts from the same reverb state — and the same round-robin
+    // position — as the mix. Without this, exporting twice would give different files.
+    for (auto& slot : pads)
+        slot.roundRobin = 0;
 }
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
@@ -185,14 +206,36 @@ bool DrumEngine::isPadAudible (int padIndex) const noexcept
     return ! padMuted[(size_t) padIndex].load (std::memory_order_relaxed);
 }
 
-void DrumEngine::triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones) noexcept
+int DrumEngine::pickLayer (PadSlot& slot, float velocity, int sampleLock) noexcept
 {
-    if (padIndex >= 0 && padIndex < (int) pads.size() && pads[(size_t) padIndex].sample != nullptr)
+    if (slot.numLayers <= 1)
+        return 0;
+
+    // An explicit per-step lock always wins, so a pinned alternate stays pinned.
+    if (sampleLock >= 0 && sampleLock < slot.numLayers)
+        return sampleLock;
+
+    if (slot.layerMode == (int) LayerMode::velocity)
     {
-        const auto& slot = pads[(size_t) padIndex];
+        int index = (int) ((velocity < 0.0f ? 0.0f : velocity) * (float) slot.numLayers);
+        return index >= slot.numLayers ? slot.numLayers - 1 : index;
+    }
+
+    const int index = slot.roundRobin;
+    slot.roundRobin = (slot.roundRobin + 1) % slot.numLayers;
+    return index;
+}
+
+void DrumEngine::triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones,
+                                int sampleLock) noexcept
+{
+    if (padIndex >= 0 && padIndex < (int) pads.size() && pads[(size_t) padIndex].numLayers > 0)
+    {
+        auto& slot = pads[(size_t) padIndex];
         VoiceParameters params = slot.params;
         params.pitchSemitones += pitchOffsetSemitones;
-        pool.trigger (slot.sample, params, velocity, slot.chokeGroup, padIndex);
+        pool.trigger (slot.layers[(size_t) pickLayer (slot, velocity, sampleLock)],
+                      params, velocity, slot.chokeGroup, padIndex);
     }
     else
     {
@@ -216,9 +259,15 @@ void DrumEngine::handleCommand (const EngineCommand& command) noexcept
                 // Adopt the raw pointer into a Ptr (increfs). Decref of any
                 // previous sample is null/held-elsewhere at install time; a live
                 // replacement retires the old buffer on the producer side first.
-                pads[(size_t) padIndex].sample     = command.sample;
-                pads[(size_t) padIndex].params     = command.params;
-                pads[(size_t) padIndex].chokeGroup = command.chokeGroup;
+                auto& slot = pads[(size_t) padIndex];
+                for (int i = 0; i < maxPadLayers; ++i)
+                    slot.layers[(size_t) i] = i < command.numLayers ? command.layers[i] : nullptr;
+                slot.numLayers  = command.numLayers;
+                slot.layerMode  = command.layerMode;
+                slot.params     = command.params;
+                slot.chokeGroup = command.chokeGroup;
+                // slot.roundRobin is deliberately untouched: re-pushing a pad's params
+                // (a knob move) must not restart its round-robin cycle.
 
                 // Gate the send reverb on whether any pad actually uses it. Audio-thread
                 // state derived from audio-thread state, so no atomic is needed.

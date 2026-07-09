@@ -36,6 +36,16 @@ void installSampleIntoPad (SampleRetirementPool& retirementPool,
                            int padIndex,
                            SampleBuffer::Ptr newSample);
 
+/** As installSampleIntoPad, but gives the pad up to maxSampleAlternates LAYERS that it
+    round-robins (or velocity-switches) between. Nulls are skipped and the rest packed
+    from slot 0. Retires every layer the pad held. Message thread only. */
+void installLayersIntoPad (SampleRetirementPool& retirementPool,
+                           Kit& kit,
+                           DrumEngine& engine,
+                           int padIndex,
+                           const SampleBuffer::Ptr* newLayers,
+                           int numLayers);
+
 /** Re-pushes pad `padIndex`'s current params + choke to the engine WITHOUT changing
     its sample — used for live per-pad edits (trim / reverse). No retirement, since
     the sample buffer is unchanged. Message thread only. */

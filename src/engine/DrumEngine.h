@@ -61,6 +61,16 @@ public:
                      const VoiceParameters& params,
                      int chokeGroup) noexcept;
 
+    /** As above, but with up to maxPadLayers samples the pad picks between (round-robin,
+        or by velocity). Same lifetime + retirement contract for EVERY layer. Null layers
+        are skipped; passing a single layer is identical to pushSetPad. */
+    bool pushSetPadLayers (int padIndex,
+                           const SampleBuffer::Ptr* layers,
+                           int numLayers,
+                           LayerMode layerMode,
+                           const VoiceParameters& params,
+                           int chokeGroup) noexcept;
+
     /** Queues a trigger from a MIDI-input thread. Uses a SEPARATE queue from the
         message-thread commands; because multiple MIDI devices deliver on multiple
         threads, the producer side is guarded by a spin lock so it stays a valid
@@ -89,8 +99,11 @@ public:
 
     /** Triggers a pad immediately from the audio thread (no queue). Plays the
         pad's configured sample/params/choke, or the interim blip if unconfigured.
-        `pitchOffsetSemitones` is added to the pad's pitch (used by rolls). */
-    void triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones = 0.0f) noexcept;
+        `pitchOffsetSemitones` is added to the pad's pitch (used by rolls).
+        `sampleLock` >= 0 forces that layer instead of the pad's own choice — the
+        sequencer passes each Step's sampleLock, so a step can pin one alternate. */
+    void triggerPadNow (int padIndex, float velocity, float pitchOffsetSemitones = 0.0f,
+                        int sampleLock = -1) noexcept;
 
     /** Renders the voice pool ADDITIVELY into `buffer[startSample, startSample+numSamples)`,
         accumulating each voice's reverb send into the engine's send buffer. */
@@ -143,10 +156,22 @@ private:
 
     struct PadSlot
     {
-        SampleBuffer::Ptr sample;
+        std::array<SampleBuffer::Ptr, maxPadLayers> layers;
+        int               numLayers  = 0;
+        int               layerMode  = (int) LayerMode::roundRobin;
         VoiceParameters   params;
         int               chokeGroup = 0;
+
+        // Round-robin cursor. Touched ONLY from the audio thread (triggerPadNow), so a
+        // plain int is correct and cheapest — unlike padMuted/padSoloed, which the
+        // message thread writes. prepare() zeroes it, which is what keeps an offline
+        // render reproducible; setPad deliberately leaves it alone, so turning a knob
+        // mid-pattern doesn't restart the cycle.
+        int               roundRobin = 0;
     };
+
+    /** Which layer a hit should play. Audio thread only; advances the round-robin. */
+    int pickLayer (PadSlot& slot, float velocity, int sampleLock) noexcept;
 
     void handleCommand (const EngineCommand& command) noexcept;
 

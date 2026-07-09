@@ -203,7 +203,8 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
             }
             velocity = clampVal (velocity, 0.0f, 1.0f);
 
-            addEvent (evSample, lane.targetPad, velocity);
+            // Step.sampleLock pins one of the pad's layers; -1 lets the pad choose.
+            addEvent (evSample, lane.targetPad, velocity, 0.0f, s.sampleLock);
         }
     }
 
@@ -232,10 +233,11 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
     }
 }
 
-void Sequencer::addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset) noexcept
+void Sequencer::addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset,
+                          int sampleLock) noexcept
 {
     if (pendingCount < maxPendingEvents)
-        pending[pendingCount++] = { sample, pad, velocity, pitchOffset };
+        pending[pendingCount++] = { sample, pad, velocity, pitchOffset, sampleLock };
     // else: buffer full (pathological ratchet/lane/roll count) -> drop this event.
 }
 
@@ -273,7 +275,8 @@ void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& 
         // Per-pad mute/solo gates SEQUENCED (+ roll) hits; a muted pad's steps stay
         // silent. Manual auditions go through a different path and are never gated.
         if (engine.isPadAudible (pending[best].pad))
-            engine.triggerPadNow (pending[best].pad, pending[best].velocity, pending[best].pitchOffset);
+            engine.triggerPadNow (pending[best].pad, pending[best].velocity,
+                                  pending[best].pitchOffset, pending[best].sampleLock);
         triggerCount.fetch_add (1, std::memory_order_acq_rel);
 
         pending[best] = pending[--pendingCount];   // remove (swap with last)

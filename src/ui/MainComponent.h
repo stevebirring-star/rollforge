@@ -67,6 +67,7 @@ private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
     void timerCallback() override;                              // retirement sweep
     void loadFileIntoPad (int padIndex, const juce::File& file);
+    void loadLayersIntoPad (int padIndex, const juce::StringArray& files);   // round-robin layers
     void sliceLoopIntoPads (const juce::File& loop);   // chop a break across the pads at its onsets
     void auditionSample (const juce::File& file);      // play a browser sample on the preview pad
     void openPadInspector (int padIndex);              // right-click a pad: TONE + SEND
@@ -131,9 +132,9 @@ private:
     std::unique_ptr<juce::FileChooser>               projectChooser;
     std::unique_ptr<juce::FileChooser>               sliceChooser;
 
-    // Full file path of the sample loaded into each pad ("" = the built-in starter
-    // synth sound). Tracked so Save/Load can rebuild the kit from disk.
-    std::array<juce::String, (size_t) maxLanes>      padSourcePath {};
+    // Full file paths of the sample LAYERS loaded into each pad, in order (empty = the
+    // built-in starter synth sound). Tracked so Save/Load can rebuild the kit from disk.
+    std::array<juce::StringArray, (size_t) maxLanes> padSourcePaths {};
 
     // The sample on the preview pad. Held so the message thread keeps a reference until
     // the next audition retires it (the SampleBuffer.h ownership contract).

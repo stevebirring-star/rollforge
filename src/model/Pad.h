@@ -14,6 +14,7 @@
 // trivially-copyable POD — that constraint applies only to the audio-thread
 // command payloads, not to this message-thread model.
 
+#include "engine/EngineCommand.h"   // LayerMode (a pad property the engine also needs)
 #include "engine/SampleBuffer.h"
 
 #include <array>
@@ -34,11 +35,13 @@ inline constexpr float maxPitchSemitones =  12.0f;
 
 struct Pad
 {
-    // --- Sample -------------------------------------------------------------
-    // Up to maxSampleAlternates alternates; alternates[0] is the primary sample.
-    // A null entry is an unused slot. The alt picker / Humaniser (later phases)
-    // choose which alternate a given hit uses; Phase 1 always plays alternates[0].
+    // --- Samples ------------------------------------------------------------
+    // Up to maxSampleAlternates layers; alternates[0] is the primary sample, and the
+    // filled slots are contiguous from 0. `layerMode` decides which one a hit plays:
+    // round-robin (so repeats don't machine-gun) or by velocity (soft -> loud). A
+    // Step's sampleLock overrides both. One layer = the old behaviour exactly.
     std::array<SampleBuffer::Ptr, maxSampleAlternates> alternates {};
+    LayerMode layerMode = LayerMode::roundRobin;
 
     // --- Per-pad parameters (neutral defaults) ------------------------------
     float volume     = 1.0f;              // linear gain (1 = unity)
