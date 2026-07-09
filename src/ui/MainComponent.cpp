@@ -344,6 +344,61 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible (patternSlots);
 
+    // The arrangement. Every edit goes through the model and comes back out through
+    // refreshSongBar(), so the chips can never disagree with the chain that plays.
+    songBar.onSongModeChanged = [this] (bool on)
+    {
+        songStartStep = -1;
+        lastSongBar   = -1;
+
+        if (on && ! song.isEmpty())
+        {
+            // Standing on the chain's first slot before the transport rolls means bar 0 is
+            // its bar, rather than a bar of whatever happened to be up when SONG went on.
+            const int first = song.slotAtBar (0);
+            if (first >= 0)
+                selectSlot (first);
+        }
+        else
+        {
+            songBar.setPlayingStep (-1);
+        }
+    };
+    songBar.onLoopChanged = [this] (bool loop) { song.loop = loop; };
+    songBar.onAppendCurrent = [this]
+    {
+        song.steps.push_back ({ bank.currentSlot, 1 });
+        refreshSongBar();
+    };
+    songBar.onSetBars = [this] (int index, int bars)
+    {
+        if (index >= 0 && index < (int) song.steps.size())
+            song.steps[(std::size_t) index].bars = bars;
+        refreshSongBar();
+    };
+    songBar.onRemove = [this] (int index)
+    {
+        if (index >= 0 && index < (int) song.steps.size())
+            song.steps.erase (song.steps.begin() + index);
+
+        // The chain the chip belonged to is gone; anything mid-flight refers to bars that no
+        // longer mean what they meant. Re-anchor rather than carry a stale bar index across.
+        songStartStep = -1;
+        lastSongBar   = -1;
+        refreshSongBar();
+    };
+    songBar.onClearChain = [this]
+    {
+        song.steps.clear();
+        songStartStep = -1;
+        lastSongBar   = -1;
+        songBar.setSongMode (false);
+        songBar.setPlayingStep (-1);
+        refreshSongBar();
+    };
+    addAndMakeVisible (songBar);
+    refreshSongBar();
+
     // Roll brush: toggle it on, then drag across a lane to paint an accelerating
     // roll (drag up = denser). Clear Rolls removes them.
     brushButton.setClickingTogglesState (true);
@@ -644,8 +699,10 @@ Project MainComponent::captureProject()
     // The bank's copy of the slot you are standing in is only refreshed when you leave it,
     // so park the working pattern before the whole bank is written out.
     bank.pattern (bank.currentSlot) = editPattern;
-    p.slots       = bank.slots;
+    p.slots.assign (bank.slots.begin(), bank.slots.end());
     p.currentSlot = bank.currentSlot;
+    p.song        = song;
+    p.songMode    = songBar.isSongMode();
 
     // Tempo + swing are live sequencer controls; capture them as the authoritative
     // transport, mirrored into every pattern so the saved file is self-consistent whichever
@@ -689,7 +746,9 @@ void MainComponent::applyProject (const Project& p)
 {
     // A pre-bank file arrives with slots[0] == pattern and currentSlot == 0, so this is the
     // right read for old and new files alike.
-    bank.slots       = p.slots;
+    for (int i = 0; i < numPatternSlots; ++i)
+        bank.slots[(std::size_t) i] = (i < (int) p.slots.size()) ? p.slots[(std::size_t) i]
+                                                                 : blankPattern();
     bank.currentSlot = PatternBank::isValidSlot (p.currentSlot) ? p.currentSlot : 0;
     for (auto& slot : bank.slots)
     {
@@ -704,6 +763,13 @@ void MainComponent::applyProject (const Project& p)
     pendingSlot      = -1;
     patternSlots.setQueued (-1);
     patternSlots.setCurrent (bank.currentSlot);
+
+    song          = p.song;
+    songStartStep = -1;
+    lastSongBar   = -1;
+    songBar.setSongMode (p.songMode && ! song.isEmpty());
+    songBar.setPlayingStep (-1);
+    refreshSongBar();
 
     editPattern = bank.pattern (bank.currentSlot);
 
@@ -899,10 +965,12 @@ void MainComponent::stampTransportOnto (Pattern& pattern)
     pattern.swing = seq.getSwing();
 }
 
-void MainComponent::selectSlot (int slot)
+void MainComponent::selectSlot (int slot, bool announce)
 {
     if (! PatternBank::isValidSlot (slot) || slot == bank.currentSlot)
         return;
+
+    announceSlotChange = announce;
 
     // Park the working copy before leaving, or an edit made since the last switch is lost.
     bank.pattern (bank.currentSlot) = editPattern;
@@ -920,10 +988,11 @@ void MainComponent::selectSlot (int slot)
         engine.getSequencer().queuePattern (bank.pattern (slot));
         pendingSlot = slot;
         patternSlots.setQueued (slot);
-        statusLabel.setText (juce::String ("Pattern ")
-                                 + juce::String::charToString ((juce::juce_wchar) ('A' + slot))
-                                 + " queued for the next bar",
-                             juce::dontSendNotification);
+        if (announce)
+            statusLabel.setText (juce::String ("Pattern ")
+                                     + juce::String::charToString ((juce::juce_wchar) ('A' + slot))
+                                     + " queued for the next bar",
+                                 juce::dontSendNotification);
         return;
     }
 
@@ -945,9 +1014,13 @@ void MainComponent::commitSlot (int slot)
     patternSlots.setCurrent (slot);
     refreshGridFromPattern();
     refreshSlotStates();
-    statusLabel.setText (juce::String ("Pattern ")
-                             + juce::String::charToString ((juce::juce_wchar) ('A' + slot)),
-                         juce::dontSendNotification);
+    songBar.setCurrentSlot (slot);
+
+    if (announceSlotChange)
+        statusLabel.setText (juce::String ("Pattern ")
+                                 + juce::String::charToString ((juce::juce_wchar) ('A' + slot)),
+                             juce::dontSendNotification);
+    announceSlotChange = true;
 }
 
 void MainComponent::refreshSlotStates()
@@ -956,6 +1029,77 @@ void MainComponent::refreshSlotStates()
     for (int i = 0; i < numPatternSlots; ++i)
         patternSlots.setSlotWritten (i, ! patternIsEmpty (i == bank.currentSlot ? editPattern
                                                                                 : bank.pattern (i)));
+}
+
+void MainComponent::refreshSongBar()
+{
+    songBar.setSong (song);
+    songBar.setCurrentSlot (bank.currentSlot);
+}
+
+void MainComponent::updateSongPlayback()
+{
+    auto& seq = engine.getSequencer();
+
+    if (! songBar.isSongMode() || song.isEmpty() || ! seq.isPlaying())
+    {
+        songStartStep = -1;
+        lastSongBar   = -1;
+        songBar.setPlayingStep (-1);
+        return;
+    }
+
+    const std::int64_t step = seq.getCurrentStep();
+    if (step < 0)
+        return;   // playing, but the first block has not run yet
+
+    constexpr int barSteps = Sequencer::getBarSteps();
+
+    if (songStartStep < 0)
+    {
+        const std::int64_t barStart = step - (step % barSteps);
+        const int          first    = song.slotAtBar (0);
+
+        // If the chain's first slot is already up, bar 0 is the bar we are in. If it is not,
+        // bar 0 is the NEXT bar line — which is exactly where a queued switch lands, so the
+        // chain and the sound start together instead of a bar apart.
+        const bool alreadyThere = (first < 0 || first == bank.currentSlot);
+        songStartStep = alreadyThere ? barStart : barStart + barSteps;
+        lastSongBar   = -1;
+
+        if (! alreadyThere && first != pendingSlot)
+            selectSlot (first, false);
+        return;
+    }
+
+    if (step < songStartStep)
+        return;   // still in the run-up bar. (Integer division would round this up to bar 0.)
+
+    const int bar = (int) ((step - songStartStep) / barSteps);
+    if (bar == lastSongBar)
+        return;   // once per bar, not thirty times a second
+    lastSongBar = bar;
+
+    const int here = song.stepAtBar (bar);
+    songBar.setPlayingStep (here);
+
+    if (here < 0)
+    {
+        // A one-shot chain has played its last bar. Stop through the transport, or its button
+        // would go on saying "Stop" over a silent sequencer.
+        transportBar.stop();
+        songStartStep = -1;
+        lastSongBar   = -1;
+        songBar.setPlayingStep (-1);
+        statusLabel.setText ("Song finished", juce::dontSendNotification);
+        return;
+    }
+
+    // Queue the next bar's slot NOW: queuePattern lands on the coming bar line, which is that
+    // bar's downbeat. Two adjacent steps naming the same slot are not a switch.
+    const int next = song.slotAtBar (bar + 1);
+    if (next >= 0 && next != bank.currentSlot && next != pendingSlot)
+        selectSlot (next, false);
 }
 
 void MainComponent::rebuildSimilarSearch()
@@ -1327,6 +1471,8 @@ void MainComponent::timerCallback()
         }
     }
 
+    updateSongPlayback();
+
     // Drive the per-pad level meters (called every tick so silent pads decay too).
     auto& drum = engine.getDrumEngine();
     for (int p = 0; p < kitNumPads; ++p)
@@ -1658,6 +1804,8 @@ void MainComponent::resized()
     area.removeFromTop (8);
 
     patternSlots.setBounds (area.removeFromTop (26));
+    area.removeFromTop (6);
+    songBar.setBounds (area.removeFromTop (26));
     area.removeFromTop (8);
 
     auto rollRow = area.removeFromTop (28);

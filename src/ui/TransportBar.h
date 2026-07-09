@@ -38,6 +38,10 @@ public:
         project): updates the knob AND the live engine, but does NOT fire the
         onTempoChanged/onSwingChanged callbacks (the caller already holds the value). */
     void setDisplayedTempo (double bpm);
+
+    /** Stop from outside — a one-shot song chain reaching its end. The button has its own
+        `playing` flag, so setting the sequencer directly would leave it reading "Stop". */
+    void stop();
     void setDisplayedSwing (float amount);
 
 private:

@@ -89,6 +89,16 @@ void TransportBar::togglePlay()
     playButton.setButtonText (playing ? "Stop" : "Play");
 }
 
+void TransportBar::stop()
+{
+    if (! playing)
+        return;
+
+    playing = false;
+    sequencer.setPlaying (false);
+    playButton.setButtonText ("Play");
+}
+
 void TransportBar::tapTempo()
 {
     const double now = juce::Time::getMillisecondCounterHiRes();

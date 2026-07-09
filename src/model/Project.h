@@ -7,10 +7,12 @@
 
 #include "model/Pattern.h"
 #include "model/PatternBank.h"
+#include "model/Song.h"
 
 #include <juce_core/juce_core.h>
 
 #include <array>
+#include <vector>
 
 namespace rollforge
 {
@@ -50,8 +52,16 @@ struct Project
     // separately so that a build predating the A..H bank still loads the right groove out
     // of a newer file rather than an empty one.
     Pattern pattern;
-    std::array<Pattern, numPatternSlots> slots {};
+
+    // Heap, not std::array. A Pattern is ~52 KB, so eight of them by value put Project at
+    // 473 KB — and a Project is a stack object: captureProject() returns one, fromJson()
+    // builds a temporary, a test declares two. That overflowed the stack under ASan, and
+    // Windows gives a thread 1 MB by default. Always `numPatternSlots` long.
+    std::vector<Pattern> slots = std::vector<Pattern> ((std::size_t) numPatternSlots);
     int     currentSlot = 0;
+
+    Song    song;             // the arrangement chain over those slots
+    bool    songMode = false; // whether the chain, rather than one slot, is driving
 
     float  punch = 0.0f, space = 0.0f, crush = 0.0f, drive = 0.0f;  // master-FX macros
     float  lowEq = 0.0f, midEq = 0.0f, highEq = 0.0f;              // master EQ (dB per band)
@@ -59,5 +69,9 @@ struct Project
     double bpm   = 120.0;
     float  swing = 0.0f;
 };
+
+// The guard for the reasoning above: keep Project off the stack's danger list.
+static_assert (sizeof (Project) < 128 * 1024,
+               "Project is built on the stack; hold something this big by pointer instead");
 
 } // namespace rollforge

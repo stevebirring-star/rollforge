@@ -141,6 +141,55 @@ public:
             expect (patternIsEmpty (loaded.slots[1]), "the other seven slots must start empty");
         }
 
+        beginTest ("the song chain round-trips, and a bad slot never reaches the app");
+        {
+            Project p;
+            p.song.steps = { { 0, 2 }, { 3, 1 }, { 0, 4 } };
+            p.song.loop  = false;
+            p.songMode   = true;
+
+            Project loaded;
+            expect (ProjectIO::fromJson (ProjectIO::toJson (p), loaded));
+            expect (loaded.songMode);
+            expect (! loaded.song.loop);
+            expectEquals ((int) loaded.song.steps.size(), 3);
+            expectEquals (loaded.song.steps[1].slot, 3);
+            expectEquals (loaded.song.steps[2].bars, 4);
+            expectEquals (loaded.song.totalBars(), 7);
+
+            // A hand-edited file naming slot 99: dropped on the way in, not once per bar.
+            auto json = ProjectIO::toJson (p);
+            json = json.replace ("\"slot\": 3", "\"slot\": 99");
+            Project tampered;
+            expect (ProjectIO::fromJson (json, tampered));
+            expectEquals ((int) tampered.song.steps.size(), 2, "the impossible step survived");
+            for (const auto& step : tampered.song.steps)
+                expect (PatternBank::isValidSlot (step.slot));
+        }
+
+        beginTest ("song mode cannot come back on with an empty chain");
+        {
+            Project p;
+            p.songMode = true;          // and no steps: there is nothing for it to drive
+
+            Project loaded;
+            expect (ProjectIO::fromJson (ProjectIO::toJson (p), loaded));
+            expect (! loaded.songMode, "an empty chain must not arm song mode");
+        }
+
+        beginTest ("a project saved before arrangements existed loads with no chain");
+        {
+            Project old;
+            auto json = ProjectIO::toJson (old);
+            json = juce::JSON::toString (stripKeys (juce::JSON::parse (json), { "song" }));
+
+            Project loaded;
+            expect (ProjectIO::fromJson (json, loaded));
+            expect (loaded.song.isEmpty());
+            expect (! loaded.songMode);
+            expect (loaded.song.loop, "loop defaults on");
+        }
+
         beginTest ("blankPattern is empty but playable");
         {
             const auto blank = blankPattern();

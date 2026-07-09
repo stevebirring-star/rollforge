@@ -101,6 +101,7 @@ if(ROLLFORGE_BUILD_APP)
         src/ui/AboutView.cpp
         src/ui/FillBar.cpp
         src/ui/PatternSlots.cpp
+        src/ui/SongBar.cpp
         src/ui/RollBrushOverlay.cpp
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
@@ -145,6 +146,7 @@ if(ROLLFORGE_BUILD_APP)
         src/library/Scanner.cpp
         src/library/KitBuilder.cpp
         src/library/sqlite/sqlite3.c
+        src/model/Song.cpp
         src/model/RollCompiler.cpp
         src/model/RollPresets.cpp
         src/model/FillEngine.cpp

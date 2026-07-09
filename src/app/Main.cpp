@@ -55,13 +55,13 @@ public:
     {
     public:
         static constexpr int minWidth  = 780;
-        static constexpr int minHeight = 874;   // + the A..H pattern row
+        static constexpr int minHeight = 906;   // + the A..H pattern row + the song chain
 
         RootView()
         {
             setScrollBarsShown (true, true);
             setViewedComponent (new MainComponent(), true);
-            setSize (minWidth, 880);
+            setSize (minWidth, 920);
         }
 
         void resized() override

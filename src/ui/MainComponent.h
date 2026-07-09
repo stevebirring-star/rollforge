@@ -19,6 +19,7 @@
 #include "model/RollCompiler.h"
 #include "model/RollPresets.h"
 #include "model/PatternBank.h"
+#include "model/Song.h"
 #include "model/UndoableActions.h"
 #include "ui/PadGrid.h"
 #include "ui/NoteRepeat.h"
@@ -26,6 +27,7 @@
 #include "ui/SequencerGrid.h"
 #include "ui/FillBar.h"
 #include "ui/PatternSlots.h"
+#include "ui/SongBar.h"
 #include "ui/RollBrushOverlay.h"
 #include "ui/MacroKnobs.h"
 #include "ui/BrowserPanel.h"
@@ -77,9 +79,14 @@ private:
     void loadFileIntoPad (int padIndex, const juce::File& file);
     void installKitSelection (const std::array<juce::String, kitNumPads>& paths);  // NEW KIT + New Sounds
     void rerollSounds (std::uint64_t seed);      // swap the kit's samples, keep the groove
-    void selectSlot (int slot);                 // A..H: switch, quantised to the bar when playing
+    /** A..H: switch, quantised to the bar when playing. `announce` is false when the song
+        chain is doing the switching — the chip highlight already says which step is up, and a
+        status line rewriting itself every bar is noise, not feedback. */
+    void selectSlot (int slot, bool announce = true);
     void commitSlot (int slot);                 // the switch has landed: bring the UI across
     void refreshSlotStates();                   // which of A..H have anything in them
+    void updateSongPlayback();                  // once per timer tick: drive the chain
+    void refreshSongBar();                      // chain -> chips, and the ADD button's letter
 
     /** Tempo and swing belong to the transport, not to a pattern slot; a Pattern only
         carries them so an export is self-contained. Stamping the live transport onto a
@@ -133,6 +140,14 @@ private:
     PatternBank          bank;
     int                  pendingSlot = -1;
     std::int64_t         switchCountAtQueue = 0;   // see Sequencer::getSwitchCount()
+    bool                 announceSlotChange = true;  // whether the pending switch says so
+
+    // The arrangement. `songStartStep` is the global step at which the chain's bar 0 begins;
+    // it is anchored to a bar line so the chain can never drift by a fraction of a bar, and
+    // it may lie one bar in the FUTURE while a switch onto the chain's first slot is landing.
+    Song                 song;
+    std::int64_t         songStartStep = -1;   // -1 = not anchored yet
+    int                  lastSongBar   = -1;   // the bar we last acted on
 
     PadGrid          padGrid;
     TransportBar     transportBar { engine.getSequencer() };
@@ -147,6 +162,7 @@ private:
     juce::ComboBox   repeatRateBox;                     // rate: 1/8 .. 1/32, Build
     MacroKnobs       macroKnobs { engine.getMasterBus() };
     PatternSlots     patternSlots;
+    SongBar          songBar;
     std::array<bool, (size_t) maxLanes> laneLocked {};   // per-lane "keep on reroll" locks
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     int              autosaveCounter = 0;   // ticks since the last recovery save

@@ -189,10 +189,24 @@ juce::String toJson (const Project& proj)
     root->setProperty ("pattern", patternToVar (proj.pattern));
 
     juce::Array<var> slots;
-    for (const auto& slot : proj.slots)
-        slots.add (patternToVar (slot));
+    for (int i = 0; i < numPatternSlots && i < (int) proj.slots.size(); ++i)
+        slots.add (patternToVar (proj.slots[(std::size_t) i]));
     root->setProperty ("slots",       slots);
     root->setProperty ("currentSlot", proj.currentSlot);
+
+    juce::Array<var> songSteps;
+    for (const auto& step : proj.song.steps)
+    {
+        auto* so = new DynamicObject();
+        so->setProperty ("slot", step.slot);
+        so->setProperty ("bars", step.bars);
+        songSteps.add (var (so));
+    }
+    auto* songObject = new DynamicObject();
+    songObject->setProperty ("steps", songSteps);
+    songObject->setProperty ("loop",  proj.song.loop);
+    songObject->setProperty ("mode",  proj.songMode);
+    root->setProperty ("song", var (songObject));
 
     return juce::JSON::toString (var (root));
 }
@@ -261,6 +275,34 @@ bool fromJson (const juce::String& json, Project& out)
     {
         out.slots[0]    = out.pattern;
         out.currentSlot = 0;
+    }
+
+    // No "song" key means a file from before arrangements existed: an empty chain, and song
+    // mode off, which is exactly what a default-constructed Project already says.
+    const var songVar = root.getProperty ("song", var());
+    if (songVar.isObject())
+    {
+        out.song.loop = (bool) songVar.getProperty ("loop", true);
+        out.songMode  = (bool) songVar.getProperty ("mode", false);
+
+        if (auto* steps = songVar.getProperty ("steps", var()).getArray())
+        {
+            for (const auto& stepVar : *steps)
+            {
+                SongStep step;
+                step.slot = (int) stepVar.getProperty ("slot", 0);
+                step.bars = (int) stepVar.getProperty ("bars", 1);
+
+                // A hand-edited file could name a slot that does not exist. Drop it here
+                // rather than let Song::slotAtBar hand the app a -1 every bar.
+                if (PatternBank::isValidSlot (step.slot))
+                    out.song.steps.push_back (step);
+            }
+        }
+
+        // A chain that was saved in song mode but has nothing in it cannot drive anything.
+        if (out.song.steps.empty())
+            out.songMode = false;
     }
     return true;
 }

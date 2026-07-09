@@ -80,6 +80,10 @@ public:
     double       getTempo()        const noexcept { return pendingTempo.load (std::memory_order_acquire); }
     bool         isSwitchQueued()  const noexcept { return switchQueued.load (std::memory_order_acquire); }
 
+    /** The bar the queued switch quantises to, in global 1/16 steps. Song mode counts bars
+        off getCurrentStep() and must use the same number the switch does, not its own 16. */
+    static constexpr int getBarSteps() noexcept { return barLengthSteps; }
+
     /** Counts the queued patterns that have actually BECOME the active one. A caller that
         wants to know "has my queued switch landed yet?" must compare this against the value
         it read when it queued, not watch isSwitchQueued() fall: that flag is still false in
@@ -100,6 +104,7 @@ private:
     };
 
     // A bar for switch quantisation = 16 steps (4/4 at 1/16). Configurable later.
+    // Public read access is via getBarSteps().
     static constexpr int barLengthSteps = 16;
 
     // Sized well above a realistic worst case (steps-in-block x lanes x ratchets
