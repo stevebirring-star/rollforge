@@ -55,9 +55,9 @@ private:
     void openLibrary();
     void openExport();
     void openHelp();
-    void doExportMidi();
-    void doExportWav();
-    void doExportStems();
+    void doExportMidi (int loops);
+    void doExportWav (int loops);
+    void doExportStems (int loops);
     void doSaveProject();
     void doOpenProject();
     void refreshStatus();

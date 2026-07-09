@@ -57,6 +57,26 @@ public:
             expectWithinAbsoluteError (p.lanes[1].steps[3].velocity, 0.55f, 1.0e-6f);
         }
 
+        beginTest ("patternBars() sizes exports to the longest lane (ceil to bars, >= 1)");
+        {
+            Pattern empty;
+            expectEquals (patternBars (empty), 1);            // no lanes -> one bar
+
+            Pattern oneBar;
+            oneBar.numLanes = 2;
+            oneBar.lane (0).length = 16;
+            oneBar.lane (1).length = 8;
+            expectEquals (patternBars (oneBar), 1);           // 16 steps == 1 bar
+
+            Pattern twoBars = oneBar;
+            twoBars.lane (1).length = 17;                     // just over a bar -> ceil to 2
+            expectEquals (patternBars (twoBars), 2);
+
+            Pattern fourBars = oneBar;
+            fourBars.lane (0).length = 64;                    // max lane length -> 4 bars
+            expectEquals (patternBars (fourBars), 4);
+        }
+
         beginTest ("TripleBuffer returns the default before any publish");
         {
             TripleBuffer<int> tb;

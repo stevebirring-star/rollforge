@@ -18,12 +18,19 @@ public:
 
     void resized() override;
 
-    std::function<void()> onExportMidi;
-    std::function<void()> onExportWav;
-    std::function<void()> onExportStems;
+    // The int is the loop count: how many times to repeat the whole pattern in the
+    // export (1/2/4/8). Repeats capture the per-bar probability + humanise variation
+    // the engine generates, so a longer render isn't just a copy-paste of bar 1.
+    std::function<void (int loops)> onExportMidi;
+    std::function<void (int loops)> onExportWav;
+    std::function<void (int loops)> onExportStems;
 
 private:
+    int selectedLoops() const;
+
     juce::Label      title;
+    juce::Label      loopsCaption;
+    juce::ComboBox   loopsBox;
     juce::TextButton exportMidiButton  { "Export MIDI" };
     juce::TextButton exportWavButton   { "Export WAV (mix)" };
     juce::TextButton exportStemsButton { "Export Stems (per pad)" };

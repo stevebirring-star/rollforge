@@ -32,4 +32,23 @@ struct Pattern
     const Lane& lane (int index) const noexcept { return lanes[(std::size_t) index]; }
 };
 
+/** The pattern's natural length in whole bars (1 bar = 16 steps), taken from the
+    longest active lane and always >= 1. Exports use this to size the render so a
+    multi-bar pattern isn't truncated to one bar. Pure — no JUCE, headless-testable. */
+inline int patternBars (const Pattern& p) noexcept
+{
+    int lanes = p.numLanes;
+    if (lanes < 0)        lanes = 0;
+    if (lanes > maxLanes) lanes = maxLanes;
+
+    int maxLen = 16;   // never report fewer than one bar
+    for (int i = 0; i < lanes; ++i)
+    {
+        const int len = p.lane (i).length;
+        if (len > maxLen)
+            maxLen = len;
+    }
+    return (maxLen + 15) / 16;   // ceil to whole bars (>= 1)
+}
+
 } // namespace rollforge

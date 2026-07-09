@@ -28,14 +28,26 @@ TransportBar::TransportBar (Sequencer& seq)
     bpmSlider.setRange (40.0, 300.0, 1.0);
     bpmSlider.setValue (120.0, juce::dontSendNotification);
     bpmSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 22);
-    bpmSlider.onValueChange = [this] { sequencer.setTempo (bpmSlider.getValue()); };
+    bpmSlider.onValueChange = [this]
+    {
+        const double bpm = bpmSlider.getValue();
+        sequencer.setTempo (bpm);
+        if (onTempoChanged != nullptr)
+            onTempoChanged (bpm);
+    };
     addAndMakeVisible (bpmSlider);
 
     swingSlider.setSliderStyle (juce::Slider::LinearHorizontal);
     swingSlider.setRange (0.0, 1.0, 0.01);
     swingSlider.setValue (0.0, juce::dontSendNotification);
     swingSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 48, 22);
-    swingSlider.onValueChange = [this] { sequencer.setSwing ((float) swingSlider.getValue()); };
+    swingSlider.onValueChange = [this]
+    {
+        const float amount = (float) swingSlider.getValue();
+        sequencer.setSwing (amount);
+        if (onSwingChanged != nullptr)
+            onSwingChanged (amount);
+    };
     addAndMakeVisible (swingSlider);
 
     bpmCaption.setText ("BPM", juce::dontSendNotification);
@@ -94,6 +106,20 @@ void TransportBar::tapTempo()
         tapCount = 0;             // stale -> restart the averaging
         tapIntervalSum = 0.0;
     }
+}
+
+void TransportBar::setDisplayedTempo (double bpm)
+{
+    // dontSendNotification so we don't re-enter onTempoChanged: the caller already
+    // owns the model value. We still push the live engine so playback matches.
+    bpmSlider.setValue (juce::jlimit (40.0, 300.0, bpm), juce::dontSendNotification);
+    sequencer.setTempo (bpm);
+}
+
+void TransportBar::setDisplayedSwing (float amount)
+{
+    swingSlider.setValue (juce::jlimit (0.0, 1.0, (double) amount), juce::dontSendNotification);
+    sequencer.setSwing (amount);
 }
 
 void TransportBar::paint (juce::Graphics& g)

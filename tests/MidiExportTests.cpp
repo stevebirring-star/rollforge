@@ -101,6 +101,45 @@ public:
             expectEquals (total, 2);
             f.deleteFile();
         }
+
+        beginTest ("tempo meta + bar count follow the pattern (export-speed contract)");
+        {
+            Pattern p;
+            p.numLanes = 1; p.bpm = 90.0;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            p.lane (0).step (0).on = true;
+
+            // Bar count multiplies the note count (one hit per bar).
+            expectEquals (countNoteOns (MidiExporter::toSequence (p, 1, 960)), 1);
+            expectEquals (countNoteOns (MidiExporter::toSequence (p, 2, 960)), 2);
+            expectEquals (countNoteOns (MidiExporter::toSequence (p, 4, 960)), 4);
+
+            // The saved file carries the pattern's tempo, so a DAW plays it at 90,
+            // not the default 120 — the desync bug this guards against.
+            auto f = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                         .getChildFile ("rollforge_tempo_test.mid");
+            f.deleteFile();
+            expect (MidiExporter::save (p, f, 1));
+
+            juce::MidiFile mf;
+            std::unique_ptr<juce::FileInputStream> is (f.createInputStream());
+            expect (is != nullptr);
+            expect (mf.readFrom (*is));
+
+            double bpmFromFile = 0.0;
+            for (int t = 0; t < mf.getNumTracks(); ++t)
+            {
+                const auto* trk = mf.getTrack (t);
+                for (int e = 0; e < trk->getNumEvents(); ++e)
+                {
+                    const auto& m = trk->getEventPointer (e)->message;
+                    if (m.isTempoMetaEvent())
+                        bpmFromFile = 60.0 / m.getTempoSecondsPerQuarterNote();
+                }
+            }
+            expectWithinAbsoluteError (bpmFromFile, 90.0, 0.1);
+            f.deleteFile();
+        }
     }
 };
 
