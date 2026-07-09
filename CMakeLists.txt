@@ -111,6 +111,7 @@ if(ROLLFORGE_BUILD_APP)
         src/app/FirstRunState.cpp
         src/ui/MainComponent.cpp
         src/ui/FirstRun.cpp
+        src/ui/CoachMarks.cpp
         src/ui/PadComponent.cpp
         src/ui/PadGrid.cpp
         src/ui/TransportBar.cpp

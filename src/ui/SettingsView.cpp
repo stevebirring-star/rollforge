@@ -39,36 +39,9 @@ SettingsView::SettingsView (juce::AudioDeviceManager& dm) : deviceManager (dm)
     };
     addAndMakeVisible (scaleBox);
 
-    foldersLabel.setColour (juce::Label::textColourId, theme().textDim);
-    foldersLabel.setFont (juce::FontOptions (12.0f));
-    updateFoldersLabel();
-    addAndMakeVisible (foldersLabel);
 
-    addFolderButton.onClick = [this] { addSampleFolder(); };
-    addAndMakeVisible (addFolderButton);
 
     setSize (520, 480);
-}
-
-void SettingsView::addSampleFolder()
-{
-    chooser = std::make_unique<juce::FileChooser> ("Choose a sample folder");
-    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-        [this] (const juce::FileChooser& fc)
-        {
-            const auto dir = fc.getResult();
-            if (! dir.isDirectory())
-                return;
-            settings.sampleFolders.addIfNotAlreadyThere (dir.getFullPathName());
-            settings.save();
-            updateFoldersLabel();
-        });
-}
-
-void SettingsView::updateFoldersLabel()
-{
-    foldersLabel.setText (juce::String (settings.sampleFolders.size()) + " sample folder(s) saved",
-                          juce::dontSendNotification);
 }
 
 void SettingsView::paint (juce::Graphics& g)
@@ -86,16 +59,11 @@ void SettingsView::resized()
 {
     auto r = getLocalBounds().reduced (8);
 
-    auto bottom = r.removeFromBottom (64);
-    auto scaleRow = bottom.removeFromTop (28);
+    auto scaleRow = r.removeFromBottom (28);
     scaleLabel.setBounds (scaleRow.removeFromLeft (70));
     scaleBox.setBounds (scaleRow.removeFromLeft (90));
-    bottom.removeFromTop (6);
-    addFolderButton.setBounds (bottom.removeFromLeft (170));
-    bottom.removeFromLeft (10);
-    foldersLabel.setBounds (bottom);
 
-    r.removeFromBottom (8);
+    r.removeFromBottom (12);
     if (deviceSelector != nullptr)
         deviceSelector->setBounds (r);
 }

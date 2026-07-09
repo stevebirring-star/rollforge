@@ -1,8 +1,11 @@
 #pragma once
 
-// RollForge — SettingsView: the app preferences dialog. Hosts the audio device
-// selector (device + buffer size) and adds a UI-scale chooser + the library's
-// sample folders, persisted via AppSettings. UI only.
+// RollForge — SettingsView: the app preferences dialog. Hosts the audio device selector
+// (device + buffer size) and a UI-scale chooser, persisted via AppSettings. UI only.
+//
+// It used to have an "Add folder" button too. Nothing ever read the folders it saved, so it
+// showed a count that meant nothing and scanned nothing. Sample folders belong to the library,
+// which is where you can also see them, watch them and stop watching them.
 
 #include "app/AppSettings.h"
 
@@ -27,19 +30,14 @@ public:
     std::function<void (float)> onScaleChanged;
 
 private:
-    void addSampleFolder();
-    void updateFoldersLabel();
 
     juce::AudioDeviceManager& deviceManager;
     std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector;
 
     juce::Label      scaleLabel;
     juce::ComboBox   scaleBox;
-    juce::Label      foldersLabel;
-    juce::TextButton addFolderButton { "Add sample folder..." };
 
     AppSettings settings;
-    std::unique_ptr<juce::FileChooser> chooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsView)
 };

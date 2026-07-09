@@ -1,5 +1,7 @@
 #include "ui/MainComponent.h"
 
+#include "ui/CoachMarks.h"
+
 #include "library/SampleAnalyser.h"
 #include "ui/Text.h"
 
@@ -84,6 +86,18 @@ MainComponent::MainComponent()
                       .getChildFile ("library.db");
     dbFile.getParentDirectory().createDirectory();
     library.open (dbFile);
+
+    // Settings once had an "Add folder" button whose folders nothing ever scanned. Move any
+    // it saved into the watch list, once, so the app finally does what that button promised.
+    if (auto settings = AppSettings::load(); ! settings.sampleFolders.isEmpty())
+    {
+        for (const auto& folder : settings.sampleFolders)
+            library.addWatchedFolder (folder);
+
+        settings.sampleFolders.clear();
+        settings.save();
+    }
+
     rebuildSimilarSearch();
 
     // Auto-ingest. Anything in a watched folder that the library has not seen is analysed on a
@@ -558,18 +572,33 @@ MainComponent::MainComponent()
     // One-time welcome overlay: shown only on the very first launch (gated by a
     // marker file in app-data). It dims the app and lists a few tips; dismissing it
     // writes the marker so it never returns.
-    if (FirstRunState::shouldShow())
+    // The cover page is gated on the TOUR marker, not the welcome one: the tour shipped after
+    // some people had already opened the app, and they are exactly the ones with questions.
+    if (FirstRunState::shouldShowTour())
     {
         firstRun = std::make_unique<FirstRun>();
-        firstRun->onDismissed = [this]
+
+        juce::Component::SafePointer<MainComponent> safe (this);
+        auto dismiss = [safe] (bool thenTour)
         {
             FirstRunState::markShown();
-            // Delete the overlay *after* this button-click callback unwinds (deleting
-            // it synchronously would destroy the button mid-click). SafePointer guards
-            // against the window closing before the async fires.
-            juce::Component::SafePointer<MainComponent> safe (this);
-            juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->firstRun.reset(); });
+            FirstRunState::markTourShown();
+
+            // Deleting the overlay from inside its own button callback is a use-after-free, so
+            // the teardown (and the tour that follows it) waits for the next message.
+            juce::MessageManager::callAsync ([safe, thenTour]
+            {
+                if (safe == nullptr)
+                    return;
+                safe->firstRun.reset();
+                if (thenTour)
+                    safe->startTour();
+            });
         };
+
+        firstRun->onTakeTour = [dismiss] { dismiss (true); };
+        firstRun->onSkip     = [dismiss] { dismiss (false); };
+
         addAndMakeVisible (*firstRun);         // added last -> drawn on top of everything
         firstRun->setBounds (getLocalBounds());
     }
@@ -1838,6 +1867,82 @@ void MainComponent::openExport()
     exportWindow = options.launchAsync();
 }
 
+std::vector<CoachMarks::Step> MainComponent::tourSteps()
+{
+    // Six steps, and the order is load-bearing. Make a Beat does NOT start the transport, so
+    // any feature shown before Play would be demonstrated in silence -- which is how a tour
+    // becomes a lecture. Sound first, then the three things this app does that a user could
+    // not have guessed, then where to find the rest.
+    //
+    // Every target is a MainComponent member: CoachMarks cuts its hole around a Component it
+    // is handed, so a step cannot point at a button living inside FillBar or PadInspector.
+    // ASCII only -- the bodies are drawn without going through utf8().
+    return {
+        { &fillBar, "Make a beat",
+          "Press Make a Beat. One tap writes a full groove in the current style, and Reroll "
+          "gives you another take." },
+
+        { &transportBar, "Play it",
+          "Press Play to loop the beat you just made. Nothing plays until you do, so this is "
+          "where the sound starts." },
+
+        { &brushButton, "Paint a roll",
+          "Turn Roll Brush on, then drag across a lane in the grid to paint an accelerating "
+          "roll. Most machines make you program that hit by hit." },
+
+        { &evolveButton, "Keep it alive",
+          "Turn on EVOLVE and every bar becomes a fresh variation of your pattern, so the loop "
+          "never repeats itself. Drift sets how far each bar strays." },
+
+        { &patternSlots, "Eight patterns",
+          "A to H hold eight patterns over one kit. While Play is running a switch lands on the "
+          "next bar line, so a verse becomes a chorus in time rather than mid-beat." },
+
+        { &helpButton, "Find this later",
+          "That is the tour. Every control has a tooltip, and Help has the full guide plus a "
+          "button to run this again whenever you want it." },
+    };
+}
+
+void MainComponent::startTour()
+{
+    if (tour != nullptr)
+        return;   // already running
+
+    // Marked here, not at the end. A tour abandoned by quitting the app must not reappear on
+    // the next launch: a tour that comes back uninvited reads as broken. Help re-runs it.
+    FirstRunState::markTourShown();
+
+    tour = std::make_unique<CoachMarks>();
+
+    juce::Component::SafePointer<MainComponent> safe (this);
+    tour->onFinished = [safe]
+    {
+        // Deleting a component from inside its own button callback is a use-after-free.
+        juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->tour.reset(); });
+    };
+
+    // Parent first, THEN the steps. setSteps() grabs the keyboard, and a component with no
+    // parent cannot take focus — so Return would still have gone to whatever button opened the
+    // tour, and re-clicked it.
+    addAndMakeVisible (*tour);            // added last -> on top of everything
+    tour->setBounds (getLocalBounds());
+    tour->toFront (true);
+    tour->setSteps (tourSteps());
+
+    // Deferred, and this is not belt-and-braces. Whatever opened the tour — the Help dialog's
+    // button, or the welcome overlay's — is torn down around now, and JUCE hands focus back to
+    // the component that had it before the dialog appeared. That happens AFTER this function
+    // returns, so a focus grab made here is silently undone, and the first Return the user
+    // presses re-clicks the button they opened the tour with.
+    juce::Component::SafePointer<MainComponent> focusSafe (this);
+    juce::MessageManager::callAsync ([focusSafe]
+    {
+        if (focusSafe != nullptr && focusSafe->tour != nullptr)
+            focusSafe->tour->grabKeyboardFocus();
+    });
+}
+
 void MainComponent::openHelp()
 {
     if (helpWindow != nullptr)
@@ -1846,8 +1951,23 @@ void MainComponent::openHelp()
         return;
     }
 
+    auto* about = new AboutView();
+
+    // Closing the dialog first: a tour that highlights a button behind a modal window is a
+    // tour pointing at something the user cannot reach.
+    juce::Component::SafePointer<MainComponent> safe (this);
+    about->onStartTour = [safe]
+    {
+        if (auto* self = safe.getComponent())
+        {
+            if (self->helpWindow != nullptr)
+                self->helpWindow.deleteAndZero();
+            self->startTour();
+        }
+    };
+
     juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned (new AboutView());
+    options.content.setOwned (about);
     options.dialogTitle                  = "Help & About";
     options.dialogBackgroundColour       = colours::background();
     options.componentToCentreAround      = this;
@@ -2102,6 +2222,9 @@ void MainComponent::resized()
 
     if (firstRun != nullptr)
         firstRun->setBounds (getLocalBounds());   // overlay always covers the whole window
+
+    if (tour != nullptr)
+        tour->setBounds (getLocalBounds());
 }
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)

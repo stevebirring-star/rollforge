@@ -37,6 +37,37 @@ public:
 
             f.deleteFile();
         }
+
+        beginTest ("the tour has its own marker, so the welcome does not silence it");
+        {
+            // Someone who opened the app before the tour existed has welcome.done already.
+            // Sharing that marker would deny the tour to exactly the people who need it.
+            expect (FirstRunState::markerFile() != FirstRunState::tourMarkerFile(),
+                    "the welcome and the tour share a marker file");
+            expectEquals (FirstRunState::tourMarkerFile().getFileName(), juce::String ("tour.done"));
+            expectEquals (FirstRunState::markerFile().getFileName(), juce::String ("welcome.done"));
+
+            const auto dir = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                 .getChildFile ("RollForgeTourGate")
+                                 .getChildFile (juce::Uuid().toString());
+            dir.createDirectory();
+            const auto welcome = dir.getChildFile ("welcome.done");
+            const auto tour    = dir.getChildFile ("tour.done");
+
+            FirstRunState::markShown (welcome);
+            expect (! FirstRunState::shouldShow (welcome), "the welcome is done");
+            expect (FirstRunState::shouldShow (tour), "the tour must still be offered");
+
+            FirstRunState::markShown (tour);
+            expect (! FirstRunState::shouldShow (tour));
+
+            // Help re-arms it: clearing the marker offers it again, and only it.
+            tour.deleteFile();
+            expect (FirstRunState::shouldShow (tour), "the tour cannot be re-run from Help");
+            expect (! FirstRunState::shouldShow (welcome), "re-arming the tour reopened the welcome");
+
+            dir.deleteRecursively();
+        }
     }
 };
 

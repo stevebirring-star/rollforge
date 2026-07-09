@@ -23,6 +23,9 @@ public:
         {
             AppSettings s;
             s.uiScale = 1.25f;
+            // sampleFolders is legacy: Settings no longer writes it, but old settings.json
+            // files still carry it and MainComponent migrates them into the watch list on
+            // launch. The round-trip must keep working until nobody has an old file left.
             s.sampleFolders.add ("/a/kicks");
             s.sampleFolders.add ("/b/snares");
 

@@ -34,13 +34,15 @@ namespace
 }
 
 //==============================================================================
-MasterMeter::MasterMeter (const OutputMeter& source) : meter (source)
+MasterMeter::MasterMeter (const OutputMeter& source, MasterBus& busToUse)
+    : meter (source), bus (busToUse)
 {
     setTooltip (utf8 ("Master output level, left and right channels, measured after the limiter — "
                 "what actually reaches your speakers.\n"
                 "The needles are true VU: 300 ms averaging, so they read loudness and ignore "
-                "single transients. The slim bar on each face is sample peak, and CLIP lights "
-                "if the output goes over."));
+                "single transients. The slim bar on each face is sample peak. CLIP lights when "
+                "the mix went over full scale and the limiter had to catch it — the sound is "
+                "safe, but you are pushing the master."));
     startTimerHz (30);
 }
 
@@ -61,8 +63,9 @@ void MasterMeter::timerCallback()
     }
 
     // The clip lamp latches, or a single over-sample would flash for one frame and be
-    // gone before anyone saw it — which is precisely when you need to know.
-    const bool over = meter.getPeakDbfs (0) >= clipDbfs || meter.getPeakDbfs (1) >= clipDbfs;
+    // gone before anyone saw it — which is precisely when you need to know. Reading drains the
+    // limiter's register, so this is the one and only consumer of it.
+    const bool over = bus.getLimiter().readAndResetInputPeak() >= clipInputPeak;
     if (over)
     {
         clipHold = clipHoldTicks;

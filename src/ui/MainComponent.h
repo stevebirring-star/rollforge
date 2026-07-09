@@ -11,6 +11,7 @@
 #include "app/FirstRunState.h"
 #include "ui/SettingsView.h"
 #include "ui/FirstRun.h"
+#include "ui/CoachMarks.h"
 #include "library/SampleLoader.h"
 #include "library/StarterKit.h"
 #include "library/KitInstaller.h"
@@ -71,6 +72,8 @@ private:
     void openLibrary();
     void openExport();
     void openHelp();
+    void startTour();   // the coach marks, from first run or from Help
+    std::vector<CoachMarks::Step> tourSteps();
     void doExportMidi (int loops);
     void doExportWav (int loops);
     void doExportStems (int loops);
@@ -219,7 +222,7 @@ private:
     std::vector<RollBrushOverlay::RollRect> paintedRolls;
     int              autosaveCounter = 0;   // ticks since the last recovery save
     BrandMark        brandMark;
-    MasterMeter      masterMeter { engine.getOutputMeter() };
+    MasterMeter      masterMeter { engine.getOutputMeter(), engine.getMasterBus() };
     juce::Label      statusLabel;
 
     // Painted panel geometry, computed in resized() and drawn in paint(). Keeping the
@@ -259,7 +262,8 @@ private:
 
     juce::TooltipWindow tooltipWindow { this };   // enables tooltips app-wide (lane locks, sliders)
 
-    std::unique_ptr<FirstRun> firstRun;   // one-time welcome overlay (first launch only)
+    std::unique_ptr<FirstRun>   firstRun;   // one-time welcome overlay (first launch only)
+    std::unique_ptr<CoachMarks> tour;       // the guided tour; also re-runnable from Help
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

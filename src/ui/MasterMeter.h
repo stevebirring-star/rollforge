@@ -17,6 +17,8 @@
 #include "engine/OutputMeter.h"
 #include "ui/Theme.h"
 
+#include "engine/MasterBus.h"
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace rollforge
@@ -27,7 +29,9 @@ class MasterMeter final : public juce::Component,
                           private juce::Timer
 {
 public:
-    explicit MasterMeter (const OutputMeter& source);
+    /** `bus` is not const: the clip lamp drains the limiter's input-peak register when it
+        reads it, so a peak survives exactly until the lamp has seen it. */
+    MasterMeter (const OutputMeter& source, MasterBus& bus);
 
     void paint (juce::Graphics&) override;
 
@@ -38,13 +42,17 @@ private:
     void drawFace (juce::Graphics&, juce::Rectangle<float> face, int channel, const juce::String& label);
 
     static constexpr float sweepDegrees  = 90.0f;   // -45 deg at rest .. +45 deg at +3 VU
-    // The brickwall limiter holds the mix at 0.98, which is -0.175 dBFS. A clip lamp that
-    // trips at -0.3 would therefore be lit whenever the limiter worked at all — a lamp
-    // that is always on tells you nothing. Trip above the ceiling instead.
-    static constexpr float clipDbfs      = -0.05f;
+
+    // The lamp watches the limiter's INPUT, not the output. The limiter hard-clamps every
+    // sample to 0.98, so nothing above -0.18 dBFS can ever leave it: a lamp fed from the
+    // output and tripping anywhere above the ceiling is a lamp that can never light, which is
+    // exactly what this one used to be. What a user actually wants to know is whether the
+    // master went over full scale and the limiter caught it.
+    static constexpr float clipInputPeak = 1.0f;    // 0 dBFS at the limiter's input
     static constexpr int   clipHoldTicks = 30;      // ~1 s at 30 Hz
 
     const OutputMeter& meter;
+    MasterBus&         bus;
 
     // Smoothed only for DRAWING — the needle's real ballistics are in the engine. This is
     // just the 30 Hz timer catching up with a value that already moves at the right speed.

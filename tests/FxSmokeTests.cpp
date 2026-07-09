@@ -73,6 +73,72 @@ public:
             expect (maxMag (b) <= lim.getCeiling() + 1.0e-4f);
         }
 
+        beginTest ("a lamp watching the limiter's OUTPUT could never light");
+        {
+            // The reason the clip lamp was rewired. The limiter hard-clamps every sample to
+            // its ceiling, so the loudest thing that can ever leave it is 0.98 -- about
+            // -0.18 dBFS. Any clip detector fed from the output is therefore dead on arrival,
+            // whatever its threshold, as long as that threshold is above the ceiling.
+            MasterLimiter lim;
+            lim.prepare (sr);
+            expect (lim.getCeiling() < 1.0f, "the ceiling is what makes the output safe");
+
+            juce::AudioBuffer<float> b (2, 512);
+            fill (b, 40.0f);          // absurd, on purpose
+            lim.process (b);
+            expect (maxMag (b) <= lim.getCeiling() + 1.0e-4f,
+                    "nothing above the ceiling ever leaves the limiter");
+        }
+
+        beginTest ("the limiter reports the peak it was HANDED, which is what a clip lamp needs");
+        {
+            MasterLimiter lim;
+            lim.prepare (sr);
+
+            expectWithinAbsoluteError (lim.readAndResetInputPeak(), 0.0f, 1.0e-6f,
+                                       "a fresh limiter has seen nothing");
+
+            juce::AudioBuffer<float> b (2, 512);
+            fill (b, 1.7f);
+            lim.process (b);
+
+            expectWithinAbsoluteError (lim.readAndResetInputPeak(), 1.7f, 1.0e-4f,
+                                       "the input peak must survive the clamp");
+
+            // Reading drains it: a clip shown once must not latch forever.
+            expectWithinAbsoluteError (lim.readAndResetInputPeak(), 0.0f, 1.0e-6f,
+                                       "the peak was not drained by the read");
+
+            // ...and a quiet block never claims to have gone over.
+            juce::AudioBuffer<float> quiet (1, 256);
+            for (int i = 0; i < 256; ++i)
+                quiet.setSample (0, i, 0.4f * std::sin ((float) i * 0.2f));
+            lim.process (quiet);
+            expect (lim.readAndResetInputPeak() < 1.0f, "a quiet block reported a clip");
+        }
+
+        beginTest ("the loudest block wins, not the last one");
+        {
+            // The meter reads at 30 Hz; many audio blocks pass between reads, and a transient
+            // that peaked in the first of them must still be there when the lamp looks.
+            MasterLimiter lim;
+            lim.prepare (sr);
+
+            juce::AudioBuffer<float> loud (1, 128);
+            fill (loud, 2.5f);
+            lim.process (loud);
+
+            for (int i = 0; i < 5; ++i)
+            {
+                juce::AudioBuffer<float> quiet (1, 128);
+                fill (quiet, 0.05f);
+                lim.process (quiet);
+            }
+
+            expectWithinAbsoluteError (lim.readAndResetInputPeak(), 2.5f, 1.0e-4f,
+                                       "quiet blocks erased the transient the lamp exists to show");
+        }
+
         beginTest ("limiter passes a quiet signal ~unchanged");
         {
             MasterLimiter lim;
