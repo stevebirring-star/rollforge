@@ -7,6 +7,7 @@
 
 #include "engine/Sequencer.h"
 #include "model/FillEngine.h"
+#include "model/FeelPresets.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -26,17 +27,36 @@ public:
     /** Fired when FILL or Reroll is pressed: (style, intensity 1..5, seed). */
     std::function<void (FillEngine::Style, int, std::uint64_t)> onFill;
 
+    /** Fired when Vary is pressed: (intensity 1..5, seed). Mutates the CURRENT
+        pattern instead of regenerating it. */
+    std::function<void (int, std::uint64_t)> onVary;
+
+    /** Fired when New Sounds is pressed: swap the kit's samples, keep the groove.
+        The mirror image of Reroll, which swaps the groove and keeps the samples. */
+    std::function<void (std::uint64_t)> onRerollSounds;
+
+    /** Greys out New Sounds when there is no library to reroll from. */
+    void setLibraryAvailable (bool available);
+
+    /** Fired when a Feel preset is picked: the new swing 0..1 (the owner reflects it
+        onto the transport's swing control). Humanise is applied directly. */
+    std::function<void (float)> onFeelSwing;
+
 private:
     void fire();
+    void fireVary();
+    void applyFeel (FeelPresets::Feel feel);
 
     Sequencer& sequencer;
 
     juce::ComboBox   styleBox;
     juce::Slider     intensitySlider;
-    juce::TextButton fillButton   { "FILL" };
+    juce::TextButton fillButton   { "Make a Beat" };   // the flagship one-tap generate
     juce::TextButton rerollButton { "Reroll" };
-    juce::Label      humaniseLabel;
-    juce::Slider     humaniseSlider;
+    juce::TextButton varyButton   { "Vary" };          // mutate the current beat, don't regenerate
+    juce::TextButton soundsButton { "New Sounds" };    // reroll the kit, keep the groove
+    juce::Label      feelLabel;
+    juce::ComboBox   feelBox;                          // named Humaniser+swing presets
 
     std::uint64_t seed = 1;
 

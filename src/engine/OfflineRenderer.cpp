@@ -12,15 +12,26 @@ namespace OfflineRenderer
 
 int render (DrumEngine& engine, const Pattern& pattern, juce::AudioBuffer<float>& out, const Options& opts)
 {
+    // The same reason as the live callback: the reverbs, the limiter and the compressor
+    // all decay into denormals, and an export is thousands of blocks of exactly that.
+    const juce::ScopedNoDenormals noDenormals;
+
     const double sr        = opts.sampleRate > 0.0 ? opts.sampleRate : 44100.0;
     const int    blockSize = opts.blockSize > 0 ? opts.blockSize : 512;
     const double bpm       = pattern.bpm > 0.0 ? pattern.bpm : 120.0;
 
     engine.prepare (sr, blockSize);
+    engine.setCapturePad (opts.capturePad);   // after prepare(), which resets it to "full mix"
 
     Sequencer seq;                 // heap-allocates its large pattern state internally
     seq.prepare (sr);
     seq.setTempo (bpm);
+
+    // Swing lives on the Sequencer, not inside the Pattern snapshot it reads, so a fresh
+    // offline Sequencer starts straight. The pattern carries the transport's swing (the
+    // UI writes it on every slider move) — hand it over, or every export comes out dead
+    // straight while the app shuffles.
+    seq.setSwing (pattern.swing);
     seq.setPattern (pattern);
     seq.setPlaying (true);
 
@@ -32,6 +43,10 @@ int render (DrumEngine& engine, const Pattern& pattern, juce::AudioBuffer<float>
         bus.setDrive (opts.drive);
         bus.setCrush (opts.crush);
         bus.setSpace (opts.space);
+        bus.setLowEqDb  (opts.lowEq);
+        bus.setMidEqDb  (opts.midEq);
+        bus.setHighEqDb (opts.highEq);
+        bus.setComp     (opts.comp);
     }
 
     // 1/16 step = a quarter-note / 4.

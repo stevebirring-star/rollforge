@@ -77,7 +77,26 @@ public:
     bool         isPlaying()       const noexcept { return playing.load (std::memory_order_acquire); }
     float        getSwing()        const noexcept { return swing.load (std::memory_order_acquire); }
     float        getHumanise()     const noexcept { return humanise.load (std::memory_order_acquire); }
+    double       getTempo()        const noexcept { return pendingTempo.load (std::memory_order_acquire); }
     bool         isSwitchQueued()  const noexcept { return switchQueued.load (std::memory_order_acquire); }
+
+    /** The transport position at the START of the block currently being rendered, in samples
+        since Play was pressed (the clock is reset then). Zero while stopped is not meaningful;
+        check isPlaying(). Capture timestamps its hits against this, so a tap and a beatboxed
+        hit are measured on the same clock the sequencer plays to -- a wall clock would drift
+        against the audio device. */
+    std::int64_t getTransportSamples() const noexcept { return transportSamples.load (std::memory_order_acquire); }
+
+    /** The bar the queued switch quantises to, in global 1/16 steps. Song mode counts bars
+        off getCurrentStep() and must use the same number the switch does, not its own 16. */
+    static constexpr int getBarSteps() noexcept { return barLengthSteps; }
+
+    /** Counts the queued patterns that have actually BECOME the active one. A caller that
+        wants to know "has my queued switch landed yet?" must compare this against the value
+        it read when it queued, not watch isSwitchQueued() fall: that flag is still false in
+        the gap between queuePattern() and the next audio block, and it can be raised and
+        lowered inside a single block when the switch is queued right on a bar line. */
+    std::int64_t getSwitchCount() const noexcept { return switchCount.load (std::memory_order_acquire); }
     std::int64_t getCurrentStep()  const noexcept { return currentStep.load (std::memory_order_acquire); }
     std::int64_t getTriggerCount() const noexcept { return triggerCount.load (std::memory_order_acquire); }
 
@@ -88,9 +107,11 @@ private:
         int          pad;
         float        velocity;
         float        pitchOffset; // extra semitones (rolls); 0 for plain steps
+        int          sampleLock;  // -1 = let the pad pick its layer; else pin that one
     };
 
     // A bar for switch quantisation = 16 steps (4/4 at 1/16). Configurable later.
+    // Public read access is via getBarSteps().
     static constexpr int barLengthSteps = 16;
 
     // Sized well above a realistic worst case (steps-in-block x lanes x ratchets
@@ -99,7 +120,8 @@ private:
 
     void applyIncomingPattern (bool nowPlaying) noexcept;
     void generateStepEvents (std::int64_t stepIndex, std::int64_t stepSample) noexcept;
-    void addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset = 0.0f) noexcept;
+    void addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset = 0.0f,
+                   int sampleLock = -1) noexcept;
     void renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& buffer,
                            std::int64_t blockStart, int numSamples) noexcept;
 
@@ -128,6 +150,8 @@ private:
     std::atomic<bool>   resetRequested { false };
     std::atomic<bool>   switchQueued   { false };
 
+    std::atomic<std::int64_t> switchCount      { 0 };
+    std::atomic<std::int64_t> transportSamples { 0 };
     std::atomic<std::int64_t> currentStep  { -1 };
     std::atomic<std::int64_t> triggerCount { 0 };
 };

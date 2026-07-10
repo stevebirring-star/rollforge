@@ -1,6 +1,7 @@
 #include "engine/Voice.h"
 
 #include <cmath>
+#include <utility>
 
 namespace rollforge
 {
@@ -36,25 +37,39 @@ void Voice::start (SampleBuffer::Ptr newSample, const Parameters& params, float 
     const double pitchRatio = std::pow (2.0, (double) params.pitchSemitones / 12.0);
     const double speed      = baseInc * pitchRatio;                          // magnitude of the step
 
+    // Trim: play only the [start, end] fraction of the sample.
+    const double span = (double) (length - 1);
+    float s0 = juce::jlimit (0.0f, 1.0f, params.startFraction);
+    float s1 = juce::jlimit (0.0f, 1.0f, params.endFraction);
+    if (s1 < s0) std::swap (s0, s1);
+    double startSrc = (double) s0 * span;
+    double endSrc   = (double) s1 * span;
+    if (endSrc - startSrc < 1.0)                       // keep at least one source sample
+        endSrc = juce::jmin (span, startSrc + 1.0);
+
     if (params.reverse)
     {
         increment = -speed;
-        sourcePos = (double) (length - 1);
+        sourcePos = endSrc;
     }
     else
     {
         increment = speed;
-        sourcePos = 0.0;
+        sourcePos = startSrc;
     }
 
-    const double span = (double) (length - 1);
-    framesTotal  = speed > 0.0 ? (int) std::floor (span / speed) + 1 : 1;
+    const double trimSpan = endSrc - startSrc;
+    framesTotal  = speed > 0.0 ? (int) std::floor (trimSpan / speed) + 1 : 1;
     framesPlayed = 0;
 
     attackFrames  = juce::jlimit (0, framesTotal, (int) (params.attackMs  * 0.001 * deviceSampleRate));
     releaseFrames = juce::jlimit (0, framesTotal, (int) (params.releaseMs * 0.001 * deviceSampleRate));
 
     levelGain = params.gain * juce::jlimit (0.0f, 1.0f, velocity);
+    sendGain  = juce::jlimit (0.0f, 1.0f, params.reverbSend);
+
+    // A Voice is a one-shot, so the tilt starts from clean state on every note.
+    toneFilter.setTone (deviceSampleRate, params.tone);
 
     // Equal-power pan: pan[-1,+1] -> angle[0, pi/2].
     const double angle = ((double) juce::jlimit (-1.0f, 1.0f, params.pan) + 1.0)
@@ -109,12 +124,43 @@ float Voice::readMono (double pos) const noexcept
     return (1.0f - frac) * monoAt (i0) + frac * monoAt (i0 + 1);
 }
 
-void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
+void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                           float* sendOut, bool writeOutput) noexcept
 {
-    if (! active || sample == nullptr)
+    if (! active || sample == nullptr || numSamples <= 0)
         return;
 
-    const int outChannels = buffer.getNumChannels();
+    if (! writeOutput)
+    {
+        // This voice belongs to a pad the caller is not capturing, so it must ADVANCE
+        // without being heard. Only three things about a voice are observable from the
+        // outside: whether it is still active, how many frames it has played, and
+        // getLevel() -- which VoicePool's "steal the quietest" policy reads, and which
+        // depends on the envelope alone. The sample read and the tone filter feed nothing
+        // but `mono`, and `mono` feeds nothing but the output we are throwing away; the
+        // filter is reset by setTone() on every start(), so freezing its state here can
+        // never colour a later note. That makes the skip closed-form rather than a
+        // sample loop, which is what keeps a 16-pad stem export from costing 16 mixes.
+        const int adv = juce::jmin (numSamples, juce::jmax (0, framesTotal - framesPlayed));
+
+        if (adv > 0)
+        {
+            framesPlayed += adv;
+            sourcePos    += (double) adv * increment;   // never read again; kept coherent
+            lastEnv       = envelopeAt (framesPlayed - 1);
+        }
+
+        // The loop below only calls stop() when it runs out of FRAMES before it runs out
+        // of SAMPLES. Match that exactly: a voice that lands precisely on its last frame
+        // stays active until the next block, and stays visible to voice-stealing.
+        if (adv < numSamples)
+            stop();
+
+        return;
+    }
+
+    const int  outChannels = buffer.getNumChannels();
+    const bool feedsSend   = sendOut != nullptr && sendGain > 0.0f;
 
     for (int n = 0; n < numSamples; ++n)
     {
@@ -125,9 +171,19 @@ void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, i
         }
 
         lastEnv = envelopeAt (framesPlayed);
-        const float mono = readMono (sourcePos) * lastEnv * levelGain;
+
+        float src = readMono (sourcePos);
+        if (toneFilter.isActive())
+            src = toneFilter.processSample (src);   // tone shapes the dry AND the send
+        const float mono = src * lastEnv * levelGain;
 
         const int dest = startSample + n;
+
+        // Post-envelope, pre-pan: the send is mono, and the reverb hears the voice at
+        // the level you hear it at.
+        if (feedsSend)
+            sendOut[dest] += mono * sendGain;
+
         if (outChannels >= 2)
         {
             buffer.addSample (0, dest, mono * leftGain);

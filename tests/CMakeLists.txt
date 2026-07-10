@@ -21,18 +21,34 @@ target_sources(RollForgeTests PRIVATE
     SampleLoaderTests.cpp
     StarterKitTests.cpp
     KitInstallerTests.cpp
+    LayerTests.cpp
     PadMappingTests.cpp
     PatternModelTests.cpp
     ClockTimingTests.cpp
     SequencerTests.cpp
+    TripletTests.cpp
     PatternSwitchTests.cpp
     RollCompilerTests.cpp
     RollSequencingTests.cpp
     RollPresetsTests.cpp
     FillEngineTests.cpp
+    VariatorTests.cpp
+    FeelPresetsTests.cpp
     HumaniserTests.cpp
     FxSmokeTests.cpp
+    OutputMeterTests.cpp
     CategoriserTests.cpp
+    SlicerTests.cpp
+    SimilarityTests.cpp
+    BeatboxDetectorTests.cpp
+    CaptureTests.cpp
+    InputRecorderTests.cpp
+    MidiCaptureQueueTests.cpp
+    FolderWatcherTests.cpp
+    ResampleTests.cpp
+    SongTests.cpp
+    TextTests.cpp
+    SimilarSearchTests.cpp
     LibraryDbTests.cpp
     ScannerTests.cpp
     KitBuilderTests.cpp
@@ -40,6 +56,7 @@ target_sources(RollForgeTests PRIVATE
     MidiExportTests.cpp
     OfflineRenderTests.cpp
     StemNullTests.cpp
+    WysiwygExportTests.cpp
     AutosaveTests.cpp
     AppSettingsTests.cpp
     FirstRunStateTests.cpp
@@ -50,11 +67,14 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine/MasterBus.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/OfflineRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/WavExporter.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/Compressor.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Crush.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Drive.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterEq.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/MasterLimiter.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Punch.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/fx/Space.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/fx/ToneFilter.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/PadMapping.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Sequencer.cpp
     ${CMAKE_SOURCE_DIR}/src/engine/Voice.cpp
@@ -63,6 +83,17 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/library/StarterKit.cpp
     ${CMAKE_SOURCE_DIR}/src/library/KitInstaller.cpp
     ${CMAKE_SOURCE_DIR}/src/library/FeatureExtractor.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/Slicer.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/InputRecorder.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/MidiCaptureQueue.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine/Resample.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/BeatboxDetector.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/Capture.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/Song.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/SampleAnalyser.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/FolderWatcher.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/Similarity.cpp
+    ${CMAKE_SOURCE_DIR}/src/library/SimilarSearch.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Categoriser.cpp
     ${CMAKE_SOURCE_DIR}/src/library/LibraryDb.cpp
     ${CMAKE_SOURCE_DIR}/src/library/Scanner.cpp
@@ -71,6 +102,8 @@ target_sources(RollForgeTests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/model/RollCompiler.cpp
     ${CMAKE_SOURCE_DIR}/src/model/RollPresets.cpp
     ${CMAKE_SOURCE_DIR}/src/model/FillEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/Variator.cpp
+    ${CMAKE_SOURCE_DIR}/src/model/FeelPresets.cpp
     ${CMAKE_SOURCE_DIR}/src/model/Humaniser.cpp
     ${CMAKE_SOURCE_DIR}/src/model/ProjectIO.cpp
     ${CMAKE_SOURCE_DIR}/src/model/MidiExporter.cpp

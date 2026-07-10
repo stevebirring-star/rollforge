@@ -50,6 +50,7 @@ namespace
             auto* lo = new DynamicObject();
             lo->setProperty ("pad", lane.targetPad);
             lo->setProperty ("len", lane.length);
+            lo->setProperty ("trip", lane.triplet);
 
             juce::Array<var> steps;
             int len = lane.length;
@@ -106,6 +107,7 @@ namespace
                 Lane& lane = p.lane (li);
                 lane.targetPad = (int) lv.getProperty ("pad", 0);
                 lane.length    = (int) lv.getProperty ("len", 16);
+                lane.triplet   = (bool) lv.getProperty ("trip", false);   // absent -> straight
 
                 if (auto* steps = lv.getProperty ("steps", var()).getArray())
                     for (int s = 0; s < steps->size() && s < maxStepsPerLane; ++s)
@@ -152,6 +154,10 @@ juce::String toJson (const Project& proj)
     root->setProperty ("space",   proj.space);
     root->setProperty ("crush",   proj.crush);
     root->setProperty ("drive",   proj.drive);
+    root->setProperty ("lowEq",   proj.lowEq);
+    root->setProperty ("midEq",   proj.midEq);
+    root->setProperty ("highEq",  proj.highEq);
+    root->setProperty ("comp",    proj.comp);
 
     juce::Array<var> pads;
     for (const auto& pad : proj.pads)
@@ -163,10 +169,44 @@ juce::String toJson (const Project& proj)
         po->setProperty ("pan",     pad.pan);
         po->setProperty ("choke",   pad.chokeGroup);
         po->setProperty ("reverse", pad.reverse);
+        po->setProperty ("muted",   pad.muted);
+        po->setProperty ("soloed",  pad.soloed);
+        po->setProperty ("trimStart", pad.startFraction);
+        po->setProperty ("trimEnd",   pad.endFraction);
+        po->setProperty ("tone",      pad.tone);
+        po->setProperty ("send",      pad.reverbSend);
+        if (! pad.extraLayerPaths.isEmpty())
+        {
+            juce::Array<var> layers;
+            for (const auto& path : pad.extraLayerPaths)
+                layers.add (var (path));
+            po->setProperty ("layers",    layers);
+            po->setProperty ("layerMode", pad.layerMode);
+        }
         pads.add (var (po));
     }
     root->setProperty ("pads", pads);
     root->setProperty ("pattern", patternToVar (proj.pattern));
+
+    juce::Array<var> slots;
+    for (int i = 0; i < numPatternSlots && i < (int) proj.slots.size(); ++i)
+        slots.add (patternToVar (proj.slots[(std::size_t) i]));
+    root->setProperty ("slots",       slots);
+    root->setProperty ("currentSlot", proj.currentSlot);
+
+    juce::Array<var> songSteps;
+    for (const auto& step : proj.song.steps)
+    {
+        auto* so = new DynamicObject();
+        so->setProperty ("slot", step.slot);
+        so->setProperty ("bars", step.bars);
+        songSteps.add (var (so));
+    }
+    auto* songObject = new DynamicObject();
+    songObject->setProperty ("steps", songSteps);
+    songObject->setProperty ("loop",  proj.song.loop);
+    songObject->setProperty ("mode",  proj.songMode);
+    root->setProperty ("song", var (songObject));
 
     return juce::JSON::toString (var (root));
 }
@@ -185,6 +225,10 @@ bool fromJson (const juce::String& json, Project& out)
     out.space   = (float) (double) root.getProperty ("space", 0.0);
     out.crush   = (float) (double) root.getProperty ("crush", 0.0);
     out.drive   = (float) (double) root.getProperty ("drive", 0.0);
+    out.lowEq   = (float) (double) root.getProperty ("lowEq", 0.0);
+    out.midEq   = (float) (double) root.getProperty ("midEq", 0.0);
+    out.highEq  = (float) (double) root.getProperty ("highEq", 0.0);
+    out.comp    = (float) (double) root.getProperty ("comp", 0.0);
 
     if (auto* pads = root.getProperty ("pads", var()).getArray())
     {
@@ -198,10 +242,68 @@ bool fromJson (const juce::String& json, Project& out)
             pad.pan            = (float) (double) pv.getProperty ("pan", 0.0);
             pad.chokeGroup     = (int) pv.getProperty ("choke", 0);
             pad.reverse        = (bool) pv.getProperty ("reverse", false);
+            pad.muted          = (bool) pv.getProperty ("muted", false);
+            pad.soloed         = (bool) pv.getProperty ("soloed", false);
+            pad.startFraction  = (float) (double) pv.getProperty ("trimStart", 0.0);
+            pad.endFraction    = (float) (double) pv.getProperty ("trimEnd", 1.0);
+            pad.tone           = (float) (double) pv.getProperty ("tone", 0.0);   // absent -> flat
+            pad.reverbSend     = (float) (double) pv.getProperty ("send", 0.0);   // absent -> dry
+            pad.layerMode      = (int) pv.getProperty ("layerMode", 0);
+
+            // Absent "layers" -> a one-layer pad, which every pre-layers project is.
+            pad.extraLayerPaths.clear();
+            if (auto* layers = pv.getProperty ("layers", var()).getArray())
+                for (const auto& layer : *layers)
+                    pad.extraLayerPaths.add (layer.toString());
         }
     }
 
     patternFromVar (root.getProperty ("pattern", var()), out.pattern);
+
+    // A file written before the A..H bank existed has no "slots": its single pattern is
+    // slot A, and the other seven are empty. Loading it must not silently blank the groove.
+    if (auto* slots = root.getProperty ("slots", var()).getArray())
+    {
+        for (int i = 0; i < slots->size() && i < numPatternSlots; ++i)
+            patternFromVar ((*slots)[i], out.slots[(std::size_t) i]);
+
+        out.currentSlot = (int) root.getProperty ("currentSlot", 0);
+        if (! PatternBank::isValidSlot (out.currentSlot))
+            out.currentSlot = 0;
+    }
+    else
+    {
+        out.slots[0]    = out.pattern;
+        out.currentSlot = 0;
+    }
+
+    // No "song" key means a file from before arrangements existed: an empty chain, and song
+    // mode off, which is exactly what a default-constructed Project already says.
+    const var songVar = root.getProperty ("song", var());
+    if (songVar.isObject())
+    {
+        out.song.loop = (bool) songVar.getProperty ("loop", true);
+        out.songMode  = (bool) songVar.getProperty ("mode", false);
+
+        if (auto* steps = songVar.getProperty ("steps", var()).getArray())
+        {
+            for (const auto& stepVar : *steps)
+            {
+                SongStep step;
+                step.slot = (int) stepVar.getProperty ("slot", 0);
+                step.bars = (int) stepVar.getProperty ("bars", 1);
+
+                // A hand-edited file could name a slot that does not exist. Drop it here
+                // rather than let Song::slotAtBar hand the app a -1 every bar.
+                if (PatternBank::isValidSlot (step.slot))
+                    out.song.steps.push_back (step);
+            }
+        }
+
+        // A chain that was saved in song mode but has nothing in it cannot drive anything.
+        if (out.song.steps.empty())
+            out.songMode = false;
+    }
     return true;
 }
 

@@ -114,6 +114,21 @@ packaging\windows\build-packages.ps1 -Version 0.1.0      # -> dist\*-setup.exe +
 
 ---
 
+## Known issues
+
+None currently tracked. The two long-standing ones were fixed after v0.2.1:
+
+- Exported stems now sum to the exported mix even when choke groups fire. A stem is the whole
+  pattern played with one pad captured, so the closed hat still chokes the open hat — and voice
+  stealing resolves identically to the mix. (Stems are pre-master, which is what makes summing
+  meaningful: the master strip's limiter and compressor are non-linear.)
+- Sample auto-categorisation matches filename tokens on word boundaries, so `Phat Kick` is a kick,
+  not a closed hat. `KickDrum`, `kick01` and `808kick` all still read as kicks. A name no token
+  matches falls through to the audio-feature classifier. You can still right-click a sample in the
+  Library to re-tag it; the override is saved and survives a re-scan.
+
+---
+
 ## Project layout
 
 ```

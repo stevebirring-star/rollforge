@@ -22,6 +22,15 @@ public:
     /** Reflects model state into the cell (does not fire onEdit). */
     void setState (bool isOn, float vel);
     void setPlayhead (bool isCurrent);
+    void setChanged (bool wasJustChanged);   // brief "Vary changed this" highlight
+
+    /** False for a cell past the lane's length (a triplet lane uses 12 of 16). It is
+        drawn faint and ignores the mouse — the step doesn't exist. */
+    void setActive (bool isActive);
+
+    /** The colour of the sound this lane triggers. A kick's steps are the kick's colour,
+        everywhere. Brightness within the cell then carries velocity. */
+    void setAccent (juce::Colour colour);
 
     std::function<void (bool on, float velocity)> onEdit;
     std::function<void()> onGestureStart;   // fired at mouse-down (for undo transactions)
@@ -34,10 +43,14 @@ public:
 private:
     float velocityForY (float y) const noexcept;
 
-    bool  on       = false;
-    float velocity = 0.8f;
-    bool  current  = false;
-    bool  editing  = false;   // mouse held on this cell -> show a prominent % readout
+    bool  on        = false;
+    float velocity  = 0.8f;
+    bool  current   = false;
+    bool  changed   = false;   // recently mutated by Vary -> amber ring, cleared by a timer
+    bool  editing   = false;   // mouse held on this cell -> show a prominent % readout
+    bool  downWasOn = false;    // step's on-state at mouse-down (click vs velocity-drag)
+    bool  active    = true;     // false -> beyond the lane's length: faint, unclickable
+    juce::Colour accent { 0xff4cc2ff };   // this lane's sound colour
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StepComponent)
 };

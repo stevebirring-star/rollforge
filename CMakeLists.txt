@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(RollForge VERSION 0.1.0 LANGUAGES C CXX)
+project(RollForge VERSION 0.2.2 LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 # Global build settings
@@ -45,10 +45,30 @@ FetchContent_MakeAvailable(JUCE)
 # Sanitizer helper (opt-in, used by the ASan CI job)
 # ---------------------------------------------------------------------------
 function(rollforge_apply_sanitizers target)
+    if(ROLLFORGE_ASAN AND ROLLFORGE_TSAN)
+        message(FATAL_ERROR "ROLLFORGE_ASAN and ROLLFORGE_TSAN cannot be enabled together")
+    endif()
+
     if(ROLLFORGE_ASAN AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
         message(STATUS "RollForge: enabling ASan/UBSan for ${target}")
         target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer -g)
         target_link_options(${target}    PRIVATE -fsanitize=address,undefined)
+    endif()
+
+    # ASan cannot see a data race. FolderWatcher hands rows from a worker thread to the
+    # message thread, so the class that most needs checking is the one ASan says least about.
+    #
+    #   cmake -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DROLLFORGE_TSAN=ON
+    #   cmake --build build-tsan --target RollForgeTests
+    #   setarch $(uname -m) -R ./build-tsan/tests/RollForgeTests_artefacts/Debug/RollForgeTests
+    #
+    # The setarch is not optional: TSan's shadow mapping collides with the address-space
+    # randomisation modern kernels use, and the binary aborts with "unexpected memory mapping"
+    # before a single test runs.
+    if(ROLLFORGE_TSAN AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+        message(STATUS "RollForge: enabling ThreadSanitizer for ${target}")
+        target_compile_options(${target} PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g)
+        target_link_options(${target}    PRIVATE -fsanitize=thread)
     endif()
 endfunction()
 
@@ -91,28 +111,47 @@ if(ROLLFORGE_BUILD_APP)
         src/app/FirstRunState.cpp
         src/ui/MainComponent.cpp
         src/ui/FirstRun.cpp
+        src/ui/CoachMarks.cpp
         src/ui/PadComponent.cpp
         src/ui/PadGrid.cpp
         src/ui/TransportBar.cpp
         src/ui/StepComponent.cpp
         src/ui/SequencerGrid.cpp
+        src/ui/NoteRepeat.cpp
+        src/ui/LaneLockButton.cpp
+        src/ui/AboutView.cpp
         src/ui/FillBar.cpp
+        src/ui/PatternSlots.cpp
+        src/ui/SongBar.cpp
         src/ui/RollBrushOverlay.cpp
         src/ui/MacroKnobs.cpp
         src/ui/BrowserPanel.cpp
+        src/ui/SimilarityMap.cpp
         src/ui/ExportPanel.cpp
+        src/ui/PadInspector.cpp
+        src/ui/Theme.cpp
+        src/ui/RollForgeLookAndFeel.cpp
+        src/ui/MasterMeter.cpp
+        src/ui/BrandMark.cpp
+        src/ui/DragExportButton.cpp
         src/ui/SettingsView.cpp
         src/engine/AudioEngine.cpp
         src/engine/Clock.cpp
         src/engine/DrumEngine.cpp
         src/engine/MasterBus.cpp
         src/engine/OfflineRenderer.cpp
+        src/engine/InputRecorder.cpp
+        src/engine/MidiCaptureQueue.cpp
+        src/engine/Resample.cpp
         src/engine/WavExporter.cpp
+        src/engine/fx/Compressor.cpp
         src/engine/fx/Crush.cpp
         src/engine/fx/Drive.cpp
+        src/engine/fx/MasterEq.cpp
         src/engine/fx/MasterLimiter.cpp
         src/engine/fx/Punch.cpp
         src/engine/fx/Space.cpp
+        src/engine/fx/ToneFilter.cpp
         src/engine/PadMapping.cpp
         src/engine/SampleBuffer.cpp
         src/engine/SampleRetirementPool.cpp
@@ -123,14 +162,24 @@ if(ROLLFORGE_BUILD_APP)
         src/library/StarterKit.cpp
         src/library/KitInstaller.cpp
         src/library/FeatureExtractor.cpp
+        src/library/BeatboxDetector.cpp
+        src/library/Slicer.cpp
+        src/library/Similarity.cpp
+    src/library/SimilarSearch.cpp
         src/library/Categoriser.cpp
         src/library/LibraryDb.cpp
+        src/library/SampleAnalyser.cpp
+        src/library/FolderWatcher.cpp
         src/library/Scanner.cpp
         src/library/KitBuilder.cpp
         src/library/sqlite/sqlite3.c
+        src/model/Capture.cpp
+        src/model/Song.cpp
         src/model/RollCompiler.cpp
         src/model/RollPresets.cpp
         src/model/FillEngine.cpp
+        src/model/Variator.cpp
+        src/model/FeelPresets.cpp
         src/model/Humaniser.cpp
         src/model/ProjectIO.cpp
         src/model/MidiExporter.cpp

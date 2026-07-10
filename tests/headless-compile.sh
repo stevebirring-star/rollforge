@@ -51,6 +51,7 @@ ENGINE_SOURCES=(
     src/engine/fx/MasterLimiter.cpp
     src/engine/fx/Punch.cpp
     src/engine/fx/Space.cpp
+    src/engine/fx/ToneFilter.cpp
     src/engine/PadMapping.cpp
     src/engine/Sequencer.cpp
     src/engine/Voice.cpp
@@ -59,6 +60,17 @@ ENGINE_SOURCES=(
     src/library/StarterKit.cpp
     src/library/KitInstaller.cpp
     src/library/FeatureExtractor.cpp
+    src/library/Slicer.cpp
+    src/engine/InputRecorder.cpp
+    src/engine/MidiCaptureQueue.cpp
+    src/engine/Resample.cpp
+    src/library/BeatboxDetector.cpp
+    src/model/Capture.cpp
+    src/model/Song.cpp
+    src/library/SampleAnalyser.cpp
+    src/library/FolderWatcher.cpp
+    src/library/Similarity.cpp
+    src/library/SimilarSearch.cpp
     src/library/Categoriser.cpp
     src/library/LibraryDb.cpp
     src/library/Scanner.cpp
@@ -66,6 +78,8 @@ ENGINE_SOURCES=(
     src/model/RollCompiler.cpp
     src/model/RollPresets.cpp
     src/model/FillEngine.cpp
+    src/model/Variator.cpp
+    src/model/FeelPresets.cpp
     src/model/Humaniser.cpp
     src/model/ProjectIO.cpp
     src/model/MidiExporter.cpp
@@ -86,18 +100,34 @@ TEST_SOURCES=(
     tests/SampleLoaderTests.cpp
     tests/StarterKitTests.cpp
     tests/KitInstallerTests.cpp
+    tests/LayerTests.cpp
     tests/PadMappingTests.cpp
     tests/PatternModelTests.cpp
     tests/ClockTimingTests.cpp
     tests/SequencerTests.cpp
+    tests/TripletTests.cpp
     tests/PatternSwitchTests.cpp
     tests/RollCompilerTests.cpp
     tests/RollSequencingTests.cpp
     tests/RollPresetsTests.cpp
     tests/FillEngineTests.cpp
+    tests/VariatorTests.cpp
+    tests/FeelPresetsTests.cpp
     tests/HumaniserTests.cpp
     tests/FxSmokeTests.cpp
+    tests/OutputMeterTests.cpp
     tests/CategoriserTests.cpp
+    tests/SlicerTests.cpp
+    tests/SimilarityTests.cpp
+    tests/BeatboxDetectorTests.cpp
+    tests/CaptureTests.cpp
+    tests/InputRecorderTests.cpp
+    tests/MidiCaptureQueueTests.cpp
+    tests/FolderWatcherTests.cpp
+    tests/ResampleTests.cpp
+    tests/SongTests.cpp
+    tests/TextTests.cpp
+    tests/SimilarSearchTests.cpp
     tests/LibraryDbTests.cpp
     tests/ScannerTests.cpp
     tests/KitBuilderTests.cpp
@@ -105,6 +135,7 @@ TEST_SOURCES=(
     tests/MidiExportTests.cpp
     tests/OfflineRenderTests.cpp
     tests/StemNullTests.cpp
+    tests/WysiwygExportTests.cpp
     tests/AutosaveTests.cpp
     tests/AppSettingsTests.cpp
     tests/FirstRunStateTests.cpp

@@ -18,7 +18,10 @@ SampleBuffer::Ptr SampleLoader::loadFile (const juce::File& file)
         return nullptr;
 
     std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (file));
-    return readAll (reader.get(), file.getFileName());
+    // The name is a DISPLAY name: it goes on the pad face and the sequencer lane label.
+    // Both already dropped the extension when they built it from the File themselves, and a
+    // lane reading "Kick_808.wav" next to a pad reading "Kick_808" looked like two sounds.
+    return readAll (reader.get(), file.getFileNameWithoutExtension());
 }
 
 SampleBuffer::Ptr SampleLoader::loadFromStream (std::unique_ptr<juce::InputStream> stream, const juce::String& name)

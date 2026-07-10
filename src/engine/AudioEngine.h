@@ -14,6 +14,9 @@
 // atomic flag.
 
 #include "engine/DrumEngine.h"
+#include "engine/InputRecorder.h"
+#include "engine/MidiCaptureQueue.h"
+#include "engine/OutputMeter.h"
 #include "engine/MasterBus.h"
 #include "engine/PadMapping.h"
 #include "engine/Sequencer.h"
@@ -61,12 +64,33 @@ public:
     /** True if a device is currently open and running. UI-thread use only. */
     bool isAudioRunning() const noexcept { return audioRunning.load (std::memory_order_acquire); }
 
+    /** The open device's sample rate, or 44100 when nothing is open. Any thread. */
+    double getSampleRate() const noexcept { return currentSampleRate.load (std::memory_order_acquire); }
+
+    /** True when the open device gave us at least one input channel. Beatbox capture is dead
+        without one, and a REC button that records silence is worse than one that is greyed. */
+    bool hasAudioInput() const noexcept { return inputChannels.load (std::memory_order_acquire) > 0; }
+
+    /** The microphone capture buffer. Arm it, play, disarm it, take() the samples. */
+    InputRecorder& getInputRecorder() noexcept { return inputRecorder; }
+
+    /** Notes played on a MIDI controller, each stamped with where the loop was. Drained by the
+        message thread: a MIDI callback may not touch the pattern or the undo history. The pad
+        sounds immediately either way -- this is only the record of the note. */
+    MidiCaptureQueue& getMidiCaptureQueue() noexcept { return midiCaptureQueue; }
+
     /** Exposed so the UI can host an AudioDeviceSelectorComponent. The engine
         keeps ownership; the UI only reads/edits the shared device manager. */
     juce::AudioDeviceManager& getDeviceManager() noexcept { return deviceManager; }
 
     /** Exposed so the app can install a Kit into the DrumEngine (KitInstaller). */
     DrumEngine& getDrumEngine() noexcept { return drumEngine; }
+
+    /** A 17th pad, past the 16 kit pads, reserved for auditioning a library sample.
+        It is a normal pad in every respect — same setPad/trigger path, same voice
+        pool — but no lane targets it, mute/solo never gate it, and the meter array
+        stops at 16, so previewing cannot disturb the kit. */
+    static constexpr int previewPadIndex = 16;
 
     /** Exposed so the app/transport UI can drive the sequencer (pattern, play,
         tempo). All of its control methods are message-thread safe. */
@@ -75,6 +99,10 @@ public:
     /** Exposed so the macro-knob UI can drive the master effects. Its setters are
         message-thread safe. */
     MasterBus& getMasterBus() noexcept { return masterBus; }
+
+    /** The master output's VU + peak readings, taken after the master bus and limiter —
+        i.e. what actually leaves the app. Read from the UI timer. */
+    const OutputMeter& getOutputMeter() const noexcept { return outputMeter; }
 
 private:
     //==============================================================================
@@ -95,12 +123,17 @@ private:
 
     //==============================================================================
     juce::AudioDeviceManager deviceManager;
-    DrumEngine               drumEngine;
+    DrumEngine               drumEngine { 1024, 64, previewPadIndex + 1 };   // 16 kit pads + preview
     Sequencer                sequencer;
     MasterBus                masterBus;
+    OutputMeter              outputMeter;
 
     juce::StringArray enabledMidiInputs;   // device ids we registered a callback on
-    std::atomic<bool> audioRunning { false };
+    std::atomic<bool>   audioRunning      { false };
+    std::atomic<int>    inputChannels     { 0 };
+    std::atomic<double> currentSampleRate { 44100.0 };
+    InputRecorder     inputRecorder;
+    MidiCaptureQueue  midiCaptureQueue;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioEngine)
 };

@@ -50,7 +50,16 @@ public:
                   int padIndex   = -1) noexcept;
 
     /** Sums every active voice ADDITIVELY into `buffer`. AUDIO THREAD. */
-    void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
+    /** `sendOut`, if given, collects every voice's reverb-send contribution (see
+        Voice::renderAdditive). Optional so existing call sites are unchanged.
+
+        `capturePad >= 0` renders EVERY voice as usual but only lets voices belonging to
+        that pad reach `buffer`/`sendOut`. Every other voice still advances, so choke
+        groups and voice-stealing play out exactly as they do in the full mix -- which is
+        the whole reason per-pad stems sum back to it. `capturePad < 0` (the default)
+        captures everything. */
+    void renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                         float* sendOut = nullptr, int capturePad = -1) noexcept;
 
     /** Peak-combines each active voice's level into out[voicePad] for per-pad
         meters (does NOT zero `out` first). out must hold >= numPads entries.

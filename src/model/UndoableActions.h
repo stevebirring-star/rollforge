@@ -54,4 +54,31 @@ private:
     std::function<void (int, int)> onApplied;
 };
 
+/** Replaces a whole Pattern (used by "Make a Beat" / generation), remembering the
+    prior pattern so one Cmd/Ctrl+Z reverts the entire generate. onApplied refreshes
+    the view + engine after both perform and undo. */
+class SetPatternAction final : public juce::UndoableAction
+{
+public:
+    SetPatternAction (Pattern& target, Pattern before, Pattern after,
+                      std::function<void()> onApplied)
+        : target (target), before (std::move (before)), after (std::move (after)),
+          onApplied (std::move (onApplied))
+    {
+    }
+
+    bool perform() override { target = after;  if (onApplied) onApplied(); return true; }
+    bool undo()    override { target = before; if (onApplied) onApplied(); return true; }
+
+    // before/after are held BY VALUE, so sizeof(*this) already counts both Patterns.
+    // Adding them again would ~2x the reported size and prune undo history too soon.
+    int getSizeInUnits() override { return (int) sizeof (*this); }
+
+private:
+    Pattern& target;
+    Pattern  before;
+    Pattern  after;
+    std::function<void()> onApplied;
+};
+
 } // namespace rollforge

@@ -2,8 +2,19 @@
 
 // RollForge — WavExporter: renders a Pattern to WAV — a full mix and/or per-pad
 // stems — via the OfflineRenderer. Lives in the engine layer because it drives the
-// renderer (a stem = the same pattern with only one pad's lanes/rolls active).
-// With master FX off, the stems sum back to the mix (linear). Off-audio-thread.
+// renderer.
+//
+// A stem is the WHOLE pattern played, with only one pad's voices captured — NOT the
+// pattern with the other pads removed. Removing them would leave nothing to fire a
+// choke group (the closed hat would never choke the open hat) and would change which
+// voices get stolen, so the stems would not sum back to the mix. See
+// DrumEngine::setCapturePad.
+//
+// With master FX off, the stems sum back to the mix (the engine's signal path is
+// linear, and the send reverb is linear too). With master FX ON they do not, and
+// cannot: the strip ends in an always-on limiter, and drive/crush/punch/comp are all
+// non-linear, so limiting each stem on its own is not the same as limiting their sum.
+// Off-audio-thread.
 //
 // ENGINE LAYER RULE: no JUCE GUI includes.
 

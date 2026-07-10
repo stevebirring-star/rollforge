@@ -105,6 +105,63 @@ public:
             FillEngine::generateFill (b, FillEngine::Trap, 3, 999);
             expect (! sameFill (a, b));
         }
+
+        // --- Curated randomisation: genre skeletons are correct + distinct -------
+        // (pad layout: 0=kick 1=snare 2=closed-hat 3=open-hat 4=clap)
+
+        beginTest ("House and Techno are four-on-the-floor");
+        {
+            for (auto st : { FillEngine::House, FillEngine::Techno })
+            {
+                Pattern p; FillEngine::generateFill (p, st, 3, 4);
+                for (int beat : { 0, 4, 8, 12 })
+                    expect (p.lane (0).step (beat).on);   // kick on every beat
+            }
+        }
+
+        beginTest ("Pop kicks on beats 1 and 3");
+        {
+            Pattern p; FillEngine::generateFill (p, FillEngine::Pop, 3, 4);
+            expect (p.lane (0).step (0).on);
+            expect (p.lane (0).step (8).on);
+        }
+
+        beginTest ("Trap / Drill / DnB have rolling (ratcheted) hats");
+        {
+            for (auto st : { FillEngine::Trap, FillEngine::Drill, FillEngine::DnB })
+            {
+                Pattern p; FillEngine::generateFill (p, st, 4, 4);
+                bool anyRoll = false;
+                for (int s = 0; s < 16; ++s)
+                    if (p.lane (2).step (s).on && p.lane (2).step (s).ratchets > 1)
+                        anyRoll = true;
+                expect (anyRoll);
+            }
+        }
+
+        beginTest ("House lays offbeat open hats");
+        {
+            Pattern p; FillEngine::generateFill (p, FillEngine::House, 3, 4);
+            for (int s : { 2, 6, 10, 14 })
+                expect (p.lane (3).step (s).on);   // OpenHat = pad 3
+        }
+
+        beginTest ("Boom Bap swings; four-on-floor styles don't");
+        {
+            Pattern bb, ho;
+            FillEngine::generateFill (bb, FillEngine::BoomBap, 3, 4);
+            FillEngine::generateFill (ho, FillEngine::House, 3, 4);
+            expect (bb.swing > 0.3f);
+            expect (ho.swing < 0.01f);
+        }
+
+        beginTest ("distinct styles produce distinct patterns");
+        {
+            Pattern trap, house;
+            FillEngine::generateFill (trap,  FillEngine::Trap,  3, 4);
+            FillEngine::generateFill (house, FillEngine::House, 3, 4);
+            expect (! sameFill (trap, house));
+        }
     }
 };
 

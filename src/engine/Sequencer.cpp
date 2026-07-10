@@ -83,6 +83,7 @@ void Sequencer::applyIncomingPattern (bool nowPlaying) noexcept
         *active = *queued;
         hasQueued = false;
         switchQueued.store (false, std::memory_order_release);
+        switchCount.fetch_add (1, std::memory_order_release);
     }
 }
 
@@ -95,6 +96,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
     {
         clock.reset();
         pendingCount = 0;
+        transportSamples.store (0, std::memory_order_release);
     }
 
     const bool nowPlaying = playing.load (std::memory_order_acquire);
@@ -108,12 +110,16 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
 
     if (! nowPlaying)
     {
-        // Transport paused: just render decaying voices; don't advance events.
+        // Transport paused: just render decaying voices; don't advance events. The send
+        // return still runs, or a reverb tail would stop dead the moment you hit stop.
         engine.renderInto (buffer, 0, numSamples);
+        engine.applySendReturn (buffer, numSamples);
+        engine.publishPadMeters();   // once per block (renderInto no longer self-publishes)
         return;
     }
 
     const std::int64_t blockStart = clock.getSampleCounter();
+    transportSamples.store (blockStart, std::memory_order_release);
 
     // 1. Generate this block's step events (swapping a queued pattern on the bar).
     clock.processBlock (numSamples, [&] (std::int64_t stepIndex, int offset) noexcept
@@ -123,6 +129,7 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
             *active = *queued;
             hasQueued = false;
             switchQueued.store (false, std::memory_order_release);
+            switchCount.fetch_add (1, std::memory_order_release);
         }
 
         generateStepEvents (stepIndex, blockStart + (std::int64_t) offset);
@@ -131,6 +138,13 @@ void Sequencer::process (DrumEngine& engine, juce::AudioBuffer<float>& buffer) n
 
     // 2. Fire pending events landing in this block, in order, splitting segments.
     renderWithEvents (engine, buffer, blockStart, numSamples);
+
+    // 3. Reverberate the per-pad sends every segment fed, ONCE for the whole block.
+    engine.applySendReturn (buffer, numSamples);
+
+    // 4. Publish the per-pad meters ONCE for the whole block. renderWithEvents calls
+    //    engine.renderInto per segment; publishing inside it would be wasted work.
+    engine.publishPadMeters();
 }
 
 void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSample) noexcept
@@ -151,49 +165,73 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
         if (len < 1) continue;
         if (len > maxStepsPerLane) len = maxStepsPerLane;
 
-        const int   pos = (int) (stepIndex % (std::int64_t) len);
-        const Step& s   = lane.step (pos);
-        if (! s.on)
-            continue;
+        // A lane runs at its own rate. Which of ITS steps begin inside this global 1/16
+        // step is pure integer maths (see model/Lane.h), so it never depends on the audio
+        // block size — and every event is anchored to `stepSample`, which the Clock keeps
+        // drift-free. A straight lane yields exactly {stepIndex} with a zero offset, so
+        // every expression below collapses to what it was before triplets existed.
+        const auto rate = laneStepRate (lane);
+        const double samplesPerLaneStep = samplesPerStep * (double) rate.num / (double) rate.den;
 
-        // Probability gate (deterministic per absolute step + lane).
-        if (s.probability < 100)
+        std::int64_t firstLaneStep = 0, endLaneStep = 0;
+        laneStepsInGlobalStep (lane, stepIndex, firstLaneStep, endLaneStep);
+
+        for (std::int64_t p = firstLaneStep; p < endLaneStep; ++p)
         {
-            if (s.probability <= 0)
+            const int   pos = (int) (p % (std::int64_t) len);
+            const Step& s   = lane.step (pos);
+            if (! s.on)
                 continue;
-            if (hashUnitFloat (stepIndex, li) >= (float) s.probability / 100.0f)
-                continue;
-        }
 
-        // Forward timing offset = micro-shift + swing, both applied LATER only.
-        // Micro-shift is forward-only for now (a backward shift would land before
-        // the block that generates the step -> wrong + buffer-size dependent; a
-        // negative value is clamped to 0). Swing delays the off-beat (odd) 1/16s.
-        double forward = clampVal ((double) s.microShift, 0.0, 0.5);
-        if ((stepIndex & 1) == 1)
-            forward += swingAmount / 3.0;   // swing 1 -> ~66:33 shuffle
-        forward += (double) Humaniser::timingSteps (Humaniser::eventHash (stepIndex, li, 0), humaniseAmt);
-        const std::int64_t base = stepSample + (std::int64_t) std::llround (forward * samplesPerStep);
-
-        // Humanised base velocity (seeded, non-destructive) — shared by all ratchets.
-        const float stepVelocity = clampVal (s.velocity
-            + Humaniser::velocityDelta (Humaniser::eventHash (stepIndex, li, 1), humaniseAmt), 0.0f, 1.0f);
-
-        // Ratchets: `r` evenly-spaced sub-hits across the step, velocity-ramped.
-        const int r = clampVal (s.ratchets, 1, 8);
-        for (int j = 0; j < r; ++j)
-        {
-            const std::int64_t evSample = base + (std::int64_t) std::llround ((double) j * samplesPerStep / (double) r);
-
-            float velocity = stepVelocity;
-            if (r > 1)
+            // Probability + humanise are keyed on the LANE's step index, not the global
+            // one: two triplet steps inside one global step must gate and jitter
+            // independently. For a straight lane p == stepIndex, so nothing moves.
+            if (s.probability < 100)
             {
-                const float t = (float) j / (float) (r - 1);      // 0..1
-                velocity *= 1.0f + s.ratchetRamp * (t - 0.5f);     // ramp around the base
+                if (s.probability <= 0)
+                    continue;
+                if (hashUnitFloat (p, li) >= (float) s.probability / 100.0f)
+                    continue;
             }
-            velocity = clampVal (velocity, 0.0f, 1.0f);
 
-            addEvent (evSample, lane.targetPad, velocity);
+            // Forward timing offset = micro-shift + swing, both applied LATER only.
+            // Micro-shift is forward-only for now (a backward shift would land before
+            // the block that generates the step -> wrong + buffer-size dependent; a
+            // negative value is clamped to 0). Swing delays the off-beat (odd) 1/16s;
+            // it is undefined against triplets, so a triplet lane simply doesn't swing.
+            double forward = clampVal ((double) s.microShift, 0.0, 0.5);
+            if (! lane.triplet && (p & 1) == 1)
+                forward += swingAmount / 3.0;   // swing 1 -> ~66:33 shuffle
+            forward += (double) Humaniser::timingSteps (Humaniser::eventHash (p, li, 0), humaniseAmt);
+
+            // The lane-step offset is measured in 1/16ths; micro-shift, swing and
+            // humanise are fractions of the LANE's own (possibly longer) step.
+            const std::int64_t base = stepSample
+                + (std::int64_t) std::llround (laneStepOffset (lane, p, stepIndex) * samplesPerStep
+                                               + forward * samplesPerLaneStep);
+
+            // Humanised base velocity (seeded, non-destructive) — shared by all ratchets.
+            const float stepVelocity = clampVal (s.velocity
+                + Humaniser::velocityDelta (Humaniser::eventHash (p, li, 1), humaniseAmt), 0.0f, 1.0f);
+
+            // Ratchets: `r` evenly-spaced sub-hits across the LANE's step, velocity-ramped.
+            const int r = clampVal (s.ratchets, 1, 8);
+            for (int j = 0; j < r; ++j)
+            {
+                const std::int64_t evSample = base
+                    + (std::int64_t) std::llround ((double) j * samplesPerLaneStep / (double) r);
+
+                float velocity = stepVelocity;
+                if (r > 1)
+                {
+                    const float t = (float) j / (float) (r - 1);      // 0..1
+                    velocity *= 1.0f + s.ratchetRamp * (t - 0.5f);     // ramp around the base
+                }
+                velocity = clampVal (velocity, 0.0f, 1.0f);
+
+                // Step.sampleLock pins one of the pad's layers; -1 lets the pad choose.
+                addEvent (evSample, lane.targetPad, velocity, 0.0f, s.sampleLock);
+            }
         }
     }
 
@@ -222,10 +260,11 @@ void Sequencer::generateStepEvents (std::int64_t stepIndex, std::int64_t stepSam
     }
 }
 
-void Sequencer::addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset) noexcept
+void Sequencer::addEvent (std::int64_t sample, int pad, float velocity, float pitchOffset,
+                          int sampleLock) noexcept
 {
     if (pendingCount < maxPendingEvents)
-        pending[pendingCount++] = { sample, pad, velocity, pitchOffset };
+        pending[pendingCount++] = { sample, pad, velocity, pitchOffset, sampleLock };
     // else: buffer full (pathological ratchet/lane/roll count) -> drop this event.
 }
 
@@ -260,7 +299,11 @@ void Sequencer::renderWithEvents (DrumEngine& engine, juce::AudioBuffer<float>& 
             cursor = offset;
         }
 
-        engine.triggerPadNow (pending[best].pad, pending[best].velocity, pending[best].pitchOffset);
+        // Per-pad mute/solo gates SEQUENCED (+ roll) hits; a muted pad's steps stay
+        // silent. Manual auditions go through a different path and are never gated.
+        if (engine.isPadAudible (pending[best].pad))
+            engine.triggerPadNow (pending[best].pad, pending[best].velocity,
+                                  pending[best].pitchOffset, pending[best].sampleLock);
         triggerCount.fetch_add (1, std::memory_order_acq_rel);
 
         pending[best] = pending[--pendingCount];   // remove (swap with last)

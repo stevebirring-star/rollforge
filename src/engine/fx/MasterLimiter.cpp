@@ -40,6 +40,8 @@ void MasterLimiter::process (juce::AudioBuffer<float>& buffer) noexcept
     for (int c = 0; c < useCh; ++c)
         chans[c] = buffer.getWritePointer (c);
 
+    float blockInputPeak = 0.0f;
+
     for (int i = 0; i < n; ++i)
     {
         float peak = 0.0f;
@@ -48,6 +50,9 @@ void MasterLimiter::process (juce::AudioBuffer<float>& buffer) noexcept
             const float a = std::abs (chans[c][i]);
             if (a > peak) peak = a;
         }
+
+        if (peak > blockInputPeak)
+            blockInputPeak = peak;
 
         // Instant attack (catch the transient), smoothed release.
         if (peak > envelope) envelope = peak;
@@ -62,6 +67,16 @@ void MasterLimiter::process (juce::AudioBuffer<float>& buffer) noexcept
             v = v < -ceiling ? -ceiling : v;
             chans[c][i] = v;
         }
+    }
+
+    // Publish the loudest thing we were given, not the loudest thing we let out. The reader
+    // zeroes it, so a peak survives exactly until someone has looked at it.
+    float previous = inputPeak.load (std::memory_order_acquire);
+    while (blockInputPeak > previous
+           && ! inputPeak.compare_exchange_weak (previous, blockInputPeak,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire))
+    {
     }
 }
 

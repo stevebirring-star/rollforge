@@ -12,10 +12,19 @@ AudioEngine::~AudioEngine()
 
 void AudioEngine::initialise()
 {
-    // Zero inputs, up to two outputs. Returns a non-empty error string on
-    // failure (e.g. no audio hardware) — we tolerate that so the app still
-    // opens and can be pointed at a device from the settings dialog.
-    const juce::String error = deviceManager.initialiseWithDefaultDevices (0, 2);
+    // One input (the beatbox microphone), up to two outputs. Returns a non-empty error string
+    // on failure (e.g. no audio hardware) — we tolerate that so the app still opens and can be
+    // pointed at a device from the settings dialog.
+    juce::String error = deviceManager.initialiseWithDefaultDevices (1, 2);
+
+    if (error.isNotEmpty())
+    {
+        // A machine with speakers and no microphone is a machine that should still make noise.
+        // Fall back to output only; hasAudioInput() then reports false and REC says why.
+        juce::Logger::writeToLog ("RollForge audio init (with input): " + error);
+        error = deviceManager.initialiseWithDefaultDevices (0, 2);
+    }
+
     if (error.isNotEmpty())
     {
         // Not fatal. Leave the engine idle; UI reflects isAudioRunning() == false.
@@ -57,17 +66,28 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
     drumEngine.prepare (sampleRate, blockSize);
     sequencer.prepare (sampleRate);
     masterBus.prepare (sampleRate, blockSize);
+    outputMeter.prepare (sampleRate);
+
+    // Thirty seconds of mono. Longer than anyone beatboxes in one take, and allocated here --
+    // aboutToStart brackets the callback stream, so this is the last safe moment.
+    inputRecorder.prepare (sampleRate, 30.0);
+    currentSampleRate.store (sampleRate, std::memory_order_release);
+    inputChannels.store (device != nullptr ? device->getActiveInputChannels().countNumberOfSetBits() : 0,
+                         std::memory_order_release);
 
     audioRunning.store (true, std::memory_order_release);
 }
 
 void AudioEngine::audioDeviceStopped()
 {
+    inputRecorder.stop();   // no device, no more blocks: never leave it armed and silent
     audioRunning.store (false, std::memory_order_release);
+    inputChannels.store (0, std::memory_order_release);
+    outputMeter.reset();   // the needles fall to rest rather than freezing mid-scale
 }
 
-void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputChannelData*/,
-                                                    int /*numInputChannels*/,
+void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
+                                                    int numInputChannels,
                                                     float* const* outputChannelData,
                                                     int numOutputChannels,
                                                     int numSamples,
@@ -75,6 +95,13 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
 {
     if (numOutputChannels <= 0 || numSamples <= 0)
         return;
+
+    // Flush denormals for the whole callback. Every feedback path in the signal chain
+    // decays towards zero and then sits there: the two plate reverbs' comb lines, the
+    // limiter's and compressor's envelope followers, the per-voice tone filter. A
+    // denormal multiply costs orders of magnitude more than a normal one on x86, so an
+    // idle-but-running reverb is exactly the thing that turns into an audio dropout.
+    const juce::ScopedNoDenormals noDenormals;
 
     // Wrap the driver's output channels (JUCE guarantees non-null output pointers
     // for [0, numOutputChannels)), start from silence, then let the DrumEngine
@@ -85,8 +112,18 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const* /*inputC
     // at sample-accurate offsets, and renders the block into `output`.
     sequencer.process (drumEngine, output);
 
+    // AFTER process(), so getTransportSamples() is this block's start rather than the previous
+    // one's. The recorder ignores this unless it is armed, and stamps it on its first block so
+    // Capture knows where in the loop the take began. Stopped: zero, and capture refuses to run.
+    inputRecorder.writeBlock (inputChannelData, numInputChannels, numSamples,
+                              sequencer.isPlaying() ? sequencer.getTransportSamples() : 0);
+
     // Master chain (future macro FX) + always-on brickwall limiter.
     masterBus.process (output);
+
+    // Meter what actually leaves the app: after the limiter, not before it.
+    for (int ch = 0; ch < juce::jmin (2, numOutputChannels); ++ch)
+        outputMeter.processBlock (ch, output.getReadPointer (ch), numSamples);
 }
 
 void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
@@ -96,7 +133,15 @@ void AudioEngine::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiM
     {
         const int pad = midiNoteToPad (message.getNoteNumber());
         if (pad >= 0)
-            drumEngine.pushMidiTrigger (pad, message.getFloatVelocity());
+        {
+            const float velocity = message.getFloatVelocity();
+            drumEngine.pushMidiTrigger (pad, velocity);
+
+            // ...and keep a record of it, stamped where the loop was, so REC can quantise it.
+            // The message thread drains this; nothing here may touch the pattern.
+            midiCaptureQueue.push ({ pad, velocity,
+                                     sequencer.isPlaying() ? sequencer.getTransportSamples() : 0 });
+        }
     }
 }
 

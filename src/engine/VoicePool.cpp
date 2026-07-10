@@ -93,10 +93,16 @@ int VoicePool::selectVoice() const noexcept
     return best;
 }
 
-void VoicePool::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept
+void VoicePool::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
+                               float* sendOut, int capturePad) noexcept
 {
     for (int i = 0; i < numVoices; ++i)
-        voices[i].renderAdditive (buffer, startSample, numSamples);
+    {
+        // A voice with an unknown pad (-1) belongs to no stem, so a capturing render
+        // advances it but never hears it.
+        const bool heard = capturePad < 0 || voicePads[(size_t) i] == capturePad;
+        voices[i].renderAdditive (buffer, startSample, numSamples, sendOut, heard);
+    }
 }
 
 int VoicePool::getNumActive() const noexcept

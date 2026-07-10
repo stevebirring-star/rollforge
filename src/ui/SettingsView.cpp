@@ -1,5 +1,7 @@
 #include "ui/SettingsView.h"
 
+#include "ui/Theme.h"
+
 namespace rollforge
 {
 
@@ -18,7 +20,7 @@ SettingsView::SettingsView (juce::AudioDeviceManager& dm) : deviceManager (dm)
     addAndMakeVisible (*deviceSelector);
 
     scaleLabel.setText ("UI scale", juce::dontSendNotification);
-    scaleLabel.setColour (juce::Label::textColourId, juce::Colour (0xffbcbcc4));
+    scaleLabel.setColour (juce::Label::textColourId, theme().textDim);
     addAndMakeVisible (scaleLabel);
 
     scaleBox.addItem ("100%", 1);
@@ -37,51 +39,31 @@ SettingsView::SettingsView (juce::AudioDeviceManager& dm) : deviceManager (dm)
     };
     addAndMakeVisible (scaleBox);
 
-    foldersLabel.setColour (juce::Label::textColourId, juce::Colour (0xffbcbcc4));
-    updateFoldersLabel();
-    addAndMakeVisible (foldersLabel);
 
-    addFolderButton.onClick = [this] { addSampleFolder(); };
-    addAndMakeVisible (addFolderButton);
 
     setSize (520, 480);
 }
 
-void SettingsView::addSampleFolder()
+void SettingsView::paint (juce::Graphics& g)
 {
-    chooser = std::make_unique<juce::FileChooser> ("Choose a sample folder");
-    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
-        [this] (const juce::FileChooser& fc)
-        {
-            const auto dir = fc.getResult();
-            if (! dir.isDirectory())
-                return;
-            settings.sampleFolders.addIfNotAlreadyThere (dir.getFullPathName());
-            settings.save();
-            updateFoldersLabel();
-        });
-}
+    const auto& t = theme();
+    g.fillAll (t.background);
 
-void SettingsView::updateFoldersLabel()
-{
-    foldersLabel.setText (juce::String (settings.sampleFolders.size()) + " sample folder(s) saved",
-                          juce::dontSendNotification);
+    // Separate the device (what the app talks to) from the app's own preferences.
+    const float y = (float) scaleLabel.getY() - 8.0f;
+    g.setColour (t.hairline);
+    g.drawLine (8.0f, y, (float) getWidth() - 8.0f, y, 1.0f);
 }
 
 void SettingsView::resized()
 {
     auto r = getLocalBounds().reduced (8);
 
-    auto bottom = r.removeFromBottom (64);
-    auto scaleRow = bottom.removeFromTop (28);
+    auto scaleRow = r.removeFromBottom (28);
     scaleLabel.setBounds (scaleRow.removeFromLeft (70));
     scaleBox.setBounds (scaleRow.removeFromLeft (90));
-    bottom.removeFromTop (6);
-    addFolderButton.setBounds (bottom.removeFromLeft (170));
-    bottom.removeFromLeft (10);
-    foldersLabel.setBounds (bottom);
 
-    r.removeFromBottom (8);
+    r.removeFromBottom (12);
     if (deviceSelector != nullptr)
         deviceSelector->setBounds (r);
 }

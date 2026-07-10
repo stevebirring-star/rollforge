@@ -43,6 +43,27 @@ public:
                 { "Crash_Cymbal.wav",   SoundCategory::Perc },
                 { "Riser_FX.wav",       SoundCategory::Fx },
                 { "Vinyl_Noise.wav",    SoundCategory::Fx },
+
+                // Word boundaries: a token must not match a fragment of a longer word.
+                { "Phat Kick.wav",      SoundCategory::Kick },
+                { "Phatty_Kick.wav",    SoundCategory::Kick },
+                { "That_Snare.wav",     SoundCategory::Snare },
+
+                // ...while the splits that keep boundary matching useful still hold.
+                { "KickDrum.wav",       SoundCategory::Kick },   // camelCase hump
+                { "kick01.wav",         SoundCategory::Kick },   // letter -> digit
+                { "808kick.wav",        SoundCategory::Kick },   // digit -> letter
+                { "TR808_BD.wav",       SoundCategory::Kick },
+                { "hihat.wav",          SoundCategory::HatClosed },
+                { "HH_01.wav",          SoundCategory::HatClosed },
+                { "Hi-Hat_Closed.wav",  SoundCategory::HatClosed },
+                { "Open_Hat_02.wav",    SoundCategory::HatOpen },
+                { "hatopen.wav",        SoundCategory::HatOpen },
+                { "RimShot.wav",        SoundCategory::Snare },
+                { "Low Tom 3.wav",      SoundCategory::Tom },
+                { "Cowbell.wav",        SoundCategory::Perc },
+                { "Wood_Block.wav",     SoundCategory::Perc },
+                { "Uplifter_01.wav",    SoundCategory::Fx },
             };
 
             int correct = 0;
@@ -57,6 +78,45 @@ public:
                                 + " (expected " + categoryName (c.expected) + ")");
             }
             expect ((float) correct / (float) total >= 0.85f);
+        }
+
+        beginTest ("filename tokens match whole words, not substrings");
+        {
+            // The bug: "hat" was matched as a SUBSTRING, and tested before "kick", so the
+            // "hat" inside "Phat" won the race and a kick was filed as a closed hat.
+            expectEquals ((int) Categoriser::fromFilename ("Phat Kick.wav"),
+                          (int) SoundCategory::Kick);
+            expectEquals ((int) Categoriser::fromFilename ("Phatty_Kick.wav"),
+                          (int) SoundCategory::Kick);
+            expectEquals ((int) Categoriser::fromFilename ("That_Snare.wav"),
+                          (int) SoundCategory::Snare);
+
+            // "OpenHat" camel-splits to "open hat", which also contains the word "hat" --
+            // so the open hat must still be claimed before the closed hat.
+            expectEquals ((int) Categoriser::fromFilename ("OpenHat.wav"),
+                          (int) SoundCategory::HatOpen);
+            expectEquals ((int) Categoriser::fromFilename ("openhat.wav"),
+                          (int) SoundCategory::HatOpen);
+            expectEquals ((int) Categoriser::fromFilename ("ClosedHat.wav"),
+                          (int) SoundCategory::HatClosed);
+
+            // Splits that keep short tokens working without letting them run wild.
+            expectEquals ((int) Categoriser::fromFilename ("808kick.wav"),
+                          (int) SoundCategory::Kick);
+            expectEquals ((int) Categoriser::fromFilename ("BD_deep.wav"),
+                          (int) SoundCategory::Kick);
+            expectEquals ((int) Categoriser::fromFilename ("Bdrum.wav"),
+                          (int) SoundCategory::Unknown);   // "bd" is not a word here
+            expectEquals ((int) Categoriser::fromFilename ("Shaker.wav"),
+                          (int) SoundCategory::Perc);
+
+            // The extension is not a token: a ".fx" file is not an FX hit.
+            expectEquals ((int) Categoriser::fromFilename ("Snare.fx"),
+                          (int) SoundCategory::Snare);
+
+            // A name with no usable token is Unknown, and categorise() then asks the audio.
+            expectEquals ((int) Categoriser::fromFilename ("sound01.wav"),
+                          (int) SoundCategory::Unknown);
         }
 
         beginTest ("feature fallback classifies un-named samples");

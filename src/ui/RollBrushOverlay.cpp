@@ -1,4 +1,7 @@
 #include "ui/RollBrushOverlay.h"
+#include "ui/Text.h"
+
+#include "ui/GridGeometry.h"
 
 namespace rollforge
 {
@@ -33,23 +36,26 @@ void RollBrushOverlay::setRolls (const std::vector<RollRect>& rollsToDraw)
 
 int RollBrushOverlay::laneAt (int y) const noexcept
 {
-    const int rowH = juce::jmax (1, getHeight() / numLanes);
-    return juce::jlimit (0, numLanes - 1, y / rowH);
+    // gridIndexAt, not y / rowH: the grid's rows are ROUNDED edges (gridSpan), and floor
+    // division disagrees with them by a row wherever the height is not a multiple of
+    // numLanes — painting the roll onto the lane above or below the one under the cursor.
+    return gridIndexAt (y, numLanes, juce::jmax (1, getHeight()));
 }
 
 int RollBrushOverlay::stepAt (int x) const noexcept
 {
     const int gridW = juce::jmax (1, getWidth() - labelWidth);
-    const int cellW = juce::jmax (1, gridW / numSteps);
-    return juce::jlimit (0, numSteps - 1, (x - labelWidth) / cellW);
+    return gridIndexAt (x, numSteps, gridW, labelWidth);
 }
 
 juce::Rectangle<int> RollBrushOverlay::cellRect (int lane, int startStep, int len) const noexcept
 {
-    const int rowH  = juce::jmax (1, getHeight() / numLanes);
     const int gridW = juce::jmax (1, getWidth() - labelWidth);
-    const int cellW = juce::jmax (1, gridW / numSteps);
-    return { labelWidth + startStep * cellW, lane * rowH, len * cellW, rowH };
+    const auto rowY = gridSpan (lane, numLanes, getHeight());
+    const int  x0   = gridSpan (startStep, numSteps, gridW, labelWidth).getStart();
+    const int  x1   = gridSpan (juce::jmin (numSteps, startStep + juce::jmax (1, len)) - 1,
+                                numSteps, gridW, labelWidth).getEnd();
+    return { x0, rowY.getStart(), juce::jmax (1, x1 - x0), rowY.getLength() };
 }
 
 void RollBrushOverlay::mouseDown (const juce::MouseEvent& e)
@@ -158,7 +164,7 @@ void RollBrushOverlay::paint (juce::Graphics& g)
 
         g.setColour (juce::Colour (0xffb8b8c0));
         g.drawText ("Span  " + juce::String (len) + (len == 1 ? " step" : " steps")
-                        + "  ·  " + juce::String (len / 4.0, 2) + " beats",
+                        + utf8 ("  ·  ") + juce::String (len / 4.0, 2) + " beats",
                     txt.removeFromTop (lineH), juce::Justification::centredLeft, false);
 
         if (getHitCount != nullptr)

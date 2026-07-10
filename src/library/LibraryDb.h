@@ -44,6 +44,22 @@ public:
 
     bool upsert (const LibraryEntry& entry);                     // insert or replace by path
     bool setFavourite (const juce::String& path, bool favourite);
+
+    // Manual re-tag: a persistent per-path category override, kept in its own table
+    // so it SURVIVES a re-scan (which replaces the samples row) and is consulted by
+    // every query. Correcting a misjudged sample sticks.
+    bool setCategoryOverride (const juce::String& path, SoundCategory category);
+    bool clearCategoryOverride (const juce::String& path);
+
+    // Folders the watcher keeps an eye on. Persisted, because a library you have to re-add
+    // on every launch is not a library. Adding one twice is not an error.
+    bool addWatchedFolder (const juce::String& path);
+    bool removeWatchedFolder (const juce::String& path);
+    juce::StringArray watchedFolders() const;
+
+    /** Just the paths, for the watcher's "have I seen this file?" set. */
+    juce::StringArray allPaths() const;
+
     int  count() const;
 
     std::vector<LibraryEntry> all() const;

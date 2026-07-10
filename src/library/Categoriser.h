@@ -4,6 +4,13 @@
 // tokens first (fast + reliable for named packs), then an audio-feature-rule
 // fallback for un-obvious names. Pure model (juce_core only, no GUI) so it is
 // headless-testable.
+//
+// Tokens match on WORD boundaries, not as substrings, or "Phat Kick" is a hat.
+// Words are split at punctuation, at letter<->digit boundaries and at camelCase
+// humps, so "kick01", "808kick" and "KickDrum" all still read as a kick. A name
+// that boundary-matching leaves Unknown (an all-lowercase compound like
+// "kickdrum") falls through to the feature rules, which is why categorise() --
+// not fromFilename() -- is what callers should use.
 
 #include "library/FeatureExtractor.h"
 

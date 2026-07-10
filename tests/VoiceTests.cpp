@@ -168,6 +168,57 @@ public:
             // Well past the attack: full level.
             expectWithinAbsoluteError (buf.getSample (0, 100), src->getSample (0, 100) * v_monoCentre(), 1.0e-3f);
         }
+
+        beginTest ("start trim skips the head; end trim shortens the tail");
+        {
+            const int n = 32;
+
+            // Start at 50%: the first output comes from mid-ramp, not the quiet head.
+            {
+                Voice v; v.prepare (kRate);
+                auto src = makeRamp (n);
+                Voice::Parameters p; p.startFraction = 0.5f;
+                v.start (src, p, 1.0f);
+
+                juce::AudioBuffer<float> buf (1, 64); buf.clear();
+                v.renderAdditive (buf, 0, 64);
+
+                expect (buf.getSample (0, 0) > 0.3f);                             // ~0.5 mid-ramp, not ~0.03 head
+                expectWithinAbsoluteError (buf.getSample (0, 25), 0.0f, 1.0e-6f); // ended early (~16 frames)
+                expect (! v.isActive());
+            }
+
+            // End at 25%: only the first quarter plays -> goes idle much sooner.
+            {
+                Voice v; v.prepare (kRate);
+                auto src = makeRamp (n);
+                Voice::Parameters p; p.endFraction = 0.25f;
+                v.start (src, p, 1.0f);
+
+                juce::AudioBuffer<float> buf (1, 64); buf.clear();
+                v.renderAdditive (buf, 0, 64);
+
+                expect (buf.getSample (0, 0) > 0.0f);                            // plays the head
+                expectWithinAbsoluteError (buf.getSample (0, 12), 0.0f, 1.0e-6f);// ~8 frames then silent
+                expect (! v.isActive());
+            }
+        }
+
+        beginTest ("reverse honours the trim (starts at the trimmed end)");
+        {
+            const int n = 32;
+            Voice v; v.prepare (kRate);
+            auto src = makeRamp (n);
+            Voice::Parameters p; p.reverse = true; p.endFraction = 0.5f;
+            v.start (src, p, 1.0f);
+
+            juce::AudioBuffer<float> buf (1, 64); buf.clear();
+            v.renderAdditive (buf, 0, 64);
+
+            // First reversed frame reads ~ source position 0.5*(n-1) = 15.5 (mid-ramp),
+            // not the very last sample (~1.0).
+            expect (buf.getSample (0, 0) > 0.30f && buf.getSample (0, 0) < 0.45f);
+        }
     }
 
 private:

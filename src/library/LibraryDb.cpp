@@ -18,7 +18,12 @@ bool LibraryDb::openAt (const char* filename)
         close();
         return false;
     }
-    return createSchema();
+    if (! createSchema())
+    {
+        close();   // don't leave a half-open handle that isOpen() would report as ready
+        return false;
+    }
+    return true;
 }
 
 bool LibraryDb::open (const juce::File& dbFile)
@@ -48,7 +53,11 @@ bool LibraryDb::createSchema()
     const char* sql =
         "CREATE TABLE IF NOT EXISTS samples ("
         " path TEXT PRIMARY KEY, name TEXT, duration REAL, rms REAL, zcr REAL,"
-        " decay REAL, onsets INTEGER, category INTEGER, confidence REAL, favourite INTEGER);";
+        " decay REAL, onsets INTEGER, category INTEGER, confidence REAL, favourite INTEGER);"
+        "CREATE TABLE IF NOT EXISTS category_overrides ("
+        " path TEXT PRIMARY KEY, category INTEGER NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS watched_folders ("
+        " path TEXT PRIMARY KEY);";
 
     char* err = nullptr;
     if (sqlite3_exec (db, sql, nullptr, nullptr, &err) != SQLITE_OK)
@@ -108,6 +117,108 @@ bool LibraryDb::setFavourite (const juce::String& path, bool favourite)
     return ok;
 }
 
+bool LibraryDb::setCategoryOverride (const juce::String& path, SoundCategory category)
+{
+    if (db == nullptr)
+        return false;
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2 (db, "INSERT INTO category_overrides (path,category) VALUES (?,?)"
+                                " ON CONFLICT(path) DO UPDATE SET category=excluded.category;",
+                            -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_text (stmt, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int  (stmt, 2, (int) category);
+
+    const bool ok = sqlite3_step (stmt) == SQLITE_DONE;
+    sqlite3_finalize (stmt);
+    return ok;
+}
+
+bool LibraryDb::addWatchedFolder (const juce::String& path)
+{
+    if (db == nullptr || path.isEmpty())
+        return false;
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2 (db, "INSERT OR IGNORE INTO watched_folders (path) VALUES (?);",
+                            -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_text (stmt, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const bool ok = sqlite3_step (stmt) == SQLITE_DONE;
+    sqlite3_finalize (stmt);
+    return ok;
+}
+
+bool LibraryDb::removeWatchedFolder (const juce::String& path)
+{
+    if (db == nullptr)
+        return false;
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2 (db, "DELETE FROM watched_folders WHERE path = ?;",
+                            -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_text (stmt, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+    const bool ok = sqlite3_step (stmt) == SQLITE_DONE;
+    sqlite3_finalize (stmt);
+    return ok;
+}
+
+juce::StringArray LibraryDb::watchedFolders() const
+{
+    juce::StringArray folders;
+    if (db == nullptr)
+        return folders;
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2 (db, "SELECT path FROM watched_folders ORDER BY path;",
+                            -1, &stmt, nullptr) != SQLITE_OK)
+        return folders;
+
+    while (sqlite3_step (stmt) == SQLITE_ROW)
+        folders.add (juce::String::fromUTF8 ((const char*) sqlite3_column_text (stmt, 0)));
+
+    sqlite3_finalize (stmt);
+    return folders;
+}
+
+juce::StringArray LibraryDb::allPaths() const
+{
+    juce::StringArray paths;
+    if (db == nullptr)
+        return paths;
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2 (db, "SELECT path FROM samples;", -1, &stmt, nullptr) != SQLITE_OK)
+        return paths;
+
+    while (sqlite3_step (stmt) == SQLITE_ROW)
+        paths.add (juce::String::fromUTF8 ((const char*) sqlite3_column_text (stmt, 0)));
+
+    sqlite3_finalize (stmt);
+    return paths;
+}
+
+bool LibraryDb::clearCategoryOverride (const juce::String& path)
+{
+    if (db == nullptr)
+        return false;
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2 (db, "DELETE FROM category_overrides WHERE path=?;", -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_text (stmt, 1, path.toRawUTF8(), -1, SQLITE_TRANSIENT);
+
+    const bool ok = sqlite3_step (stmt) == SQLITE_DONE;
+    sqlite3_finalize (stmt);
+    return ok;
+}
+
 int LibraryDb::count() const
 {
     if (db == nullptr)
@@ -130,8 +241,12 @@ std::vector<LibraryEntry> LibraryDb::queryWhere (const juce::String& whereClause
     if (db == nullptr)
         return out;
 
+    // The category column is the OVERRIDE if one exists, else the auto-detected one,
+    // so a manual re-tag is honoured by every query without touching the samples row.
     const juce::String sql =
-        "SELECT path,name,duration,rms,zcr,decay,onsets,category,confidence,favourite FROM samples "
+        "SELECT s.path,s.name,s.duration,s.rms,s.zcr,s.decay,s.onsets,"
+        " COALESCE(o.category,s.category),s.confidence,s.favourite"
+        " FROM samples s LEFT JOIN category_overrides o ON s.path=o.path "
         + whereClause + ";";
 
     sqlite3_stmt* stmt = nullptr;
@@ -159,17 +274,19 @@ std::vector<LibraryEntry> LibraryDb::queryWhere (const juce::String& whereClause
 
 std::vector<LibraryEntry> LibraryDb::all() const
 {
-    return queryWhere ("ORDER BY name");
+    return queryWhere ("ORDER BY s.name");
 }
 
 std::vector<LibraryEntry> LibraryDb::byCategory (SoundCategory category) const
 {
-    return queryWhere ("WHERE category=" + juce::String ((int) category) + " ORDER BY name");
+    // Filter on the effective (override-aware) category so a re-tag moves the sample.
+    return queryWhere ("WHERE COALESCE(o.category,s.category)=" + juce::String ((int) category)
+                       + " ORDER BY s.name");
 }
 
 std::vector<LibraryEntry> LibraryDb::favourites() const
 {
-    return queryWhere ("WHERE favourite=1 ORDER BY name");
+    return queryWhere ("WHERE s.favourite=1 ORDER BY s.name");
 }
 
 } // namespace rollforge
