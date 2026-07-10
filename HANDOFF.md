@@ -4,34 +4,83 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-09 evening (everything is shipped, pushed, public and Windows-verified; awaiting a human Windows test)._
+_Last updated: 2026-07-10 (v0.2.1 bug-fix release shipped; two known bugs left open, listed below)._
 
 ---
 
-## 0. Read this first (2026-07-09 evening)
+## 0. Read this first (2026-07-10)
 
-**There is nothing left to build.** Every tier of the roadmap artifact is shipped: the moat
-(generative rhythm), Credibility (table stakes), the whole **P2 "Later"** tier, and the **v2 big
-bet** (Capture: tap-to-pattern + beatbox). Three P2 items were deliberately never built and are
-claimed nowhere: perceptual filter sliders, auto silence-trim on import, and keyword
-prompt-to-beat (dropped on its own critique -- "a preset-picker in NL clothing").
+**There is nothing left to BUILD, but there are known bugs left to FIX.** Every tier of the
+roadmap artifact is shipped: the moat (generative rhythm), Credibility (table stakes), the whole
+**P2 "Later"** tier, and the **v2 big bet** (Capture: tap-to-pattern + beatbox). Three P2 items
+were deliberately never built and are claimed nowhere: perceptual filter sliders, auto silence-trim
+on import, and keyword prompt-to-beat (dropped on its own critique -- "a preset-picker in NL
+clothing").
 
-**Branch `feature/make-a-beat` is PUSHED and 47 commits ahead of `master`.** It has never been
+**Branch `feature/make-a-beat` is PUSHED and 50 commits ahead of `master`.** It has never been
 merged; merging it is an open decision.
 
-**CI is green, Windows included.** The repo was made **public** on 2026-07-09 to unblock GitHub
-Actions -- a failed payment / spending limit had been failing every job in 2-4 seconds. Public
-repos get free unlimited Actions. Linux 5m42s, ASan 4m2s, **Windows 8m30s**, 299 test groups.
-This branch had never been compiled by MSVC before; reading it first found one guaranteed break
-(`M_PI` is POSIX and absent from MSVC's `<cmath>` -- use `juce::MathConstants`).
+**CI is green on all three jobs, Windows included.** The repo was made **public** on 2026-07-09 to
+unblock GitHub Actions -- a failed payment / spending limit had been failing every job in 2-4
+seconds. Public repos get free unlimited Actions. **303 test groups.** MSVC gotchas that have
+actually bitten: `M_PI` is POSIX and absent from MSVC's `<cmath>` (use `juce::MathConstants`), and
+`juce::String` decodes a narrow `char` literal as **Latin-1**, so any non-ASCII UI literal must go
+through `utf8()` (`src/ui/Text.h`).
 
-**v0.2.0 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
+**v0.2.1 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
 behind HTTP basic auth). **Do not tag a release** -- the repo is public, so a GitHub Release
 would put the binaries at public URLs and the download password would protect nothing. Dispatch
 `release.yml` instead; its publish job is gated on `github.ref_type == 'tag'`. See
-[`web/README.md`](web/README.md).
+[`web/README.md`](web/README.md). (The old `v0.1.0` Release's four assets were public for exactly
+this reason and were **deleted 2026-07-10**; the tag and the Release page remain.)
 
-### The only open item
+## 0a. v0.2.1 -- what was fixed, and what is still broken (2026-07-10)
+
+Prompted by a user report that "the clear button does not work: click Make a Beat, then Clear or
+Clear Rolls". Both buttons were firing correctly; neither could show it. Chasing that found worse.
+
+**Fixed (commits `d146252`, `3116a0d`):**
+
+1. **No step in the sequencer could be toggled by mouse.** `RollBrushOverlay` overrides
+   `Component::hitTest`, and JUCE honours `setInterceptsMouseClicks(false)` only *inside the
+   default* `hitTest` (`juce_Component.cpp:1095`). The override returned `x >= labelWidth`
+   unconditionally, so it swallowed every click over the step area even with the brush off.
+   Since `11b3496`. **Any `hitTest` override must re-check its own enabled flag.** The lane
+   padlocks kept working (they sit left of the step area), which is what disguised it.
+2. **Every offline render came out dead straight.** Swing lives on a `Sequencer` atomic, *not* in
+   the `Pattern` snapshot it reads, and `OfflineRenderer` built a fresh `Sequencer` and never
+   called `setSwing`. Export WAV / Stems / drag-out / Resample all lost the groove. Regression
+   test: "swing is baked into the rendered audio".
+3. **An immediate `setPattern` ate a bar-queued switch** without bumping `switchCount`, so
+   `pendingActive` never cleared -- editing a step while EVOLVE ran (which the Help tells you to
+   do) permanently wedged EVOLVE, A-H switching and Song mode until you stopped the transport.
+   `pushEditPattern()` now cancels the queued switch deliberately and says so.
+4. **Generated rolls were never drawn**, so `Clear Rolls` deleted something invisible. New pure
+   `rollExtent()` derives the overlay from `editPattern.rolls` (a roll stores only a target *pad*,
+   so the lane is looked up; the span comes from the compiled hits -- no file-format change).
+5. **Nothing cleared the beat.** Added **Clear Pattern** (undoable, greys out when empty). The
+   song row's `Clear` is now **Clear Song** and greys out on an empty chain.
+6. Roll brush painted on the wrong lane: `laneAt` used floor division while the grid tiles rows
+   with `gridSpan`'s *rounded* edges -- the exact drift `GridGeometry.h` exists to prevent.
+7. Clearing a slot used `blankPattern()`, silently resetting it to 120 BPM and dropping its
+   triplet lanes. New pure `clearedPattern()` keeps lanes/tempo/swing and wipes only the notes.
+8. Save / Open / Export discarded their `bool` result and failed **silently**. All report now.
+9. Folder scans used the default `FollowSymlinks::yes`; a symlink cycle hung the watcher thread,
+   which is joined on quit. Now `noCycles`.
+
+**STILL BROKEN -- deliberately not fixed before shipping:**
+
+- **Stems do not sum to the mix when choke groups are active.** `WavExporter::stemPattern` strips
+  every other pad's lanes, so the closed hat never fires in the open-hat stem and never chokes it
+  -- and `FillEngine` places open hats *specifically* to be choked. `StemNullTests` never
+  exercises choke, so the "stems null against the mix" guarantee is untested there. Fix: render
+  **all** pads (so choke logic runs) and capture only the target pad's output, then add a
+  choke-aware null test. This is the highest-value remaining bug.
+- **`Categoriser` matches tokens as substrings**, and `"hat"` is tested before `"kick"`, so
+  "Phat Kick" tags as a closed hat (`src/library/Categoriser.cpp:43`). Needs word-boundary
+  matching, which will shift categorisation broadly -- re-check the >=85% accuracy claim after.
+
+### The other open item
 
 **A producer friend is testing the Windows build and will report back.** That is the first human
 audio/GUI acceptance pass on Windows. Two things are compiler-verified but never human-verified,
@@ -50,7 +99,7 @@ click, `ffmpeg -f x11grab` to capture. Build with `build-local`, never the stale
 
 ```
 cmake --build build-local -j8
-./build-local/tests/RollForgeTests_artefacts/Release/RollForgeTests    # 299 test groups
+./build-local/tests/RollForgeTests_artefacts/Release/RollForgeTests    # 303 test groups
 ```
 
 Sanitizers, both of which have earned their keep:

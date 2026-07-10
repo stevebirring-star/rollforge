@@ -18,13 +18,25 @@ gh workflow run Release --ref <branch>
 gh run download <run-id> -D /tmp/dist
 
 # 2. Generate the page. The JSON is {key: {name, size}} for the four packages.
-python3 web/gen_page.py /tmp/index.html "$(cat /tmp/downloads.json)" 0.2.0
+#    Keys: windows_setup, windows_zip, linux_appimage, linux_targz.
+python3 web/gen_page.py /tmp/index.html "$(cat /tmp/downloads.json)" 0.2.1
 
-# 3. Upload to webvps:
-#      page      -> /var/www/getstackbase/rollforge/index.html
+# 3. Upload to webvps. PACKAGES FIRST, then the page -- otherwise the page is live
+#    for a few seconds linking to files that 404.
 #      packages  -> /var/www/getstackbase/rollforge/downloads/
+#      page      -> /var/www/getstackbase/rollforge/index.html
 #    Always sha256sum both ends: the page links to these binaries.
 ```
+
+Gotchas paid for in real time:
+
+- **Tailscale SSH re-auth expires mid-session**, and an `scp` that hits it just *hangs* with no
+  output -- for as long as you let it. If bytes are not moving, run a plain `ssh webvps true`
+  first and complete the login URL it prints.
+- **No GitHub Release may carry assets while the repo is public.** The `v0.1.0` tag was pushed
+  while the repo was private and its four assets stayed publicly downloadable afterwards; they
+  were deleted on 2026-07-10. After deleting an asset, GitHub's CDN keeps serving a stale `200`
+  -- re-check with a cache-buster (`?cb=$RANDOM`) or you will think the delete failed.
 
 ## Hosting
 

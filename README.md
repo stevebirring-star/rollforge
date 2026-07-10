@@ -114,6 +114,18 @@ packaging\windows\build-packages.ps1 -Version 0.1.0      # -> dist\*-setup.exe +
 
 ---
 
+## Known issues
+
+- **Exported stems do not sum exactly to the exported mix when hats are involved.** Each stem is
+  rendered with only its own pad active, so the closed hat is not there to choke the open hat and
+  the open-hat stem rings out longer than it does in the mix. Everything else nulls. Use the mix
+  export, or shorten the open hat, until this is fixed.
+- **Sample auto-categorisation matches filename tokens as substrings**, so a name that contains
+  `hat` inside another word (for example `Phat Kick`) is tagged as a closed hat. Right-click the
+  sample in the Library and re-tag it; the override is saved and survives a re-scan.
+
+---
+
 ## Project layout
 
 ```
