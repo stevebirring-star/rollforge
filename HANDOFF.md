@@ -4,25 +4,25 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-10 (v0.2.1 bug-fix release shipped; two known bugs left open, listed below)._
+_Last updated: 2026-07-10 (v0.2.1 shipped; the two bugs it left open are now fixed and committed)._
 
 ---
 
 ## 0. Read this first (2026-07-10)
 
-**There is nothing left to BUILD, but there are known bugs left to FIX.** Every tier of the
+**There is nothing left to BUILD, and the two known bugs are now FIXED** (see 0a). Every tier of the
 roadmap artifact is shipped: the moat (generative rhythm), Credibility (table stakes), the whole
 **P2 "Later"** tier, and the **v2 big bet** (Capture: tap-to-pattern + beatbox). Three P2 items
 were deliberately never built and are claimed nowhere: perceptual filter sliders, auto silence-trim
 on import, and keyword prompt-to-beat (dropped on its own critique -- "a preset-picker in NL
 clothing").
 
-**Branch `feature/make-a-beat` is PUSHED and 50 commits ahead of `master`.** It has never been
-merged; merging it is an open decision.
+**Branch `feature/make-a-beat` is 54 commits ahead of `master`** (the last three are unpushed). It
+has never been merged; merging it is an open decision.
 
 **CI is green on all three jobs, Windows included.** The repo was made **public** on 2026-07-09 to
 unblock GitHub Actions -- a failed payment / spending limit had been failing every job in 2-4
-seconds. Public repos get free unlimited Actions. **303 test groups.** MSVC gotchas that have
+seconds. Public repos get free unlimited Actions. **307 test groups.** MSVC gotchas that have
 actually bitten: `M_PI` is POSIX and absent from MSVC's `<cmath>` (use `juce::MathConstants`), and
 `juce::String` decodes a narrow `char` literal as **Latin-1**, so any non-ASCII UI literal must go
 through `utf8()` (`src/ui/Text.h`).
@@ -34,7 +34,7 @@ would put the binaries at public URLs and the download password would protect no
 [`web/README.md`](web/README.md). (The old `v0.1.0` Release's four assets were public for exactly
 this reason and were **deleted 2026-07-10**; the tag and the Release page remain.)
 
-## 0a. v0.2.1 -- what was fixed, and what is still broken (2026-07-10)
+## 0a. v0.2.1 -- what was fixed, and the two bugs it left behind (2026-07-10)
 
 Prompted by a user report that "the clear button does not work: click Make a Beat, then Clear or
 Clear Rolls". Both buttons were firing correctly; neither could show it. Chasing that found worse.
@@ -68,17 +68,40 @@ Clear Rolls". Both buttons were firing correctly; neither could show it. Chasing
 9. Folder scans used the default `FollowSymlinks::yes`; a symlink cycle hung the watcher thread,
    which is joined on quit. Now `noCycles`.
 
-**STILL BROKEN -- deliberately not fixed before shipping:**
+**Both remaining bugs are now FIXED (commits `f73c025`, `d3f699f`):**
 
-- **Stems do not sum to the mix when choke groups are active.** `WavExporter::stemPattern` strips
-  every other pad's lanes, so the closed hat never fires in the open-hat stem and never chokes it
-  -- and `FillEngine` places open hats *specifically* to be choked. `StemNullTests` never
-  exercises choke, so the "stems null against the mix" guarantee is untested there. Fix: render
-  **all** pads (so choke logic runs) and capture only the target pad's output, then add a
-  choke-aware null test. This is the highest-value remaining bug.
-- **`Categoriser` matches tokens as substrings**, and `"hat"` is tested before `"kick"`, so
-  "Phat Kick" tags as a closed hat (`src/library/Categoriser.cpp:43`). Needs word-boundary
-  matching, which will shift categorisation broadly -- re-check the >=85% accuracy claim after.
+1. **Stems now sum to the mix when choke groups are active.** `WavExporter::stemPattern` used to
+   strip every other pad's lanes, so the closed hat never fired in the open-hat stem and never
+   choked it -- and `FillEngine` places open hats *specifically* to be choked. A stem is now the
+   **whole pattern played with one pad captured**: `OfflineRenderer::Options::capturePad` ->
+   `DrumEngine::setCapturePad` -> `VoicePool::renderAdditive` -> `Voice::renderAdditive`'s
+   `writeOutput` gate. `stemPattern` is deleted.
+
+   The subtlety worth keeping: a non-captured voice must still **advance**. `getLevel()` drives
+   "steal the quietest", so a voice that stopped advancing would make a stem steal differently
+   from the mix. It is advanced in *closed form* (envelope is a pure function of the frame index;
+   the sample read and the tone filter feed only the discarded output, and `setTone()` resets the
+   filter on every note) -- which is also why stem export costs the same as before rather than
+   16x: measured 242 ms vs the old 244 ms for a dense 4-bar, 16-pad export.
+
+   Stems null against the mix to **float precision** (maxDiff < 1e-7), not just the old 0.01
+   gate, under choke + rolls + reverb sends + voice stealing all at once. Three new tests in
+   `StemNullTests` cover it -- the last one through the real 24-bit WAV writer, because summing
+   the files is what a producer actually does. Each carries a guard that fails if it stops
+   exercising what it claims: that the choke really fires, that the pool really steals, and that
+   the mix WAV does not clip. A **pre-master mix has no limiter** and peaks at 1.04 at unity, so
+   without that last guard a file-level null test fails for a reason unrelated to stems.
+
+2. **`Categoriser` matches tokens on word boundaries**, so "Phat Kick" is a Kick
+   (`src/library/Categoriser.cpp`). `toWords()` splits at punctuation, at letter<->digit
+   boundaries and at camelCase humps, and matches each token against **two** spellings (camel-split
+   and glued) so both `OpenHat` and `openhat` still resolve. Order is still load-bearing: HatOpen
+   must be tested before HatClosed, because the split form of "OpenHat" contains the word "hat".
+   The >=85% claim was re-checked: the corpus was grown from 16 to 30 names (adding `KickDrum`,
+   `kick01`, `808kick`, `Hi-Hat_Closed`, `Phatty_Kick`, `That_Snare`, ...) and now scores **100%**.
+   An all-lowercase compound (`kickdrum.wav`) is the one thing boundary matching gives up; it
+   returns Unknown and `categorise()` falls through to the feature rules, which is why callers
+   must use `categorise()` and not `fromFilename()`.
 
 ### The other open item
 
@@ -99,7 +122,7 @@ click, `ffmpeg -f x11grab` to capture. Build with `build-local`, never the stale
 
 ```
 cmake --build build-local -j8
-./build-local/tests/RollForgeTests_artefacts/Release/RollForgeTests    # 303 test groups
+./build-local/tests/RollForgeTests_artefacts/Release/RollForgeTests    # 307 test groups
 ```
 
 Sanitizers, both of which have earned their keep:
