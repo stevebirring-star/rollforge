@@ -18,8 +18,15 @@ were deliberately never built and are claimed nowhere: perceptual filter sliders
 on import, and keyword prompt-to-beat (dropped on its own critique -- "a preset-picker in NL
 clothing").
 
-**Branch `feature/make-a-beat` is PUSHED and 55 commits ahead of `master`.** It has never been
-merged; merging it is an open decision.
+**`feature/make-a-beat` is MERGED into `master`** (merge commit `258d76a`, 2026-07-10), and `master`
+is green on all three CI jobs. It had gone 55 commits and three releases without merging. **`master`
+is now the place to work**; the branch is kept only as history.
+
+It is a merge commit, not a fast-forward, for one reason worth knowing: `master` carried `cb70b73`
+(the PR #2 merge of `feature/metering-visual-feedback`) which the branch did not. Both of that
+commit's parents were already ancestors of the branch, and its diff against its own second parent is
+empty, so it contributed no content -- but it did mean `master` was not an ancestor of the branch and
+a fast-forward was impossible. The merged tree is byte-identical to the branch's.
 
 **CI is green on all three jobs, Windows included.** The repo was made **public** on 2026-07-09 to
 unblock GitHub Actions -- a failed payment / spending limit had been failing every job in 2-4
