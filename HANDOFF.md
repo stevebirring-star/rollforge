@@ -18,15 +18,29 @@ were deliberately never built and are claimed nowhere: perceptual filter sliders
 on import, and keyword prompt-to-beat (dropped on its own critique -- "a preset-picker in NL
 clothing").
 
-**`feature/make-a-beat` is MERGED into `master`** (merge commit `258d76a`, 2026-07-10), and `master`
-is green on all three CI jobs. It had gone 55 commits and three releases without merging. **`master`
-is now the place to work**; the branch is kept only as history.
+**`master` is the only branch.** `feature/make-a-beat` was merged in (merge commit `258d76a`,
+2026-07-10) after 55 commits and three releases unmerged, and `master` is green on all three CI jobs.
+The four old branches were then deleted, local and remote:
 
-It is a merge commit, not a fast-forward, for one reason worth knowing: `master` carried `cb70b73`
-(the PR #2 merge of `feature/metering-visual-feedback`) which the branch did not. Both of that
-commit's parents were already ancestors of the branch, and its diff against its own second parent is
-empty, so it contributed no content -- but it did mean `master` was not an ancestor of the branch and
-a fast-forward was impossible. The merged tree is byte-identical to the branch's.
+| deleted branch | tip | still reachable as |
+| --- | --- | --- |
+| `feature/make-a-beat` | `3e9a533` | `master` itself |
+| `feature/metering-visual-feedback` | `bcd0d9a` | 2nd parent of `cb70b73` |
+| `feature/quick-wins-velocity-hatchoke` | `2c1f728` | on `master`'s first-parent line |
+| `fix/export-tempo-and-length` | `5f068b4` | merged by `9849501` |
+
+Nothing was lost -- every tip is an ancestor of `master`, so `git branch <name> <sha>` restores any of
+them. `git branch -d` (never `-D`) was used, so git itself refused to delete anything unmerged.
+
+The merge is a merge commit, not a fast-forward, for one reason worth knowing: `master` carried
+`cb70b73` (the PR #2 merge of `feature/metering-visual-feedback`) which the branch did not. Both of
+that commit's parents were already ancestors of the branch, and its diff against its own second parent
+is empty, so it contributed no content -- but it did mean `master` was not an ancestor of the branch
+and a fast-forward was impossible. The merged tree is byte-identical to the branch's.
+
+**Watch out:** local `master` was stale at `9aeb5e8` while `origin/master` was at `cb70b73`, so
+`git rev-list master..<branch>` reported a clean fast-forward that did not exist. Always diff against
+`origin/master` after a `git fetch`.
 
 **CI is green on all three jobs, Windows included.** The repo was made **public** on 2026-07-09 to
 unblock GitHub Actions -- a failed payment / spending limit had been failing every job in 2-4
