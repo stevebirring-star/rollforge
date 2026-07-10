@@ -4,7 +4,8 @@ Operational guide for resuming work in a later session. For the full phase →
 files/classes map see [`PLAN.md`](PLAN.md); for the manual test checklist see
 [`TESTING.md`](TESTING.md). This file is the "how to pick up where we left off".
 
-_Last updated: 2026-07-10 (v0.2.1 shipped; the two bugs it left open are now fixed and committed)._
+_Last updated: 2026-07-10 (**v0.2.2 shipped** — the two bugs v0.2.1 left open are fixed, and the
+packages on the download page are built from them)._
 
 ---
 
@@ -17,8 +18,8 @@ were deliberately never built and are claimed nowhere: perceptual filter sliders
 on import, and keyword prompt-to-beat (dropped on its own critique -- "a preset-picker in NL
 clothing").
 
-**Branch `feature/make-a-beat` is 54 commits ahead of `master`** (the last three are unpushed). It
-has never been merged; merging it is an open decision.
+**Branch `feature/make-a-beat` is PUSHED and 55 commits ahead of `master`.** It has never been
+merged; merging it is an open decision.
 
 **CI is green on all three jobs, Windows included.** The repo was made **public** on 2026-07-09 to
 unblock GitHub Actions -- a failed payment / spending limit had been failing every job in 2-4
@@ -27,12 +28,15 @@ actually bitten: `M_PI` is POSIX and absent from MSVC's `<cmath>` (use `juce::Ma
 `juce::String` decodes a narrow `char` literal as **Latin-1**, so any non-ASCII UI literal must go
 through `utf8()` (`src/ui/Text.h`).
 
-**v0.2.1 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
-behind HTTP basic auth). **Do not tag a release** -- the repo is public, so a GitHub Release
+**v0.2.2 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
+behind HTTP basic auth; the 0.2.0 and 0.2.1 packages are still on disk, unlinked). Built by
+dispatch run `29086993209` from `7f2ead9`, sha256-verified both ends, packages uploaded before the
+page. **Do not tag a release** -- the repo is public, so a GitHub Release
 would put the binaries at public URLs and the download password would protect nothing. Dispatch
-`release.yml` instead; its publish job is gated on `github.ref_type == 'tag'`. See
+`release.yml` instead; its publish job is gated on `github.ref_type == 'tag'` and correctly
+reported `skipped` on this run. See
 [`web/README.md`](web/README.md). (The old `v0.1.0` Release's four assets were public for exactly
-this reason and were **deleted 2026-07-10**; the tag and the Release page remain.)
+this reason and were **deleted 2026-07-10**; the tag and the Release page remain, with 0 assets.)
 
 ## 0a. v0.2.1 -- what was fixed, and the two bugs it left behind (2026-07-10)
 
