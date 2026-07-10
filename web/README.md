@@ -10,11 +10,12 @@ are hand-written here; everything under "User manual" is not.
 
 ```bash
 # 1. Build the packages WITHOUT publishing a GitHub Release.
-#    release.yml gates its publish job on
+#    release.yml is workflow_dispatch ONLY -- no tag triggers it (it used to, and every
+#    tag then rebuilt both platforms for artifacts nobody downloads). Dispatched against a
+#    BRANCH, github.ref_type is 'branch', so the publish job's gate
 #        github.ref_type == 'tag' && vars.ROLLFORGE_PUBLISH_RELEASE == 'true'
-#    and that repo variable is not set, so BOTH a manual dispatch and a v* tag build all
-#    four packages and publish none. This matters: the repo is public, so a Release would
-#    put the binaries at public URLs and the download password would protect nothing.
+#    is false and it skips. This matters: the repo is public, so a Release would put the
+#    binaries at public URLs and the download password would protect nothing.
 #    (Before 2026-07-10 the gate was just `github.ref_type == 'tag'`, and any tag published.)
 gh workflow run Release --ref <branch>
 gh run download <run-id> -D /tmp/dist
@@ -35,9 +36,13 @@ Gotchas paid for in real time:
 - **Tailscale SSH re-auth expires mid-session**, and an `scp` that hits it just *hangs* with no
   output -- for as long as you let it. If bytes are not moving, run a plain `ssh webvps true`
   first and complete the login URL it prints.
-- **Actions runs the workflow file from the ref that triggered it.** Gating the publish job on the
-  branch does nothing for a tag placed on an older commit -- that tag runs the *old* workflow. Any
-  tag you intend to be safe must sit on a commit that already contains the gate.
+- **Actions runs the workflow file from the ref that triggered it.** Changing `release.yml` on
+  `master` does nothing for an old ref: `v0.1.0` still carries the tag trigger *and* an ungated
+  publish job. Deleting and re-pushing that tag, or dispatching against it, would publish public
+  binaries. Do not re-push old tags.
+- **To publish deliberately** (only if the binaries are meant to be public): set the repo variable
+  `ROLLFORGE_PUBLISH_RELEASE=true`, then `gh workflow run Release --ref <tag>`. A dispatch against a
+  tag is what makes `github.ref_type == 'tag'`; a branch dispatch never does.
 - **No GitHub Release may carry assets while the repo is public.** The `v0.1.0` tag was pushed
   while the repo was private and its four assets stayed publicly downloadable afterwards; they
   were deleted on 2026-07-10. After deleting an asset, GitHub's CDN keeps serving a stale `200`

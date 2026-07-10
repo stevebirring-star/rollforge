@@ -52,18 +52,25 @@ through `utf8()` (`src/ui/Text.h`).
 **v0.2.2 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
 behind HTTP basic auth; the 0.2.0 and 0.2.1 packages are still on disk, unlinked). Built by
 dispatch run `29086993209` from `7f2ead9`, sha256-verified both ends, packages uploaded before the
-page. **Tagging is now safe, and it did not used to be.** The repo is public, so a GitHub Release
+page. **A tag is now just a tag, and it did not used to be.** The repo is public, so a GitHub Release
 puts its assets at unauthenticated URLs and the download password protects nothing. `release.yml`
-used to publish on *any* `v*` tag, so the rule was simply "never tag". Its publish job is now gated
-on `github.ref_type == 'tag' && vars.ROLLFORGE_PUBLISH_RELEASE == 'true'`, and that variable is not
-set -- so a tag packages and publishes nothing. **Only set that variable if the binaries are truly
-meant to be public.** To cut packages without a tag, dispatch `release.yml`. See
+used to run on any `v*` tag and publish, so the rule was simply "never tag". It is now
+**`workflow_dispatch` only** -- and `ci.yml` matches `branches: ["**"]`, which does not match tags --
+so **no workflow in this repo triggers on a tag at all**. Tag freely.
+
+Publishing a Release now takes two deliberate acts that cannot both happen by accident:
+dispatch the workflow **against a tag ref** (`gh workflow run Release --ref v0.2.2` -- only a tag
+dispatch makes `github.ref_type == 'tag'`), **and** set the repo variable
+`ROLLFORGE_PUBLISH_RELEASE` to `true`. It is not set. **Only set it if the binaries are truly meant
+to be public.** For packages without publishing, dispatch against a branch. See
 [`web/README.md`](web/README.md). (The old `v0.1.0` Release's four assets were public for exactly
 this reason and were **deleted 2026-07-10**; the tag and the Release page remain, with 0 assets.)
 
-Note that Actions runs the workflow file **from the ref that triggered it**, so a tag placed on a
-commit with the old, ungated `release.yml` would still publish. `v0.2.2` is tagged on a commit that
-contains the gate.
+**The one hazard that survives:** Actions runs the workflow file **from the ref that triggered it**.
+`v0.1.0` points at a commit whose `release.yml` still has the tag trigger *and* an ungated publish
+job, so deleting and re-pushing that tag -- or dispatching against it -- would publish public
+binaries. Nothing on `master` can prevent that. Do not re-push old tags. `v0.2.2` is tagged at
+`c0b8f73`, which carries the gate.
 
 ## 0a. v0.2.1 -- what was fixed, and the two bugs it left behind (2026-07-10)
 

@@ -4,22 +4,34 @@ name: Release
 #   Linux   -> AppImage + portable tar.gz
 #   Windows -> Inno Setup installer + portable zip   (added in Phase 7 commit 5)
 #
-# Runs on a version tag (v*) and on manual dispatch. It PACKAGES on both; it
-# PUBLISHES on neither unless you ask. The everyday build+test signal lives in
-# ci.yml; this workflow is packaging only.
+# MANUAL DISPATCH ONLY. It used to also run on `push: tags: ["v*"]`, so every
+# version tag rebuilt both platforms -- artifacts nobody downloads, since the
+# packages are published by hand to getstackbase.com. A tag is now just a tag: no
+# workflow in this repo triggers on one (ci.yml matches `branches: ["**"]`, which
+# does not match tags). The everyday build+test signal lives in ci.yml; this
+# workflow is packaging only.
 #
 # WHY PUBLISHING IS OPT-IN: this repo is PUBLIC, and a GitHub Release puts its
 # assets at unauthenticated URLs. The binaries are served from
 # getstackbase.com/rollforge behind HTTP basic auth, so a Release would hand them
 # out for free and the download password would protect nothing. The v0.1.0 tag was
 # pushed while the repo was private and its four assets stayed public afterwards;
-# they were deleted on 2026-07-10. Tagging used to be enough to repeat that by
-# accident, so it no longer is: set the repo variable ROLLFORGE_PUBLISH_RELEASE
-# to "true" only when the binaries are genuinely meant to be public.
+# they were deleted on 2026-07-10.
+#
+# So publishing now takes two deliberate acts that cannot happen by accident:
+#   1. dispatch this workflow against a TAG ref, e.g.
+#        gh workflow run Release --ref v0.2.2
+#      (a dispatch onto a tag is what makes github.ref_type == 'tag'; a dispatch
+#       onto a branch never is, and the publish job skips)
+#   2. set the repo variable ROLLFORGE_PUBLISH_RELEASE to "true"
+# Do the second only when the binaries are genuinely meant to be public.
+#
+# CAVEAT worth knowing: Actions runs the workflow file from the ref that triggered
+# it. Tags cut before 2026-07-10 (v0.1.0) still carry the old workflow, which
+# published on any tag with no gate. Dropping the trigger here cannot protect a
+# ref that predates it -- do not delete and re-push an old tag.
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +39,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write   # gh release create/upload on a tag
+  contents: write   # gh release create/upload, when dispatched against a tag
 
 jobs:
   linux:
@@ -126,10 +138,10 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # On a version tag AND only when explicitly enabled: gather both platforms'
-  # artifacts into one GitHub Release. Without the repo variable this job is
-  # skipped, so a tag is just a tag and the download password keeps working.
-  # See the header for why this is not simply `if: github.ref_type == 'tag'`.
+  # Gathers both platforms' artifacts into one GitHub Release. Runs only when this
+  # workflow was dispatched against a TAG ref AND the repo variable is set -- two
+  # deliberate acts. Neither a branch dispatch nor a tag push can reach it, so the
+  # download password keeps working. See the header.
   release:
     name: Publish GitHub Release
     needs: [linux, windows]
