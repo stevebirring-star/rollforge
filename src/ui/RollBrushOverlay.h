@@ -34,9 +34,13 @@ public:
         Keeping the count here rather than the compiler keeps this overlay model-free. */
     std::function<int (int lane, int startStep, int lengthSteps, float density)> getHitCount;
 
-    // Never claim the lane-header column (labels + lock padlocks live there and
-    // belong to the grid beneath); only the step area is ours to paint on.
-    bool hitTest (int x, int /*y*/) override { return x >= labelWidth; }
+    // Claim the step area ONLY while the brush is on. The `brushEnabled` term is not
+    // redundant with setInterceptsMouseClicks(): JUCE honours that flag inside the DEFAULT
+    // Component::hitTest, so an override that ignores it silently re-intercepts every click
+    // — which is what stopped the grid's own steps from toggling while the brush was off.
+    // Never claim the lane-header column either: labels and lock padlocks live there and
+    // belong to the grid beneath.
+    bool hitTest (int x, int /*y*/) override { return brushEnabled && x >= labelWidth; }
 
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;

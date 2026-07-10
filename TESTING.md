@@ -98,9 +98,19 @@ Linux + Windows + ASan/UBSan.
   tight. It never changes which hits play, only their feel.
 - ☐ Roll brush: toggle "Roll Brush" on, drag across a lane -> an accelerating roll
   block appears (drag up = denser) and plays; toggle off -> normal step editing.
+- ☐ REGRESSION (brush off): click a step in the grid -> it lights. The overlay
+  overrides Component::hitTest, and JUCE honours setInterceptsMouseClicks only
+  inside the DEFAULT hitTest — so an override that forgets `brushEnabled` silently
+  eats every click in the step area and no step can be toggled by mouse.
 - ☐ Roll preset picker: choose a preset (e.g. Machine Gun, Drill Slide) then paint
   -> that shape is used instead of the auto density curve.
-- ☐ Clear Rolls removes all painted rolls; a FILL also resets them.
+- ☐ Clear Rolls removes all rolls, painted OR generated. REGRESSION: press
+  "Make a Beat" (intensity >= 3 adds a snare roll) -> a roll block is DRAWN at the
+  end of the bar; Clear Rolls removes it and greys itself out; Ctrl+Z brings it back.
+- ☐ Clear Pattern empties the current slot (steps + rolls), is undoable, and greys
+  out when the pattern is already empty — including after you draw steps by hand.
+- ☐ Clear Song only empties the arrangement chain; it greys out when the chain is
+  empty and never touches the beat.
 - ☐ Quit -> clean exit, no crash/hang (ASan-clean).
 
 ## Phase 4 — Macro effects
@@ -155,9 +165,15 @@ stems sum to the full mix with master FX off; a WAV per active pad is written).
   GM drum map.
 - ☐ Export WAV (mix) -> the file plays back the pattern (with the current macro-FX
   applied) and matches what you hear.
+- ☐ REGRESSION: raise Swing, then Export WAV / Stems / drag-out / Resample -> the
+  exported audio SHUFFLES. Swing lives on the Sequencer, not inside the Pattern
+  snapshot it reads, so an offline render that forgets to hand it over comes out
+  dead straight. Covered by "swing is baked into the rendered audio".
 - ☐ Export Stems -> a folder of `pad_NN.wav` files; summing them equals the mix
   (master FX off).
 - ☐ Exporting does not interrupt live playback (renders on a separate engine).
+- ☐ Every export, Save and Open reports success OR failure in the status line;
+  none of them fail silently.
 - ☐ Quit -> clean exit, no crash/hang.
 
 ## Phase 7 — Packaging & polish

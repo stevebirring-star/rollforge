@@ -73,7 +73,7 @@ private:
     juce::TextButton songButton  { "SONG" };
     juce::TextButton loopButton  { "Loop" };
     juce::TextButton addButton   { "Add A" };
-    juce::TextButton clearButton { "Clear" };
+    juce::TextButton clearButton { "Clear Song" };
 
     juce::Rectangle<int> chipArea;   // what is left after the buttons
 

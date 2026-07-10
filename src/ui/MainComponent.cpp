@@ -289,9 +289,7 @@ MainComponent::MainComponent()
         // the genre's curated swing is audible on generate; undo puts the user's back.
         auto refresh = [this]
         {
-            refreshGridFromPattern();
-            paintedRolls.clear();             // generated rolls play but aren't drawn on the grid
-            rollOverlay.setRolls (paintedRolls);
+            refreshGridFromPattern();         // also redraws the generated roll on the grid
             transportBar.setSwing (editPattern.swing);   // drives sequencer.setSwing via the slider
             pushEditPattern();
         };
@@ -359,7 +357,9 @@ MainComponent::MainComponent()
         if (! PatternBank::isValidSlot (slot))
             return;
 
-        bank.pattern (slot) = blankPattern();
+        // Keep the slot's lanes, tempo and swing; only the notes go. blankPattern() here
+        // would silently retune the slot to 120 BPM straight and drop its triplet lanes.
+        bank.pattern (slot) = clearedPattern (bank.pattern (slot));
         if (slot == bank.currentSlot)
         {
             // Clearing what you are standing on has to reach the grid and the engine too,
@@ -372,6 +372,35 @@ MainComponent::MainComponent()
         refreshSlotStates();
     };
     addAndMakeVisible (patternSlots);
+
+    // Empty the pattern you are standing in. Right-clicking a slot key could already do this,
+    // which nobody finds; "Make a Beat" needs a visible way back to silence. Keeps the slot's
+    // lanes, tempo and swing — clearing the notes is not the same as resetting the pattern.
+    clearPatternButton.setTooltip ("Turn off every step and roll in this pattern (Ctrl+Z undoes it)");
+    clearPatternButton.setEnabled (false);   // refreshGridFromPattern() turns it on
+    clearPatternButton.onClick = [this]
+    {
+        if (patternIsEmpty (editPattern))
+            return;
+
+        Pattern before = editPattern;
+        Pattern after  = clearedPattern (editPattern);
+
+        auto refresh = [this]
+        {
+            refreshGridFromPattern();
+            pushEditPattern();
+        };
+
+        undoManager.beginNewTransaction();
+        undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+
+        statusLabel.setText ("Pattern "
+                                 + juce::String::charToString ((juce::juce_wchar) ('A' + bank.currentSlot))
+                                 + " cleared",
+                             juce::dontSendNotification);
+    };
+    addAndMakeVisible (clearPatternButton);
 
     // EVOLVE: infinity mode. Every bar the engine is handed a fresh variation of the anchor
     // — never of the last variation, which would random-walk the groove into mush. It makes
@@ -461,13 +490,33 @@ MainComponent::MainComponent()
     brushButton.onClick = [this] { rollOverlay.setBrushEnabled (brushButton.getToggleState()); };
     addAndMakeVisible (brushButton);
 
+    // Undoable as one step, like Make a Beat: a roll you generated and then cleared is
+    // one Ctrl+Z away from coming back.
     clearRollsButton.onClick = [this]
     {
-        editPattern.numRolls = 0;
-        paintedRolls.clear();
-        rollOverlay.setRolls (paintedRolls);
-        pushEditPattern();
+        const int rolls = juce::jlimit (0, maxRolls, editPattern.numRolls);
+        if (rolls == 0)
+            return;
+
+        Pattern before = editPattern;
+        Pattern after  = editPattern;
+        after.numRolls = 0;
+
+        auto refresh = [this]
+        {
+            refreshGridFromPattern();
+            pushEditPattern();
+        };
+
+        undoManager.beginNewTransaction();
+        undoManager.perform (new SetPatternAction (editPattern, before, after, refresh));
+
+        statusLabel.setText (rolls == 1 ? juce::String ("Roll cleared")
+                                        : juce::String (rolls) + " rolls cleared",
+                             juce::dontSendNotification);
     };
+    clearRollsButton.setEnabled (false);   // refreshRollOverlay() turns it on when a roll exists
+    clearRollsButton.setTooltip ("Remove every roll from this pattern (Ctrl+Z brings them back)");
     addAndMakeVisible (clearRollsButton);
 
     rollPresetBox.addItem ("Auto (density)", 1);
@@ -520,8 +569,7 @@ MainComponent::MainComponent()
             = RollCompiler::compile (buildBrushRegion (lane, startStep, length, density));
         ++editPattern.numRolls;
 
-        paintedRolls.push_back ({ lane, startStep, juce::jmax (1, length) });
-        rollOverlay.setRolls (paintedRolls);
+        refreshRollOverlay();
         pushEditPattern();
     };
 
@@ -740,7 +788,25 @@ void MainComponent::refreshGridFromPattern()
         }
     }
 
+    refreshRollOverlay();
     refreshSlotStates();
+}
+
+// The overlay is a VIEW of editPattern.rolls, never a parallel list. Deriving it here —
+// and from the one place every pattern change already funnels through — is what makes a
+// generated roll (Make a Beat), a loaded roll, and a hand-painted roll all draw alike,
+// and what makes Clear Rolls visibly do something.
+void MainComponent::refreshRollOverlay()
+{
+    paintedRolls.clear();
+
+    const int rolls = juce::jlimit (0, maxRolls, editPattern.numRolls);
+    for (int i = 0; i < rolls; ++i)
+        if (const RollExtent e = rollExtent (editPattern, i); e.lane >= 0)
+            paintedRolls.push_back ({ e.lane, e.startStep, e.lengthSteps });
+
+    rollOverlay.setRolls (paintedRolls);
+    clearRollsButton.setEnabled (rolls > 0);
 }
 
 RollRegion MainComponent::buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const
@@ -1137,8 +1203,36 @@ void MainComponent::commitPattern (int slot, const Pattern& pattern)
     announceSlotChange = true;
 }
 
+// The Sequencer has ONE incoming channel. An immediate setPattern overwrites whatever was
+// queued for the bar line and clears hasQueued WITHOUT bumping switchCount — so the timer
+// below would wait forever for a swap that can no longer happen, leaving the slot pulsing
+// and A..H, Song and EVOLVE all wedged (they refuse to act while pendingActive). Editing
+// the pattern you are standing in means you want to stay in it: drop the queued switch
+// here, deliberately, instead of letting the engine eat it.
+void MainComponent::cancelQueuedSwitch()
+{
+    if (! pendingActive)
+        return;
+
+    const int cancelled = pendingSlot;
+
+    pendingActive = false;
+    pendingSlot   = -1;
+    patternSlots.setQueued (-1);
+
+    // Evolve queues a variation of the slot you are already in; that is not a switch anyone
+    // asked for, so cancelling it is not news. Losing a switch to another slot is.
+    if (PatternBank::isValidSlot (cancelled) && cancelled != bank.currentSlot)
+        statusLabel.setText (juce::String ("Pattern ")
+                                 + juce::String::charToString ((juce::juce_wchar) ('A' + cancelled))
+                                 + utf8 (" switch cancelled — you edited this pattern"),
+                             juce::dontSendNotification);
+}
+
 void MainComponent::pushEditPattern()
 {
+    cancelQueuedSwitch();
+
     engine.getSequencer().setPattern (editPattern);
 
     if (evolveButton.getToggleState())
@@ -1363,6 +1457,11 @@ void MainComponent::refreshSlotStates()
     for (int i = 0; i < numPatternSlots; ++i)
         patternSlots.setSlotWritten (i, ! patternIsEmpty (i == bank.currentSlot ? editPattern
                                                                                 : bank.pattern (i)));
+
+    // Lives here, not in refreshGridFromPattern(): toggling one step reaches this function
+    // but not that one, and a Clear Pattern button that stayed grey after you drew a beat
+    // by hand would look exactly as broken as the one this all started with.
+    clearPatternButton.setEnabled (! patternIsEmpty (editPattern));
 }
 
 void MainComponent::refreshSongBar()
@@ -1837,8 +1936,6 @@ void MainComponent::sliceLoopIntoPads (const juce::File& file)
     auto refresh = [this]
     {
         refreshGridFromPattern();
-        paintedRolls.clear();
-        rollOverlay.setRolls (paintedRolls);
         transportBar.setDisplayedTempo (editPattern.bpm);
         transportBar.setDisplayedSwing (editPattern.swing);
         pushEditPattern();
@@ -2179,7 +2276,11 @@ void MainComponent::doExportMidi (int loops)
                 return;
             if (! f.hasFileExtension ("mid"))
                 f = f.withFileExtension ("mid");
-            MidiExporter::save (editPattern, f, bars);
+
+            statusLabel.setText (MidiExporter::save (editPattern, f, bars)
+                                     ? "Exported " + f.getFileName()
+                                     : "Couldn't write " + f.getFileName(),
+                                 juce::dontSendNotification);
         });
 }
 
@@ -2243,7 +2344,11 @@ void MainComponent::doExportWav (int loops)
             // thread is never touched.
             DrumEngine exportEngine;
             installKitIntoEngine (starterKit, exportEngine);
-            WavExporter::exportMix (exportEngine, editPattern, f, renderOptions (bars));
+
+            statusLabel.setText (WavExporter::exportMix (exportEngine, editPattern, f, renderOptions (bars))
+                                     ? "Exported " + f.getFileName()
+                                     : "Couldn't write " + f.getFileName(),
+                                 juce::dontSendNotification);
         });
 }
 
@@ -2266,7 +2371,14 @@ void MainComponent::doExportStems (int loops)
             // sum, not on each part. Running it per stem would give every stem its own
             // limiter and compressor — a nonlinearity — and the stems would no longer
             // add back up to the mix (which is what StemNullTests exists to guarantee).
-            WavExporter::exportStems (exportEngine, editPattern, dir, renderOptions (bars, false));
+            const int written = WavExporter::exportStems (exportEngine, editPattern, dir,
+                                                          renderOptions (bars, false));
+            statusLabel.setText (written > 0
+                                     ? juce::String (written) + (written == 1 ? " stem exported to "
+                                                                              : " stems exported to ")
+                                           + dir.getFileName()
+                                     : "Couldn't write stems to " + dir.getFileName(),
+                                 juce::dontSendNotification);
         });
 }
 
@@ -2283,7 +2395,12 @@ void MainComponent::doSaveProject()
                 return;
             if (! f.hasFileExtension ("rollforge"))
                 f = f.withFileExtension ("rollforge");
-            ProjectIO::save (captureProject(), f);
+
+            // A save that silently failed is the one bug a music app must never have.
+            statusLabel.setText (ProjectIO::save (captureProject(), f)
+                                     ? "Saved " + f.getFileName()
+                                     : "COULDN'T SAVE " + f.getFileName() + utf8 (" — your work is not on disk"),
+                                 juce::dontSendNotification);
         });
 }
 
@@ -2299,7 +2416,15 @@ void MainComponent::doOpenProject()
                 return;
             Project loaded;
             if (ProjectIO::load (f, loaded))
+            {
                 applyProject (loaded);
+                statusLabel.setText ("Opened " + f.getFileName(), juce::dontSendNotification);
+            }
+            else
+            {
+                statusLabel.setText ("Couldn't read " + f.getFileName() + utf8 (" — not a RollForge project?"),
+                                     juce::dontSendNotification);
+            }
         });
 }
 
@@ -2359,6 +2484,7 @@ void MainComponent::resized()
     area.removeFromTop (8);
 
     auto patternRow = area.removeFromTop (26);
+    clearPatternButton.setBounds (patternRow.removeFromRight (108));
     patternSlots.setBounds (patternRow.removeFromLeft (340));
     patternRow.removeFromLeft (10);
     evolveButton.setBounds (patternRow.removeFromLeft (78));

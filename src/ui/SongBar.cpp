@@ -49,7 +49,11 @@ SongBar::SongBar()
     addButton.onClick = [this] { if (onAppendCurrent) onAppendCurrent(); };
     addAndMakeVisible (addButton);
 
-    clearButton.setTooltip ("Empty the chain");
+    // Named for what it empties. "Clear" alone, sitting a row under the pattern keys,
+    // reads as "clear the beat" — and then does nothing visible, because the chain it
+    // really clears is usually already empty. It greys out when there is nothing to clear.
+    clearButton.setTooltip ("Empty the song chain. This does not touch the beat.");
+    clearButton.setEnabled (false);
     clearButton.onClick = [this] { if (onClearChain) onClearChain(); };
     addAndMakeVisible (clearButton);
 
@@ -60,6 +64,7 @@ void SongBar::setSong (const Song& s)
 {
     song = s;
     loopButton.setToggleState (song.loop, juce::dontSendNotification);
+    clearButton.setEnabled (! song.steps.empty());
     repaint();
 }
 
@@ -105,7 +110,7 @@ void SongBar::resized()
     r.removeFromLeft (6);
     addButton.setBounds (r.removeFromLeft (66));
     r.removeFromLeft (6);
-    clearButton.setBounds (r.removeFromLeft (54));
+    clearButton.setBounds (r.removeFromLeft (86));
     r.removeFromLeft (10);
     chipArea = r;
 }

@@ -11,8 +11,10 @@ int Scanner::scanBlocking (const juce::File& folder)
     if (! folder.isDirectory())
         return 0;
 
+    // noCycles: a symlink loop under the chosen folder would otherwise never terminate.
     juce::Array<juce::File> files;
-    folder.findChildFiles (files, juce::File::findFiles, true, analyser.supportedWildcards());
+    folder.findChildFiles (files, juce::File::findFiles, true, analyser.supportedWildcards(),
+                           juce::File::FollowSymlinks::noCycles);
 
     int stored = 0;
     for (const auto& f : files)

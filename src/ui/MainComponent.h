@@ -123,6 +123,7 @@ private:
         replaced. commitPattern() deliberately does NOT use it: adopting a variation must
         never make that variation the new anchor. */
     void pushEditPattern();
+    void cancelQueuedSwitch();                  // drop a bar-queued switch an immediate push would eat
     void refreshSlotStates();                   // which of A..H have anything in them
     void updateSongPlayback();                  // once per timer tick: drive the chain
     void refreshSongBar();                      // chain -> chips, and the ADD button's letter
@@ -154,6 +155,7 @@ private:
     void refreshCategoryColours();               // paint every pad + lane with its sound's colour
     void afterStepEdit (int lane, int step);   // reflect a step change into grid + engine
     void refreshGridFromPattern();             // re-reflect the whole editPattern into the grid
+    void refreshRollOverlay();                 // re-derive the drawn roll blocks from editPattern
     RollRegion buildBrushRegion (int lane, int startStep, int lengthSteps, float density) const; // roll under the brush (paint + live meter share this)
     /** Renders the pattern to a temp file for a drag-out, returning it (empty on
         failure). MIDI when `asMidi`, otherwise a WAV mix of the master output. */
@@ -226,6 +228,7 @@ private:
     SequencerGrid    seqGrid { 16, 16 };
     FillBar          fillBar { engine.getSequencer() };
     RollBrushOverlay rollOverlay { 16, 16, SequencerGrid::labelColumnWidth };
+    juce::TextButton clearPatternButton { "Clear Pattern" };   // empty the current slot's notes
     juce::TextButton brushButton { "Roll Brush" };
     juce::TextButton clearRollsButton { "Clear Rolls" };
     juce::ComboBox   rollPresetBox;

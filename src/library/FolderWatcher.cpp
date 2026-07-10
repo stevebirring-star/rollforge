@@ -111,8 +111,12 @@ void FolderWatcher::scanOnce()
         if (! folder.isDirectory())
             continue;   // an unmounted drive: skip it, and keep every row we have from it
 
+        // noCycles, not the default yes: a sample folder symlinked into itself (or into a
+        // parent) would otherwise recurse until this thread never finishes, and the watcher
+        // thread is joined on shutdown — so the app would hang on quit, not just stall.
         juce::Array<juce::File> files;
-        folder.findChildFiles (files, juce::File::findFiles, true, wildcards);
+        folder.findChildFiles (files, juce::File::findFiles, true, wildcards,
+                               juce::File::FollowSymlinks::noCycles);
 
         for (const auto& f : files)
         {

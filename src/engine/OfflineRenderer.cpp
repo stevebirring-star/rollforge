@@ -25,6 +25,12 @@ int render (DrumEngine& engine, const Pattern& pattern, juce::AudioBuffer<float>
     Sequencer seq;                 // heap-allocates its large pattern state internally
     seq.prepare (sr);
     seq.setTempo (bpm);
+
+    // Swing lives on the Sequencer, not inside the Pattern snapshot it reads, so a fresh
+    // offline Sequencer starts straight. The pattern carries the transport's swing (the
+    // UI writes it on every slider move) — hand it over, or every export comes out dead
+    // straight while the app shuffles.
+    seq.setSwing (pattern.swing);
     seq.setPattern (pattern);
     seq.setPlaying (true);
 

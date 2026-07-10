@@ -36,8 +36,10 @@ void RollBrushOverlay::setRolls (const std::vector<RollRect>& rollsToDraw)
 
 int RollBrushOverlay::laneAt (int y) const noexcept
 {
-    const int rowH = juce::jmax (1, getHeight() / numLanes);
-    return juce::jlimit (0, numLanes - 1, y / rowH);
+    // gridIndexAt, not y / rowH: the grid's rows are ROUNDED edges (gridSpan), and floor
+    // division disagrees with them by a row wherever the height is not a multiple of
+    // numLanes — painting the roll onto the lane above or below the one under the cursor.
+    return gridIndexAt (y, numLanes, juce::jmax (1, getHeight()));
 }
 
 int RollBrushOverlay::stepAt (int x) const noexcept

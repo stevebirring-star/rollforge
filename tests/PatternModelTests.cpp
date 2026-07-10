@@ -6,6 +6,8 @@
 
 #include "engine/TripleBuffer.h"
 #include "model/Pattern.h"
+#include "model/RollCompiler.h"
+#include "model/RollPresets.h"
 
 #include <juce_core/juce_core.h>
 
@@ -142,6 +144,59 @@ public:
             expect (got.lane (0).step (2).on);
             expectWithinAbsoluteError (got.lane (0).step (2).velocity, 0.6f, 1.0e-6f);
             expectEquals (got.lane (0).step (2).ratchets, 4);
+        }
+
+        // rollExtent is what draws a roll on the grid. It used to not exist, so a roll
+        // that FillEngine generated played but was never drawn — and "Clear Rolls" then
+        // looked like a dead button because it removed something invisible.
+        beginTest ("rollExtent finds the lane firing the roll's pad");
+        {
+            Pattern p = blankPattern();
+            p.lane (1).targetPad = 7;
+            p.rolls[0] = RollCompiler::compile (RollPresets::make (RollPresets::MachineGun, 14.0, 2.0, 7));
+            p.numRolls = 1;
+
+            const RollExtent e = rollExtent (p, 0);
+            expectEquals (e.lane, 1);
+            expectEquals (e.startStep, 14);
+            expectEquals (e.lengthSteps, 2);   // hits span columns 14 and 15
+        }
+
+        beginTest ("rollExtent draws nothing it cannot place");
+        {
+            Pattern p = blankPattern();
+            p.rolls[0] = RollCompiler::compile (RollPresets::make (RollPresets::MachineGun, 0.0, 2.0, 3));
+            p.numRolls = 1;
+
+            expectEquals (rollExtent (p, -1).lane, -1);   // out of range
+            expectEquals (rollExtent (p,  1).lane, -1);   // past numRolls
+            expectEquals (rollExtent (p,  0).lane, 3);    // blankPattern maps lane i -> pad i
+
+            Pattern noLane = p;
+            noLane.numLanes = 2;                          // no active lane targets pad 3
+            expectEquals (rollExtent (noLane, 0).lane, -1);
+
+            Pattern silent = p;
+            silent.rolls[0].count = 0;                    // a roll with no hits draws nothing
+            expectEquals (rollExtent (silent, 0).lane, -1);
+        }
+
+        beginTest ("rollExtent clamps a roll to the lane it lives on");
+        {
+            Pattern p = blankPattern();
+            p.rolls[0] = RollCompiler::compile (RollPresets::make (RollPresets::MachineGun, 15.0, 4.0, 0));
+            p.numRolls = 1;
+
+            const RollExtent e = rollExtent (p, 0);
+            expectEquals (e.lane, 0);
+            expectEquals (e.startStep, 15);
+            expectEquals (e.lengthSteps, 1);   // a 16-step lane leaves room for one column
+
+            Pattern past = p;
+            past.rolls[0].startStep = 99.0f;   // a corrupt/out-of-range start still draws in-bounds
+            const RollExtent c = rollExtent (past, 0);
+            expect (c.startStep >= 0 && c.startStep < past.lane (0).length);
+            expect (c.startStep + c.lengthSteps <= past.lane (0).length);
         }
     }
 };

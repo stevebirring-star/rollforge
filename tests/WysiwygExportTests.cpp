@@ -60,6 +60,15 @@ namespace
                 d = juce::jmax (d, std::abs (a.getSample (c, i) - b.getSample (c, i)));
         return d;
     }
+
+    // First sample index whose magnitude crosses `threshold` — a hit's onset. -1 if silent.
+    int firstOnset (const juce::AudioBuffer<float>& b, float threshold = 0.01f)
+    {
+        for (int i = 0; i < b.getNumSamples(); ++i)
+            if (std::abs (b.getSample (0, i)) > threshold)
+                return i;
+        return -1;
+    }
 }
 
 class WysiwygExportTest final : public juce::UnitTest
@@ -155,6 +164,45 @@ public:
             expect (a.getMagnitude (0, 0, a.getNumSamples()) > 0.0f);
             // The Drive macro must actually change the export, not vanish on the way out.
             expect (maxAbsDiff (a, b) > 0.001f);
+        }
+
+        beginTest ("swing is baked into the rendered audio (the export shuffles too)");
+        {
+            // The same bug as the EQ/comp one below, one level up: swing rides on the
+            // Pattern, not on Options, and OfflineRenderer built a fresh Sequencer and
+            // never told it. Every WAV/stem/drag/resample export came out dead straight
+            // while the app shuffled.
+            Kit kit = StarterKit::build (44100.0);
+
+            Pattern p;
+            p.numLanes = 1; p.bpm = 120.0;
+            p.lane (0).targetPad = 0; p.lane (0).length = 16;
+            p.lane (0).step (1).on = true;     // the OFF-beat 1/16 — the one swing delays
+
+            OfflineRenderer::Options opts;
+            opts.applyMasterFx = false;        // a clean transient to time
+            opts.bars = 1; opts.tailSeconds = 0.2;
+
+            // 1/16 step at 120 BPM, 44.1 kHz. Swing 1.0 delays the off-beat by a third of it.
+            const double samplesPerStep = (44100.0 * 60.0 / 120.0) / 4.0;
+
+            p.swing = 0.0f;
+            DrumEngine straightEngine; installKitIntoEngine (kit, straightEngine);
+            juce::AudioBuffer<float> straight;
+            OfflineRenderer::render (straightEngine, p, straight, opts);
+
+            p.swing = 1.0f;
+            DrumEngine swungEngine; installKitIntoEngine (kit, swungEngine);
+            juce::AudioBuffer<float> swung;
+            OfflineRenderer::render (swungEngine, p, swung, opts);
+
+            const int straightOnset = firstOnset (straight);
+            const int swungOnset    = firstOnset (swung);
+
+            expect (straightOnset >= 0 && swungOnset >= 0, "both renders must sound");
+            expectWithinAbsoluteError ((double) straightOnset, samplesPerStep, 64.0);
+            expectWithinAbsoluteError ((double) swungOnset, samplesPerStep * (1.0 + 1.0 / 3.0), 64.0);
+            expect (swungOnset > straightOnset + 1000, "swing must push the off-beat later");
         }
 
         beginTest ("EVERY master-strip control is baked into the rendered audio");
