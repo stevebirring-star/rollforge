@@ -11,27 +11,6 @@ namespace WavExporter
 
 namespace
 {
-    // A copy of the pattern with only the lanes + rolls targeting `pad` active.
-    Pattern stemPattern (const Pattern& p, int pad)
-    {
-        Pattern s = p;   // off-audio-thread copy
-
-        const int lanes = juce::jlimit (0, maxLanes, s.numLanes);
-        for (int li = 0; li < lanes; ++li)
-            if (s.lane (li).targetPad != pad)
-                for (int st = 0; st < maxStepsPerLane; ++st)
-                    s.lane (li).step (st).on = false;
-
-        int keep = 0;
-        const int rolls = juce::jlimit (0, maxRolls, s.numRolls);
-        for (int ri = 0; ri < rolls; ++ri)
-            if (s.rolls[(size_t) ri].targetPad == pad)
-                s.rolls[(size_t) keep++] = s.rolls[(size_t) ri];
-        s.numRolls = keep;
-
-        return s;
-    }
-
     bool padHasContent (const Pattern& p, int pad)
     {
         const int lanes = juce::jlimit (0, maxLanes, p.numLanes);
@@ -83,7 +62,13 @@ bool exportMix (DrumEngine& engine, const Pattern& pattern, const juce::File& fi
 int renderStem (DrumEngine& engine, const Pattern& pattern, int padIndex,
                 juce::AudioBuffer<float>& out, const OfflineRenderer::Options& opts)
 {
-    return OfflineRenderer::render (engine, stemPattern (pattern, padIndex), out, opts);
+    // Render the WHOLE pattern and capture one pad. Muting the other pads' lanes instead
+    // would stop them choking this one: the closed hat would never fire in the open hat's
+    // stem, so the open hat would ring on past the point where the mix cuts it dead --
+    // and FillEngine places open hats precisely so they get choked.
+    OfflineRenderer::Options stemOpts = opts;
+    stemOpts.capturePad = padIndex;
+    return OfflineRenderer::render (engine, pattern, out, stemOpts);
 }
 
 int exportStems (DrumEngine& engine, const Pattern& pattern, const juce::File& folder,

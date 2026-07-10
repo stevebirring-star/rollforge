@@ -109,6 +109,19 @@ public:
         accumulating each voice's reverb send into the engine's send buffer. */
     void renderInto (juce::AudioBuffer<float>& buffer, int startSample, int numSamples) noexcept;
 
+    /** Restricts what renderInto() CAPTURES to one pad, without changing what it PLAYS:
+        every pad still triggers, chokes and steals voices exactly as in the full mix, but
+        only `padIndex`'s voices reach the output and the reverb send. `-1` (the default,
+        and what prepare() restores) captures every pad.
+
+        This exists for per-pad stem export. Stripping the other pads out of the Pattern
+        instead -- the obvious implementation -- silently breaks any choke group: nothing
+        is left to choke the open hat, so its stem rings on past where the mix cuts it.
+
+        OFFLINE ONLY. Every offline render owns a private DrumEngine, so this is a plain
+        int, not an atomic. Do not call it on an engine a device callback is driving. */
+    void setCapturePad (int padIndex) noexcept { capturePad = padIndex; }
+
     /** Reverberates this block's accumulated per-pad sends and ADDS the wet to `buffer`,
         then clears the send buffer. Call ONCE per block, after the block's renderInto()
         segment(s) — the Sequencer renders a block in many segments, all feeding one send.
@@ -183,6 +196,10 @@ private:
     std::vector<PadSlot> pads;
 
     double sampleRate = 44100.0;
+
+    // -1 = capture every pad (live playback + mixdown). >= 0 = capture only that pad
+    // (stem export). See setCapturePad(). Audio-thread read; offline-only write.
+    int capturePad = -1;
 
     // Fallback sound for a pad with no sample yet (played until a Kit is installed).
     SampleBuffer::Ptr interimSound;

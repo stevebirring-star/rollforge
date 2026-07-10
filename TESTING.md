@@ -157,7 +157,9 @@ vendored SQLite) on Linux + Windows + ASan.
 ProjectIO (`.rollforge` JSON round-trip; malformed input fails gracefully),
 MidiExport (GM notes; ratchets flatten; a saved `.mid` reads back), OfflineRender
 (a kit+pattern renders non-silent audio; empty -> silence), and StemNull (per-pad
-stems sum to the full mix with master FX off; a WAV per active pad is written).
+stems sum to the full mix with master FX off; they still sum when a choke group
+fires, and under choke + rolls + reverb sends + voice stealing together; a WAV per
+active pad is written).
 
 **Manual (needs a machine with audio + a display):**
 - ☐ Click "Export" -> the dialog shows Export MIDI / WAV (mix) / Stems.
@@ -170,7 +172,12 @@ stems sum to the full mix with master FX off; a WAV per active pad is written).
   snapshot it reads, so an offline render that forgets to hand it over comes out
   dead straight. Covered by "swing is baked into the rendered audio".
 - ☐ Export Stems -> a folder of `pad_NN.wav` files; summing them equals the mix
-  (master FX off).
+  (stems are rendered pre-master, which is what makes them sum).
+- ☐ REGRESSION: put a closed hat two steps after an open hat (they share a choke
+  group), then Export Stems -> the open-hat stem is CUT SHORT exactly where the
+  closed hat lands, and the stems still sum to the mix. A stem is the whole
+  pattern with one pad captured; render only its own pad and nothing is left to
+  choke it. Covered by "stems sum to the mix when a choke group fires".
 - ☐ Exporting does not interrupt live playback (renders on a separate engine).
 - ☐ Every export, Save and Open reports success OR failure in the status line;
   none of them fail silently.

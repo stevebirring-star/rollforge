@@ -21,6 +21,7 @@ int render (DrumEngine& engine, const Pattern& pattern, juce::AudioBuffer<float>
     const double bpm       = pattern.bpm > 0.0 ? pattern.bpm : 120.0;
 
     engine.prepare (sr, blockSize);
+    engine.setCapturePad (opts.capturePad);   // after prepare(), which resets it to "full mix"
 
     Sequencer seq;                 // heap-allocates its large pattern state internally
     seq.prepare (sr);

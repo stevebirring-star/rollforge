@@ -125,10 +125,39 @@ float Voice::readMono (double pos) const noexcept
 }
 
 void Voice::renderAdditive (juce::AudioBuffer<float>& buffer, int startSample, int numSamples,
-                           float* sendOut) noexcept
+                           float* sendOut, bool writeOutput) noexcept
 {
-    if (! active || sample == nullptr)
+    if (! active || sample == nullptr || numSamples <= 0)
         return;
+
+    if (! writeOutput)
+    {
+        // This voice belongs to a pad the caller is not capturing, so it must ADVANCE
+        // without being heard. Only three things about a voice are observable from the
+        // outside: whether it is still active, how many frames it has played, and
+        // getLevel() -- which VoicePool's "steal the quietest" policy reads, and which
+        // depends on the envelope alone. The sample read and the tone filter feed nothing
+        // but `mono`, and `mono` feeds nothing but the output we are throwing away; the
+        // filter is reset by setTone() on every start(), so freezing its state here can
+        // never colour a later note. That makes the skip closed-form rather than a
+        // sample loop, which is what keeps a 16-pad stem export from costing 16 mixes.
+        const int adv = juce::jmin (numSamples, juce::jmax (0, framesTotal - framesPlayed));
+
+        if (adv > 0)
+        {
+            framesPlayed += adv;
+            sourcePos    += (double) adv * increment;   // never read again; kept coherent
+            lastEnv       = envelopeAt (framesPlayed - 1);
+        }
+
+        // The loop below only calls stop() when it runs out of FRAMES before it runs out
+        // of SAMPLES. Match that exactly: a voice that lands precisely on its last frame
+        // stays active until the next block, and stays visible to voice-stealing.
+        if (adv < numSamples)
+            stop();
+
+        return;
+    }
 
     const int  outChannels = buffer.getNumChannels();
     const bool feedsSend   = sendOut != nullptr && sendGain > 0.0f;

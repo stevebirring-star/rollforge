@@ -109,6 +109,9 @@ void DrumEngine::prepare (double newSampleRate, int maxBlockSize)
     // position — as the mix. Without this, exporting twice would give different files.
     for (auto& slot : pads)
         slot.roundRobin = 0;
+
+    // A prepared engine is a full-mix engine until a stem render says otherwise.
+    capturePad = -1;
 }
 
 void DrumEngine::process (juce::AudioBuffer<float>& buffer) noexcept
@@ -134,7 +137,7 @@ void DrumEngine::renderInto (juce::AudioBuffer<float>& buffer, int startSample, 
     if (startSample >= 0 && numSamples >= 0 && startSample + numSamples <= sendBuffer.getNumSamples())
         sendOut = sendBuffer.getWritePointer (0);
 
-    pool.renderAdditive (buffer, startSample, numSamples, sendOut);
+    pool.renderAdditive (buffer, startSample, numSamples, sendOut, capturePad);
 }
 
 void DrumEngine::applySendReturn (juce::AudioBuffer<float>& buffer, int numSamples) noexcept
