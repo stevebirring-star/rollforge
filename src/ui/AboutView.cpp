@@ -8,7 +8,7 @@ AboutView::AboutView()
 {
     tourButton.setColour (juce::TextButton::buttonColourId, theme().accentHot);
     tourButton.setColour (juce::TextButton::textColourOffId, theme().background);
-    tourButton.setTooltip ("Walk through the six things worth knowing, on the app itself");
+    tourButton.setTooltip ("Walk through the seven things worth knowing, on the app itself");
     tourButton.onClick = [this] { if (onStartTour) onStartTour(); };
     addAndMakeVisible (tourButton);
 
@@ -208,7 +208,7 @@ AboutView::AboutView()
         "Reroll, Vary and a whole capture take -- not sample loads, and it is cleared when you "
         "switch pattern.\n"
         "\n"
-        "The tour  -  \"Take the tour\" above walks you through the six things worth knowing, on "
+        "The tour  -  \"Take the tour\" above walks you through the seven things worth knowing, on "
         "the app itself. It runs once on first launch, and lives here for ever after.\n"
         "\n",
         false);
