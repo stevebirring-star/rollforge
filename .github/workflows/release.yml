@@ -4,9 +4,18 @@ name: Release
 #   Linux   -> AppImage + portable tar.gz
 #   Windows -> Inno Setup installer + portable zip   (added in Phase 7 commit 5)
 #
-# Triggers on a version tag (v*) to cut a real GitHub Release, and on manual
-# dispatch to smoke-test the packaging without publishing anything. The everyday
-# build+test signal lives in ci.yml; this workflow is packaging only.
+# Runs on a version tag (v*) and on manual dispatch. It PACKAGES on both; it
+# PUBLISHES on neither unless you ask. The everyday build+test signal lives in
+# ci.yml; this workflow is packaging only.
+#
+# WHY PUBLISHING IS OPT-IN: this repo is PUBLIC, and a GitHub Release puts its
+# assets at unauthenticated URLs. The binaries are served from
+# getstackbase.com/rollforge behind HTTP basic auth, so a Release would hand them
+# out for free and the download password would protect nothing. The v0.1.0 tag was
+# pushed while the repo was private and its four assets stayed public afterwards;
+# they were deleted on 2026-07-10. Tagging used to be enough to repeat that by
+# accident, so it no longer is: set the repo variable ROLLFORGE_PUBLISH_RELEASE
+# to "true" only when the binaries are genuinely meant to be public.
 
 on:
   push:
@@ -117,11 +126,14 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # On a version tag only: gather both platforms' artifacts into one GitHub Release.
+  # On a version tag AND only when explicitly enabled: gather both platforms'
+  # artifacts into one GitHub Release. Without the repo variable this job is
+  # skipped, so a tag is just a tag and the download password keeps working.
+  # See the header for why this is not simply `if: github.ref_type == 'tag'`.
   release:
     name: Publish GitHub Release
     needs: [linux, windows]
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && vars.ROLLFORGE_PUBLISH_RELEASE == 'true'
     runs-on: ubuntu-22.04
     steps:
       - name: Download all artifacts

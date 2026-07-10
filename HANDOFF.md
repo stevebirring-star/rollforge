@@ -52,12 +52,18 @@ through `utf8()` (`src/ui/Text.h`).
 **v0.2.2 is built and hosted** at <https://getstackbase.com/rollforge> (page public, downloads
 behind HTTP basic auth; the 0.2.0 and 0.2.1 packages are still on disk, unlinked). Built by
 dispatch run `29086993209` from `7f2ead9`, sha256-verified both ends, packages uploaded before the
-page. **Do not tag a release** -- the repo is public, so a GitHub Release
-would put the binaries at public URLs and the download password would protect nothing. Dispatch
-`release.yml` instead; its publish job is gated on `github.ref_type == 'tag'` and correctly
-reported `skipped` on this run. See
+page. **Tagging is now safe, and it did not used to be.** The repo is public, so a GitHub Release
+puts its assets at unauthenticated URLs and the download password protects nothing. `release.yml`
+used to publish on *any* `v*` tag, so the rule was simply "never tag". Its publish job is now gated
+on `github.ref_type == 'tag' && vars.ROLLFORGE_PUBLISH_RELEASE == 'true'`, and that variable is not
+set -- so a tag packages and publishes nothing. **Only set that variable if the binaries are truly
+meant to be public.** To cut packages without a tag, dispatch `release.yml`. See
 [`web/README.md`](web/README.md). (The old `v0.1.0` Release's four assets were public for exactly
 this reason and were **deleted 2026-07-10**; the tag and the Release page remain, with 0 assets.)
+
+Note that Actions runs the workflow file **from the ref that triggered it**, so a tag placed on a
+commit with the old, ungated `release.yml` would still publish. `v0.2.2` is tagged on a commit that
+contains the gate.
 
 ## 0a. v0.2.1 -- what was fixed, and the two bugs it left behind (2026-07-10)
 
